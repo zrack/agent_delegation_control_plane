@@ -3,6 +3,12 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
+For a single case, download the **Unexpected export demo (ZIP)** from the
+[release assets](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
+and follow the [unexpected-export walkthrough](alpha-rehearsal/UNEXPECTED_EXPORT.md).
+The demo includes the original and corrected packages and requires only Python
+and a browser.
+
 ## Start from the public release
 
 Download **Source code (zip)** from the
