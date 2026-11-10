@@ -1,46 +1,44 @@
 # Technical alpha release checks
 
-The source is prepared for a small public technical alpha, subject to the gates
-below. **The repository remains private.** This checklist does not authorize a
-visibility change, deployment, live model spending or release publication.
+## Published alpha
 
-## Gates before changing visibility
+[v0.1.0-alpha.1](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
+is a public prerelease for local, retrospective investigation with fictional
+records. The public repository started from a reviewed source snapshot.
+The original repository and its historical records remain private.
 
-| Gate | Evidence required | Current status |
-| --- | --- | --- |
-| Historical privacy | Verify all intended branches/tags, retained PR references, cached commits/diffs, comments, workflow logs, artifacts and attachments; resolve remaining unwanted personal/operational history with GitHub | Open: GitHub-controlled history cleanup and readback are still required; detailed evidence is private |
-| Current source | Source/privacy checks pass; only intended files appear in the release archive; approved Apache-2.0 attribution retained | Automated checks and final archive review are required for the selected release commit |
-| Reproducibility | Fresh checkout with no project key or saved runs passes offline checks; fictional examples and import/reload behavior are reviewable | Maintainer automation rehearsed runtime baseline `0a78c68`: fresh hash-verified SDK install, all 60 offline tests, three example outcomes, import/reload with identical raw evidence, same-ID replacement, invalid-file recovery and clearing passed; no independent human usability result is implied |
-| Dependencies | Both pinned dependency sets pass advisory checks; compatibility exceptions have a rationale | websockets 17 is deferred because openai-agents 0.24.0 requires >=15,<17; revisit with an SDK upgrade |
-| Maintainer decision | Explicit approval of the exact revision and visibility change | Not granted |
+| Check | Release evidence |
+| --- | --- |
+| Source archive | The public source ZIP matched all 87 tracked files at the reviewed release commit `f7ef54d` byte for byte. |
+| CI | [Project integrity and security passed](https://github.com/zrack/agent_delegation_control_plane/actions/runs/42745906353) at the release commit. |
+| Reporting | GitHub private vulnerability reporting was enabled and the public Advisories page exposed **Report a vulnerability**. See the [security policy](../SECURITY.md). |
+| Rights | The release includes the [Apache-2.0 license](../LICENSE), [copyright attribution](../NOTICE), and [third-party notices](../THIRD_PARTY_NOTICES.md). |
 
-Keep private audit reports, Support correspondence, raw provider records and old
-clones/backups outside the repository. Never merge or push old backup refs into
-the cleaned history. A clean current branch alone does not clear the privacy gate.
+The [sandbox validation report](SANDBOX_VALIDATION.md) describes what the invoice
+pilot demonstrated. Independent reviewer usefulness, production deployment, and
+real-data operation remain separate decisions.
 
-## At an explicitly approved public launch
+## Checklist for future public prereleases
 
-1. Verify privacy cleanup again, including the formerly accessible old references
-   and cached views; do not rely only on a Support acknowledgment.
-2. Change visibility only after the maintainer authorizes it. Recheck branch
-   protection, required checks, secret scanning/push protection availability,
-   dependency alerts and repository permissions.
-3. Enable GitHub private vulnerability reporting and verify the **Report a
-   vulnerability** route described in [SECURITY.md](../SECURITY.md). This is a
-   public-repository feature; its activation remains pending while private.
-4. After the reporting route works, create a reviewed `v0.1.0-alpha.1` tag/release
-   from the approved commit and its reviewed source archive. Do not attach raw
-   run directories, keys, private audit files or screenshots.
-5. Announce the bounded alpha scope and known limits from the
-   [sandbox validation report](SANDBOX_VALIDATION.md). Deployment and real-data
-   operation remain separate decisions.
+1. Review the exact release revision and archive. Include only intended public
+   files and retain the license and notices. Inspect any branches, tags, PR
+   content, workflow logs, or artifacts introduced by the release for private
+   material. Keep private history, backups, audit records, keys, and raw runs
+   outside the public repository.
+2. Confirm the required project-integrity and security jobs pass on the release
+   revision. From a fresh copy, follow the [alpha guide](ALPHA_REVIEW.md) with
+   fictional inputs and check that the review packages import and remain
+   available after reload.
+3. Verify the public repository's branch protection and private vulnerability
+   reporting. Confirm **Report a vulnerability** is available on the
+   [Advisories page](https://github.com/zrack/agent_delegation_control_plane/security/advisories).
+4. Obtain maintainer approval for the exact release revision and public assets.
+   After publishing, verify that the tag points to the approved commit and that
+   the public source archive matches the reviewed tree. Include the alpha scope
+   and known limits in the release notes.
 
-## Reviewer rehearsal
+## Reviewer evidence
 
-Use the [alpha review worksheet](ALPHA_REVIEW.md) with a fresh checkout. Record
-setup friction, explanations, mistakes and help needed. An automated or maintainer
-rehearsal is engineering evidence; independent operator value requires an actual
-reviewer and remains a separate roadmap gate.
-
-GitHub documents the limits of [history and cached-reference removal](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
-and the availability of [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository).
+Use the [first-use review](ALPHA_REVIEW.md) to collect setup time, mistakes,
+assistance needed, and the evidence behind each decision. Track independent
+reviewer results separately from automated and maintainer checks.

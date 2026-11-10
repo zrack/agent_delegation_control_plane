@@ -1,25 +1,46 @@
 # First-use alpha review
 
-Use fictional records only. The viewer needs no API key or account. A reviewer
-does not need to run a live model to inspect examples or a saved completed export.
+Use fictional records only. The viewer and rehearsal kit run locally without an
+API key, account, Docker, or model calls.
 
-## Generate the private rehearsal kit
+## Start from the public release
 
-From a fresh checkout with Node 22+ and Python 3.11+:
+Download **Source code (zip)** from the
+[v0.1.0-alpha.1 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
+and extract it. From the extracted directory, with Python 3.11+ and Node 22+,
+generate the fictional packages and start the dashboard:
 
 ```sh
 node scripts/alpha-rehearsal.mjs
+python3 scripts/serve.py
 ```
 
-The command creates `output/private-alpha-rehearsal/`. Use `--output NEW_DIRECTORY`
-to generate a second copy. Send only the `reviewer` folder to reviewers with private
-access to the checkout. It contains six ready-to-import packages and the task sheet.
-Keep the answer key in the separate `facilitator` folder. The kit uses fixed
-fictional records and the offline checker, so it can be regenerated without prior
-runs, credentials, Docker or provider calls.
+Open the loopback address printed by the server. The kit writes six importable
+packages and a task sheet to `output/private-alpha-rehearsal/reviewer/`. To generate
+another copy, run the kit command with `--output NEW_DIRECTORY`. For a facilitated
+review, give reviewers the `reviewer` folder and keep the answer key in the
+separate `facilitator` folder until they finish.
 
-- [Reviewer task sheet](alpha-rehearsal/TASK_SHEET.md)
-- [Facilitator answer key](alpha-rehearsal/ANSWER_KEY.md)
+## Try one review
+
+1. In **Regression inbox**, choose **Import review package** and open
+   `reviewer/case-02.json` from the generated kit.
+2. Open the evidence behind the unexpected export. Record who acted for whom,
+   which action and resource were involved, and which grant explains the finding.
+3. Choose a **Decision**, enter your reason, and select **Save decision**.
+   Use **Attach follow-up package** to open `reviewer/follow-up-02.json`.
+   Check the baseline and evidence, then decide whether to **Close as resolved**.
+
+Record how long setup took, where you needed help, and what evidence drove your
+decision. Use the [reviewer task sheet](alpha-rehearsal/TASK_SHEET.md) for the
+full rehearsal. The [facilitator answer key](alpha-rehearsal/ANSWER_KEY.md) is
+available after you finish.
+
+Share worksheet results with your facilitator. For reproducible setup or review
+friction, [open a GitHub issue](https://github.com/zrack/agent_delegation_control_plane/issues/new/choose)
+with the release, environment, and steps using fictional inputs. Keep personal
+details and operational evidence out of issues. Report vulnerabilities through
+the private route in the [security policy](../SECURITY.md).
 
 ## Standalone investigation smoke test
 
