@@ -2,16 +2,11 @@
 
 ## Reporting a vulnerability
 
-The repository is currently private during release preparation. Public vulnerability
-intake is not enabled. Maintainers should use a private draft repository security
-advisory for internal investigation rather than an ordinary issue.
-
-At public launch, enable GitHub private vulnerability reporting and verify that
-**Report a vulnerability** appears on the repository's
-[Security Advisories page](https://github.com/zrack/agent_delegation_control_plane/security/advisories).
-That private form is the intended public reporting route. Do not announce the alpha
-until the route works. If the button is missing after launch, open an issue asking
-for a private reporting route without describing the vulnerability.
+Use [GitHub’s private vulnerability reporting form](https://github.com/zrack/agent_delegation_control_plane/security/advisories/new)
+to report a vulnerability in the public alpha. You can also select **Report a
+vulnerability** on the [Security Advisories page](https://github.com/zrack/agent_delegation_control_plane/security/advisories).
+If the form is unavailable, open an issue asking for a private reporting route
+without describing the vulnerability.
 
 Include the affected revision, reproduction steps using fictional input, expected
 and observed behavior, and impact. Do not include API keys, personal/customer data,

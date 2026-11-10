@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Status:** Private technical alpha. Three live Coder → Verifier runs validated the fictional invoice outputs. The private rehearsal kit exercises investigation, regression review, and closure with fictional records. [Observed sandbox validation](docs/SANDBOX_VALIDATION.md) · [Roadmap](ROADMAP.md)
+**Status:** Public technical alpha. Download [v0.1.0-alpha.1](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1) to try it locally. Three live Coder → Verifier runs validated the fictional invoice outputs. The rehearsal kit exercises investigation, regression review, and closure with fictional records. [Observed sandbox validation](docs/SANDBOX_VALIDATION.md) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -36,7 +36,7 @@ Start with the three built-in examples or select **Import a completed run** to o
 
 Use **Export review package** to download the report and matching evidence. Notes are included only when selected. Decisions and follow-ups live in the local inbox. [Privacy and sharing guidance](docs/PRIVACY.md)
 
-## Try the private alpha kit
+## Try the alpha rehearsal kit
 
 Requires **Node 22+** to generate the materials:
 
@@ -44,7 +44,7 @@ Requires **Node 22+** to generate the materials:
 node scripts/alpha-rehearsal.mjs
 ```
 
-Open `output/private-alpha-rehearsal/reviewer/` for six ready-to-import fictional packages and the task sheet. The separate `facilitator/` folder contains the answer key. If the output already exists, select a new directory with `--output`. [Private alpha guide](docs/ALPHA_REVIEW.md)
+Open `output/private-alpha-rehearsal/reviewer/` for six ready-to-import fictional packages and the task sheet. The separate `facilitator/` folder contains the answer key. If the output already exists, select a new directory with `--output`. [Alpha rehearsal guide](docs/ALPHA_REVIEW.md)
 
 ## Architecture and limits
 
@@ -62,4 +62,6 @@ python3 scripts/check.py
 
 The standard check runs 61 offline tests with Node 22+ and briefly binds a loopback port. Use `--with-sdk` with the pinned SDK environment to include two offline replay tests. With the pilot image built and Docker running, use `--with-sdk --with-sandbox` for the full 80-test suite. GitHub also runs dependency advisory and source security checks. [Contributing](CONTRIBUTING.md)
 
-[Security policy](SECURITY.md) · [Release readiness](docs/RELEASE_READINESS.md) · [Apache-2.0 license](LICENSE) · [Rights](RIGHTS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+Report vulnerabilities through [GitHub’s private reporting form](https://github.com/zrack/agent_delegation_control_plane/security/advisories/new). See the [security policy](SECURITY.md) for what to include.
+
+[Release readiness](docs/RELEASE_READINESS.md) · [Apache-2.0 license](LICENSE) · [Rights](RIGHTS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
