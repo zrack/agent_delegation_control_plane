@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="476" viewBox="0 0 760 476" role="img" aria-labelledby="title description">
+  <title id="title">From recorded run to verified fix</title>
+  <desc id="description">Four steps: import a run or review package, check the pinned baseline, inspect evidence and save a decision, and close after a passing follow-up against the same baseline.</desc>
+  <defs>
+    <linearGradient id="header" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#101e36"/>
+      <stop offset="1" stop-color="#1b365e"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="758" height="474" rx="20" fill="#f3f6fc" stroke="#cfd9e9" stroke-width="2"/>
+  <path d="M21 1h718a20 20 0 0 1 20 20v108H1V21A20 20 0 0 1 21 1Z" fill="url(#header)"/>
+  <path d="M627 113h45l22-22h32m-67 28h60l24-24M690 31h31l22 22" fill="none" stroke="#759cd6" stroke-opacity=".3" stroke-width="2"/>
+  <circle cx="627" cy="113" r="4" fill="#88abdf"/>
+  <circle cx="690" cy="31" r="4" fill="#88abdf"/>
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="34" y="36" fill="#abc9ff" font-size="16" font-weight="700" letter-spacing="2.6">THE REVIEW LOOP</text>
+    <text x="34" y="79" fill="#fff" font-size="37" font-weight="700">From recorded run to verified fix</text>
+    <text x="35" y="108" fill="#d4e1f6" font-size="21">Review completed agent work against a pinned baseline.</text>
+
+    <path d="M59 175v244" fill="none" stroke="#aac0e5" stroke-width="3"/>
+    <g fill="#fff" stroke="#d3dfef">
+      <rect x="96" y="145" width="630" height="68" rx="10"/>
+      <rect x="96" y="226" width="630" height="68" rx="10"/>
+      <rect x="96" y="307" width="630" height="68" rx="10"/>
+      <rect x="96" y="388" width="630" height="68" rx="10"/>
+    </g>
+    <g fill="#2350a6" stroke="#f3f6fc" stroke-width="4">
+      <circle cx="59" cy="179" r="23"/><circle cx="59" cy="260" r="23"/>
+      <circle cx="59" cy="341" r="23"/><circle cx="59" cy="422" r="23"/>
+    </g>
+    <g fill="#fff" font-size="21" font-weight="700" text-anchor="middle">
+      <text x="59" y="186">1</text><text x="59" y="267">2</text>
+      <text x="59" y="348">3</text><text x="59" y="429">4</text>
+    </g>
+    <g fill="#14253f" font-size="26" font-weight="700">
+      <text x="115" y="173">Import a completed run</text>
+      <text x="115" y="254">Check the pinned baseline</text>
+      <text x="115" y="335">Inspect and decide</text>
+      <text x="115" y="416">Verify the follow-up</text>
+    </g>
+    <g fill="#3d526e" font-size="21">
+      <text x="115" y="199">Open a local run export or portable review package.</text>
+      <text x="115" y="280">Compare actions, permissions, and evidence.</text>
+      <text x="115" y="361">Open the flagged record and save your reasoning.</text>
+      <text x="115" y="442">Close after a passing check against the same baseline.</text>
+    </g>
+  </g>
+</svg>

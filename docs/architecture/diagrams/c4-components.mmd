@@ -1,0 +1,34 @@
+flowchart TB
+    Operator["Local operator<br/>[Person]<br/>Chooses a file, chain and hop"]
+    Server["Static server<br/>[External container: Python]<br/>Serves listed browser assets"]
+    subgraph Browser[Investigation viewer — browser container]
+      Shell["Semantic shell and styling<br/>[Component: index.html / styles.css]<br/>Native controls, details and status"]
+      App["View controller<br/>[Component: app.js]<br/>Run and hop selection, hash state and escaped evidence"]
+      Intake["Bounded record intake<br/>[Component: import.mjs]<br/>Version 1 checks and normalization"]
+      Store["Saved-run repository<br/>[Component: storage.mjs]<br/>Bounded envelopes and workflow baseline pins"]
+      Saved[("Saved investigations, baseline pins and reviews<br/>[Data store: browser localStorage]<br/>Scoped to browser profile and origin")]
+      App -->|Restores, saves and clears imports| Store
+      Store <-->|Versioned local records| Saved
+      Store -->|Revalidates saved envelopes| Intake
+      Fixtures["Built-in examples<br/>[Component: fixtures.mjs]<br/>Three fixed fictional chains"]
+      Eval["Evidence evaluator<br/>[Component: evaluator.mjs]<br/>Pure retrospective authority checks"]
+      Compare["Run comparison<br/>[Component: comparison.mjs]<br/>Aligned differences and regression verdicts"]
+      Inbox["Regression review inbox<br/>[Component: review.mjs / review-view.mjs]<br/>Portable packages, decisions and follow-up checks"]
+      App -->|Binds controls and renders| Shell
+      App -->|Parses file and merges chain| Intake
+      App -->|Reads examples| Fixtures
+      App -->|Evaluates supplied chains| Eval
+      App -->|Compares selected runs and assessments| Compare
+      App -->|Opens saved report and evidence| Inbox
+      Inbox -->|Validates attachments| Intake
+      Inbox -->|Recomputes verdict| Compare
+      Inbox <-->|Saves reports, snapshots and case state| Saved
+    end
+    Operator -->|Selects and inspects| Shell
+    Server -->|Provides shell and module assets| Shell
+    classDef person fill:#123e68,stroke:#123e68,color:#fff
+    classDef component fill:#eaf2fc,stroke:#325e91,color:#132d4b
+    classDef external fill:#f5f7fa,stroke:#66788c,color:#132d4b
+    class Operator person
+    class Shell,App,Intake,Fixtures,Eval,Store,Compare,Inbox component
+    class Server,Saved external

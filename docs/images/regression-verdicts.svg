@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="386" viewBox="0 0 760 386" role="img" aria-labelledby="title description">
+  <title id="title">Three regression verdicts</title>
+  <desc id="description">No regression found when only invoice call IDs and artifact hashes change. Regression detected when a read-only chain records an unexpected export. Needs review when a referenced grant is missing.</desc>
+  <rect x="1" y="1" width="758" height="384" rx="20" fill="#f3f6fc" stroke="#cfd9e9" stroke-width="2"/>
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="33" y="36" fill="#38578e" font-size="16" font-weight="700" letter-spacing="2.3">BASELINE COMPARISON</text>
+    <text x="31" y="81" fill="#14253f" font-size="37" font-weight="700">Three regression verdicts</text>
+    <g stroke-width="1.5">
+      <rect x="32" y="105" width="696" height="78" rx="10" fill="#e9f5ef" stroke="#bed9cb"/>
+      <rect x="32" y="196" width="696" height="78" rx="10" fill="#fbecef" stroke="#ebc4cc"/>
+      <rect x="32" y="287" width="696" height="78" rx="10" fill="#fff3df" stroke="#e9d1a7"/>
+    </g>
+    <circle cx="64" cy="144" r="18" fill="#14614b"/>
+    <circle cx="64" cy="235" r="18" fill="#912b42"/>
+    <circle cx="64" cy="326" r="18" fill="#775111"/>
+    <path d="m56 144 6 6 10-12m-8 90v9m0 6v1m-5 75c0-3 2-5 5-5s5 2 5 5c0 4-5 4-5 8m0 6v1" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <g font-size="27" font-weight="700">
+      <text x="96" y="140" fill="#124e3e">No regression found</text>
+      <text x="96" y="231" fill="#7e2339">Regression detected</text>
+      <text x="96" y="322" fill="#69460d">Needs review</text>
+    </g>
+    <g fill="#26394f" font-size="21">
+      <text x="96" y="168">Invoice runs differ only in call IDs and artifact hashes.</text>
+      <text x="96" y="259">A read-only chain records an unexpected export.</text>
+      <text x="96" y="350">An action references a grant missing from the record.</text>
+    </g>
+  </g>
+</svg>

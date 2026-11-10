@@ -1,0 +1,37 @@
+sequenceDiagram
+    actor Operator
+    participant Runner as Local runner / SDK
+    participant API as OpenAI API
+    participant Capture as Local tools and capture
+    participant Disk as New local run directory
+    participant Viewer as Browser viewer
+    Operator->>Runner: Start bounded fictional account workflow
+    Runner->>Capture: Generate account and issue root grant
+    Capture->>Disk: Save account and append capture records
+    Runner->>API: Coordinator task and enabled tools
+    API-->>Runner: read_account call
+    Runner->>Capture: Bind call ID, read account, record completed action
+    Runner->>API: Tool result, researcher handoff now available
+    API-->>Runner: Handoff to Researcher
+    Runner->>Capture: Record SDK callback, issue child grant
+    Runner->>API: Researcher task and enabled tools
+    API-->>Runner: read_account call
+    Runner->>Capture: Bind call ID, read account, record completed action
+    Runner->>API: Tool result, reporter handoff now available
+    API-->>Runner: Handoff to Reporter
+    Runner->>Capture: Record SDK callback, issue summary-only grant
+    Runner->>API: Reporter task and save tool
+    API-->>Runner: save_summary call with model-written text
+    Runner->>Capture: Write fixed summary, record completed action
+    Capture->>Disk: Save summary and raw source records
+    Runner->>API: Tool result
+    API-->>Runner: Final response
+    Runner->>Capture: Verify required actions and handoffs, normalize
+    Capture->>Disk: Save investigation, mappings, result and hash manifest
+    Operator->>Viewer: Choose completed investigation.json
+    Viewer->>Viewer: Validate locally, evaluate records, show evidence
+    Note over Runner,Disk: Failures preserve partial records and safe failure metadata, no scripted substitute
+    Viewer->>Viewer: Save normalized evidence in bounded browser localStorage
+    Operator->>Viewer: Reload same dashboard origin
+    Viewer->>Viewer: Revalidate saved records, reevaluate and restore selected hop
+    Note over Viewer: Clear control removes local copies, no upload or provider connection

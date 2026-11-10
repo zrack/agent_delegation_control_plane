@@ -1,0 +1,12 @@
+flowchart LR
+    Operator["Local operator<br/>[Person]<br/>Investigates completed workflows"]
+    ADCP["Agent Delegation Control Plane<br/>[Software system]<br/>Local viewer, bounded workflows and isolated coding pilot"]
+    OpenAI["OpenAI API<br/>[External software system]<br/>Optional model provider"]
+    Operator -->|Runs locally and inspects evidence| ADCP
+    ADCP <-->|Optional runner: fictional task<br/>inputs and model responses / HTTPS| OpenAI
+    classDef person fill:#123e68,stroke:#123e68,color:#fff
+    classDef system fill:#1865b1,stroke:#124a83,color:#fff
+    classDef external fill:#f2f4f6,stroke:#66788c,color:#172c41
+    class Operator person
+    class ADCP system
+    class OpenAI external

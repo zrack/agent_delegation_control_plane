@@ -1,0 +1,19 @@
+flowchart TB
+    API[OpenAI API] <-->|HTTPS: fictional tasks| Runner
+    subgraph local[Operator workstation]
+      Runner[Optional SDK runner<br/>and local capture] --> JSON[SDK investigation.json]
+      JSON -->|Operator chooses file| Browser[Browser-local import<br/>Deterministic evaluator<br/>Chain, hop and evidence view]
+      Saved[(Browser-local saved runs<br/>Versioned, bounded localStorage)] <-->|Save / revalidate on reload / clear| Browser
+      Fixtures[Three fictional examples] --> Browser
+      Server[Loopback server] -->|Application assets| Browser
+      Experiment[Separate scripted<br/>Node experiment] --> Normalized[Raw records and<br/>normalized.json]
+      Normalized --> Offline[Offline evaluator results<br/>Valid / violation / unknown]
+      Pilot[Optional coding pilot<br/>SDK, policy and independent grader] <-->|HTTPS: fictional task and code| API
+      Pilot -->|Generated Python and fictional CSV<br/>No keys or host mounts| Sandbox[Disposable Docker execution<br/>No network, bounded workspace and resources]
+      Sandbox -->|Actual output bytes and exit status| Pilot
+      Pilot --> JSON
+    end
+    classDef process fill:#eaf2fc,stroke:#325e91,color:#132d4b
+    classDef data fill:#f5f7fa,stroke:#66788c,color:#132d4b
+    class Runner,Browser,Server,Experiment,Offline,Pilot,Sandbox process
+    class JSON,Fixtures,Normalized,Saved data

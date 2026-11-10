@@ -1,0 +1,33 @@
+name: Bug report
+description: Report reproducible incorrect behavior without sensitive data.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Affected outcome
+      description: What user or project outcome is blocked or incorrect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Provide the smallest safe steps, inputs, and environment.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Observed evidence
+      description: Include expected/actual behavior and non-sensitive logs or artifacts.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, personal data, private evidence, and unauthorized content.
+          required: true

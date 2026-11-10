@@ -1,0 +1,35 @@
+sequenceDiagram
+    actor Operator
+    participant SDK as Trusted SDK controller
+    participant Model as OpenAI model
+    participant Gateway as Pilot policy and capture
+    participant Docker as Disposable Docker sandbox
+    participant Oracle as Independent host validator
+    participant Files as Private run artifacts
+    participant Check as Offline regression checker
+    Operator->>SDK: Start bounded fictional invoice pilot
+    SDK->>Model: Coder task and narrow tool schema
+    Model-->>SDK: calculate_invoices(program)
+    SDK->>Gateway: Actual role and SDK call ID
+    Gateway->>Gateway: Check actor, exact capability, time and action state
+    Gateway->>Docker: Python and fictional CSV without credentials or host files
+    Docker-->>Gateway: Exit status and bounded process output
+    Gateway->>Docker: Separate UID collects bounded regular result/input files
+    Docker-->>Gateway: Actual artifact bytes
+    Gateway->>Docker: Freeze then forcibly remove sandbox
+    Gateway->>Files: Code, execution controls, receipts and output hash
+    SDK->>Model: Successful execution receipt
+    Model-->>SDK: delegate_to_verifier
+    SDK->>Gateway: Observed handoff and narrower verifier grant
+    SDK->>Model: Verifier task
+    Model-->>SDK: validate_results()
+    SDK->>Gateway: Check verifier authority before reading output
+    Gateway->>Oracle: Actual bytes, frozen hash and withheld expected integers
+    Oracle-->>Gateway: Exact result validation
+    Gateway->>Files: Validation, manifest and completed investigation.json
+    SDK->>Check: Check the completed case
+    Check->>Files: Read the baseline pin and both investigation exports
+    Check->>Files: Write review-package.json with matching evidence
+    Check-->>SDK: Verdict and evidence references
+    SDK->>Files: Save regression.json beside the invoice result
+    Files-->>Operator: Import the review package locally

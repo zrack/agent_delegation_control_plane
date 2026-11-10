@@ -1,0 +1,26 @@
+name: Change proposal
+description: Propose a bounded outcome before implementation.
+title: "[Change]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What becomes safer, clearer, faster, or newly possible?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current evidence and countercase
+      description: State what supports the change and the strongest reason not to do it.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance and non-goals
+      description: Define observable completion, exclusions, and human authorization gates.
+    validations:
+      required: true

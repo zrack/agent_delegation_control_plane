@@ -1,0 +1,3 @@
+#!/bin/sh
+# Use a hash-verified environment with scripts/security/requirements.txt installed.
+exec "${ADCP_SECURITY_PYTHON:-python3}" scripts/security_check.py --staged

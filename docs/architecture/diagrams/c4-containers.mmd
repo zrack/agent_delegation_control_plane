@@ -1,0 +1,36 @@
+flowchart TB
+    Operator["Local operator<br/>[Person]<br/>Runs tools and chooses completed records"]
+    subgraph ADCP[Agent Delegation Control Plane — local workstation]
+      Server["Static server<br/>[Container: Python]<br/>Loopback assets only, no writes"]
+      Viewer["Investigation viewer<br/>[Container: browser JavaScript]<br/>Intake, evaluation and evidence UI"]
+      Saved[("Saved investigations and regression reviews<br/>[Data store: browser localStorage]<br/>Origin-scoped, bounded evidence and review notes")]
+      Viewer <-->|Save, revalidate and remove / local only| Saved
+      Runner["Optional agent runner<br/>[Container: Python / Agents SDK]<br/>Three agents, fixed tools, capture"]
+      Experiment["Controlled experiment<br/>[Container: Node.js]<br/>Scripted reads/export and negative cases"]
+      Pilot["Optional coding pilot<br/>[Container: Python / Agents SDK]<br/>Runtime pilot policy, capture and independent grading"]
+      Sandbox["Disposable execution sandbox<br/>[Container: Docker / Python]<br/>No host mounts or network; bounded resources and workspace"]
+      Files[("Run artifacts<br/>[Data store: local files]<br/>SDK investigation; controlled normalized input; raw evidence")]
+      Key[("Ignored credential config<br/>[Configuration: .env.local]<br/>API key; unavailable to viewer/server")]
+      Viewer -->|Loads listed assets / loopback HTTP| Server
+      Viewer -->|Reads user-selected SDK investigation.json / File API| Files
+      Runner -->|Writes new run artifacts| Files
+      Experiment -->|Writes separate run artifacts| Files
+      Runner -->|Reads approved key| Key
+      Pilot -->|Reads approved key in trusted host process| Key
+      Pilot -->|Python and fictional CSV only| Sandbox
+      Sandbox -->|Bounded physical output and exit status| Pilot
+      Pilot -->|Writes private receipts and completed investigation| Files
+    end
+    OpenAI["OpenAI API<br/>[External software system]<br/>Optional model provider"]
+    Operator -->|Starts and inspects| Viewer
+    Operator -->|Starts optional run| Runner
+    Operator -->|Starts scripted scenarios| Experiment
+    Operator -->|Starts explicit offline or live pilot| Pilot
+    Runner <-->|Fictional tasks and model responses / HTTPS| OpenAI
+    Pilot <-->|Fictional task and model responses / HTTPS| OpenAI
+    classDef person fill:#123e68,stroke:#123e68,color:#fff
+    classDef container fill:#eaf2fc,stroke:#325e91,color:#132d4b
+    classDef data fill:#f5f7fa,stroke:#66788c,color:#132d4b
+    class Operator person
+    class Server,Viewer,Runner,Experiment,Pilot,Sandbox container
+    class Files,Key,OpenAI,Saved data

@@ -1,0 +1,42 @@
+name: Project integrity
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  project-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - run: |
+          python3 -m pip install --require-hashes --only-binary=:all: -r integrations/openai-agents/requirements.txt
+      - run: docker build --network=none -t adcp-invoice-sandbox:v1 experiments/sandbox-agent
+      - run: python3 scripts/check.py --with-sdk --with-sandbox
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: |
+          python3 -m pip install --require-hashes --only-binary=:all: -r scripts/security/requirements.txt
+      - run: python3 -m unittest discover -s scripts/security -p 'test_*.py' -v
+      - run: python3 scripts/security_check.py --advisories

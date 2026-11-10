@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Investigate completed agent delegation records, compare recorded authority, and inspect violations and evidence gaps.">
+    <title>Delegation Control Plane · Investigations</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#investigation">Skip to investigation</a>
+    <header class="topbar">
+      <a class="brand" href="#CH-002"><span class="brand-mark" aria-hidden="true">⌘</span><span>Delegation<span class="brand-secondary">Control Plane</span></span></a>
+      <span class="workspace-label">Security workspace</span>
+      <span class="environment">Local / synthetic</span>
+    </header>
+    <main>
+      <div class="page-heading"><div><p class="eyebrow">AGENT OVERSIGHT</p><h1>Chain investigations</h1><p class="lede">Follow the authority. Find where it changed.</p></div><div class="dataset-note">Example dataset<span>13 Sep 2026 · UTC</span></div></div>
+      <aside class="demo-note"><strong>Synthetic demonstration</strong><span>Completed actions are simulated. Findings assess recorded authority; actions are not blocked.</span></aside>
+      <section class="import-controls" aria-label="Import a completed investigation">
+        <label for="investigation-file">Import a completed run</label>
+        <input id="investigation-file" type="file" accept=".json,application/json" aria-describedby="import-help import-status">
+        <button id="clear-imports" type="button" disabled>Clear imported runs</button>
+        <p id="import-help">Runs and evidence are saved in this browser across reloads (up to 20 runs / 2 MiB). Clear imported runs to remove local copies. No upload or agent execution.</p>
+        <p id="import-status" role="status" aria-live="polite"></p>
+      </section>
+      <nav class="view-nav" aria-label="Dashboard views">
+        <a id="investigate-link" href="#CH-002" aria-current="page">Investigate a run</a>
+        <a id="compare-link" href="#compare?">Compare runs</a>
+        <a id="review-link" href="#review?">Regression inbox</a>
+      </nav>
+      <section id="comparison" tabindex="-1" aria-labelledby="comparison-title" hidden>
+        <h2 id="comparison-title">Compare runs</h2>
+        <p class="panel-description" id="comparison-help">Choose two captures of the same workflow to see what changed in permissions, actions and evidence.</p>
+        <div class="workflow-controls">
+          <div><label for="saved-workflow">Saved workflow</label><select id="saved-workflow"></select></div>
+          <button id="remove-workflow-baseline" type="button" hidden>Remove saved baseline</button>
+          <details>
+            <summary>Save or replace a workflow baseline</summary>
+            <p class="panel-description">In a one-off comparison, select the baseline run below and give its workflow a name. Saving pins that exact run as the workflow baseline.</p>
+            <div class="workflow-save">
+              <div><label for="workflow-name">Workflow name</label><input id="workflow-name" maxlength="80" autocomplete="off"></div>
+              <button id="save-workflow-baseline" type="button">Save baseline</button>
+            </div>
+          </details>
+          <p id="workflow-status" role="status"></p>
+        </div>
+        <form id="compare-form" aria-describedby="comparison-help">
+          <div><label for="baseline-run">Baseline run</label><select id="baseline-run" required></select></div>
+          <div><label for="candidate-run">Candidate run</label><select id="candidate-run" required></select></div>
+          <button id="compare-submit" type="submit">Compare</button>
+        </form>
+        <p id="compare-status" role="status"></p>
+        <div id="compare-results"></div>
+      </section>
+      <section id="review-inbox" tabindex="-1" aria-labelledby="review-title" hidden>
+        <h2 id="review-title">Regression review inbox</h2>
+        <p id="review-help" class="panel-description">Import one review package or attach an offline report and its exports separately. The inbox keeps its copies in this browser.</p>
+        <div class="import-controls review-package-import">
+          <label for="review-package-file">Import review package</label>
+          <input id="review-package-file" type="file" accept=".json,application/json" aria-describedby="review-help review-status">
+        </div>
+        <details id="review-import-controls">
+          <summary>Import a report</summary>
+          <form id="review-import" aria-describedby="review-help">
+            <div><label for="review-report-file">Regression report</label><input id="review-report-file" type="file" accept=".json,application/json" required></div>
+            <div><label for="review-baseline-file">Baseline export <span class="muted">(optional)</span></label><input id="review-baseline-file" type="file" accept=".json,application/json"></div>
+            <div><label for="review-candidate-file">Candidate export <span class="muted">(optional)</span></label><input id="review-candidate-file" type="file" accept=".json,application/json"></div>
+            <button type="submit">Add to inbox</button>
+          </form>
+        </details>
+        <p id="review-status" role="status"></p>
+        <div class="review-layout">
+          <nav id="review-list" aria-label="Saved regression reports"></nav>
+          <section id="review-detail" tabindex="-1" aria-label="Selected regression report"></section>
+        </div>
+      </section>
+      <section id="overview" class="overview" aria-label="Investigation summary"></section>
+      <div class="workspace">
+        <aside class="chain-rail" aria-label="Completed chains"><div class="rail-heading"><h2>Completed chains</h2><span>03</span></div><nav id="chain-list" aria-label="Select a chain"></nav><p class="rail-footnote">Built-in examples cover valid authority, overreach and missing evidence. Imported runs appear alongside them.</p></aside>
+        <section id="investigation" tabindex="-1" aria-label="Selected chain investigation"></section>
+      </div>
+      <footer>Fixed example records · Evaluation uses action time, not the current clock.<span>No live agents connected</span></footer>
+      <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+    </main>
+    <noscript><p class="demo-note">Enable JavaScript to inspect examples and import a completed investigation.</p></noscript>
+  </body>
+</html>
