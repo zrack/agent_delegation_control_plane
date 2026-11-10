@@ -8,4 +8,6 @@ documentation, diagrams and fictional examples in this directory.
 Third-party dependencies retain their own licenses. No additional trademark
 permission or endorsement is granted. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
-The repository remains private during release preparation. License selection does not authorize publication or deployment.
+The [public technical alpha](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
+distributes the reviewed source and fictional examples. The original repository
+and its historical records remain private.
