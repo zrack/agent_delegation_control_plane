@@ -3,18 +3,20 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
-For a single case, download the **Unexpected export demo (ZIP)** from the
-[release assets](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
-and follow the [unexpected-export walkthrough](alpha-rehearsal/UNEXPECTED_EXPORT.md).
-The demo includes the original and corrected packages and requires only Python
-and a browser.
+For a single case, download the [unexpected-export demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.2/adcp-unexpected-export-v0.1.0-alpha.1.zip).
+Extract the demo separately and use the alpha.2 source below when following
+the [unexpected-export walkthrough](alpha-rehearsal/UNEXPECTED_EXPORT.md).
+The demo includes the original and corrected packages. You need Python and
+a browser to review them.
 
 ## Start from the public release
 
 Download **Source code (zip)** from the
-[v0.1.0-alpha.1 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
-and extract it. From the extracted directory, with Python 3.11+ and Node 22+,
-generate the fictional packages and start the dashboard:
+[v0.1.0-alpha.2 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.2)
+and extract it. For the prebuilt demo, start the dashboard with
+`python3 scripts/serve.py` from the extracted source directory using Python 3.11+.
+For the full rehearsal, use Python 3.11+ and Node 22+ to generate all six packages
+and start the dashboard from that same directory:
 
 ```sh
 node scripts/alpha-rehearsal.mjs
@@ -30,11 +32,11 @@ separate `facilitator` folder until they finish.
 ## Try one review
 
 1. In **Regression inbox**, choose **Import review package** and open
-   `reviewer/case-02.json` from the generated kit.
+   `case-02.json` from the demo ZIP or the generated kit's `reviewer` folder.
 2. Open the evidence behind the unexpected export. Record who acted for whom,
    which action and resource were involved, and which grant explains the finding.
 3. Choose a **Decision**, enter your reason, and select **Save decision**.
-   Use **Attach follow-up package** to open `reviewer/follow-up-02.json`.
+   Use **Attach follow-up package** to open `follow-up-02.json` from the same folder.
    Check the baseline and evidence, then decide whether to **Close as resolved**.
 
 Record how long setup took, where you needed help, and what evidence drove your
