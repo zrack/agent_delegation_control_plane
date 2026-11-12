@@ -174,7 +174,12 @@ class IsolationContract(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
 
     def test_total_workspace_storage_is_bounded(self):
-        result = self.run_code('for i in range(200):\n    open(f"file-{i}", "wb").write(b"x" * 60000)')
+        # Propagate disk-full errors from the buffered write or close.
+        result = self.run_code(
+            'for i in range(200):\n'
+            '    with open(f"file-{i}", "wb") as stream:\n'
+            '        stream.write(b"x" * 60000)'
+        )
         self.assertEqual(result.status, "execution_failed")
         self.assertIn("No space left on device", result.stderr)
 
