@@ -8,6 +8,11 @@ updates:
     directory: /integrations/openai-agents
     schedule:
       interval: weekly
+    groups:
+      pydantic:
+        patterns:
+          - pydantic
+          - pydantic-core
     # openai-agents 0.24.0 requires websockets >=15,<17. Remove this deferral
     # when an SDK upgrade supports 17; then regenerate and test the full lock.
     ignore:
