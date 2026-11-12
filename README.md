@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Status:** Public technical alpha. Download [v0.1.0-alpha.1](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1) to try it locally. Three live Coder → Verifier runs validated the fictional invoice outputs. The rehearsal kit exercises investigation, regression review, and closure with fictional records. [Observed sandbox validation](docs/SANDBOX_VALIDATION.md) · [Roadmap](ROADMAP.md)
+**Status:** Public technical alpha. Download [v0.1.0-alpha.2](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.2) to try it locally. Three live Coder → Verifier runs validated the fictional invoice outputs. The rehearsal kit exercises investigation, regression review, and closure with fictional records. [Observed sandbox validation](docs/SANDBOX_VALIDATION.md) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -38,7 +38,9 @@ Use **Export review package** to download the report and matching evidence. Note
 
 ## Try the alpha rehearsal kit
 
-Requires **Node 22+** to generate the materials:
+For a single review, download the [unexpected-export demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.2/adcp-unexpected-export-v0.1.0-alpha.1.zip) and use it with the alpha.2 dashboard. It includes the fictional case and its corrected follow-up.
+
+Generate the full rehearsal kit with **Node 22+**:
 
 ```sh
 node scripts/alpha-rehearsal.mjs
