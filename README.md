@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Status:** Public technical alpha. Download [v0.1.0-alpha.2](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.2) to try it locally. Three live Coder → Verifier runs validated the fictional invoice outputs. The rehearsal kit exercises investigation, regression review, and closure with fictional records. [Observed sandbox validation](docs/SANDBOX_VALIDATION.md) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.3) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -13,6 +13,12 @@ python3 scripts/serve.py
 ```
 
 Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choose a different port with `--port 48732`. The dashboard uses the browser and the Python standard library.
+
+## First exercise with a resolved case
+
+1. Extract **Source code (zip)** from the alpha.3 release and start the dashboard from that directory. Extract the [complete review case demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip) separately.
+2. In **Regression inbox**, select **Import review package or case** and open `resolved-case.json`.
+3. Check the **Fix required** decision and its reason, the original **Regression detected** verdict, and the follow-up **No regression found** verdict. Reload the dashboard and confirm the decision and **Resolved** status persist. [Alpha guide](docs/ALPHA_REVIEW.md#import-a-resolved-case)
 
 ## Inspect records
 
@@ -38,8 +44,6 @@ Open **Export review package or case** to see what each download includes. The r
 
 ## Try the alpha rehearsal kit
 
-For a single review, download the [unexpected-export demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.2/adcp-unexpected-export-v0.1.0-alpha.1.zip) and use it with the alpha.2 dashboard. It includes the fictional case and its corrected follow-up.
-
 Generate the full rehearsal kit with **Node 22+**:
 
 ```sh
@@ -54,7 +58,7 @@ The evaluator uses recorded action time to check ancestry, identity continuity, 
 
 Imported runs and the review inbox each hold up to 20 entries or 2 MiB in this browser. An individual run import can be up to 1 MiB with 200 events and 200 grants. Baselines pin an exact run ID and fingerprint. Browser storage is scoped to the profile and dashboard address. [Architecture](ARCHITECTURE.md) · [C4 and sequence diagrams](docs/architecture/README.md) · [Threat model](docs/architecture/THREAT_MODEL.md)
 
-Optional workflows run separately from the viewer. The [Agents SDK example](integrations/openai-agents/README.md) captures a Coordinator → Researcher → Reporter workflow. The [invoice pilot](experiments/sandbox-agent/README.md) executes model-written Python in Docker, checks physical output, and produces a regression report and review package. Live invocations require provider access and may consume credits. The [scripted experiment](experiments/controlled-capture/README.md) covers the three authority outcomes offline.
+Optional workflows run separately from the viewer. The [Agents SDK example](integrations/openai-agents/README.md) captures a Coordinator → Researcher → Reporter workflow. The [invoice pilot](experiments/sandbox-agent/README.md) executes model-written Python in Docker, checks physical output, and produces a regression report and review package. Three live Coder → Verifier runs validated the fictional invoice outputs. Live invocations require provider access and may consume credits. The [scripted experiment](experiments/controlled-capture/README.md) covers the three authority outcomes offline. [Observed sandbox validation](docs/SANDBOX_VALIDATION.md)
 
 ## Check locally
 

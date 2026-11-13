@@ -3,41 +3,45 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
-For a single case, download the [unexpected-export demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.2/adcp-unexpected-export-v0.1.0-alpha.1.zip).
-Extract the demo separately and use the alpha.2 source below when following
-the [unexpected-export walkthrough](alpha-rehearsal/UNEXPECTED_EXPORT.md).
-The demo includes the original and corrected packages. You need Python and
-a browser to review them.
+## Import a resolved case
 
-## Start from the public release
+1. Download **Source code (zip)** from the
+   [v0.1.0-alpha.3 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.3).
+   Extract it and the [complete review case demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
+   into separate directories.
+2. From the extracted source directory, run `python3 scripts/serve.py` with
+   Python 3.11 or newer. Open the printed loopback address in a fresh browser
+   profile.
+3. In **Regression inbox**, select **Import review package or case** and open
+   `resolved-case.json` from the demo ZIP.
+4. Check the **Fix required** decision and its reason, “Export exceeds the parent
+   grant.” The original run should show **Rechecked · Regression detected** and
+   the follow-up **Rechecked · No regression found**. Open **Inspect follow-up
+   evidence** to see the recheck against the original baseline.
+5. Reload at the same address and confirm the decision, reason, and **Resolved**
+   status persist.
 
-Download **Source code (zip)** from the
-[v0.1.0-alpha.2 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.2)
-and extract it. For the prebuilt demo, start the dashboard with
-`python3 scripts/serve.py` from the extracted source directory using Python 3.11+.
-For the full rehearsal, use Python 3.11+ and Node 22+ to generate all six packages
-and start the dashboard from that same directory:
+## Review and export the case yourself
 
-```sh
-node scripts/alpha-rehearsal.mjs
-python3 scripts/serve.py
-```
-
-Open the loopback address printed by the server. The kit writes six importable
-packages and a task sheet to `output/private-alpha-rehearsal/reviewer/`. To generate
-another copy, run the kit command with `--output NEW_DIRECTORY`. For a facilitated
-review, give reviewers the `reviewer` folder and keep the answer key in the
-separate `facilitator` folder until they finish.
-
-## Try one review
-
-1. In **Regression inbox**, use the review package import to open
-   `case-02.json` from the demo ZIP or the generated kit's `reviewer` folder.
+1. Open the dashboard in another fresh browser profile. In **Regression inbox**,
+   select **Import review package or case** and open `case-02.json` from the demo ZIP.
 2. Open the evidence behind the unexpected export. Record who acted for whom,
    which action and resource were involved, and which grant explains the finding.
 3. Choose a **Decision**, enter your reason, and select **Save decision**.
    Use **Attach follow-up package** to open `follow-up-02.json` from the same folder.
    Check the baseline and evidence, then decide whether to **Close as resolved**.
+4. Open **Export review package or case** and select **Download review case**.
+   Import the downloaded `review-case.json` in a fresh profile to repeat the
+   reload check with your own decision.
+
+## Run the full rehearsal
+
+With Node 22 or newer, run `node scripts/alpha-rehearsal.mjs` from the source
+directory. The kit writes six importable packages and a task sheet to
+`output/private-alpha-rehearsal/reviewer/`. To generate another copy, run the
+command with `--output NEW_DIRECTORY`. For a facilitated review, give reviewers
+the `reviewer` folder and keep the answer key in the separate `facilitator`
+folder until they finish.
 
 Record how long setup took, where you needed help, and what evidence drove your
 decision. Use the [reviewer task sheet](alpha-rehearsal/TASK_SHEET.md) for the
