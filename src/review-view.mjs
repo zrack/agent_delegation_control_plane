@@ -1,10 +1,11 @@
 import { regressionLabels } from './comparison.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
+import { restoreWorkflowBaselines } from './storage.mjs';
 import {
-  assessFollowUp, assessReview, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
+  assessFollowUp, assessReview, assessSavedInvoice, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
-  restoreReviews, reviewDecisions, saveReview, saveReviewDecision,
+  restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from './review.mjs';
 
 const tones = { pass: 'valid', regression: 'violation', review: 'unknown' };
@@ -24,6 +25,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
   const invoiceInput = document.querySelector('#invoice-folder-file');
   const invoiceStatus = document.querySelector('#invoice-folder-status');
   const invoiceResults = document.querySelector('#invoice-folder-results');
+  const invoiceForm = document.querySelector('#invoice-candidate-form');
+  const invoiceWorkflow = document.querySelector('#invoice-workflow');
+  const invoiceHelp = document.querySelector('#invoice-candidate-help');
+  const invoiceSave = invoiceForm.querySelector('button');
+  let invoiceDraft;
+  let pins = [];
+  let savingInvoice = false;
   const list = document.querySelector('#review-list');
   const detail = document.querySelector('#review-detail');
   const status = document.querySelector('#review-status');
@@ -76,7 +84,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       `<h4>${escape(group[0].toUpperCase() + group.slice(1))}</h4>${rows.map(row => evidenceDetails(row.title, { row },
         row.changes.map(change => change.label).join(' · ') || 'Only supplied in one run')).join('')}`).join('');
     return `${evidence}<section class="assessment review-verdict ${tones[verdict.status]}">
-      <div><strong>Current evidence check · ${regressionLabels[verdict.status]}</strong><p>${explanation}</p></div></section>
+      <div><strong>${item.invoice ? 'Baseline regression' : 'Current evidence check'} · ${regressionLabels[verdict.status]}</strong><p>${explanation}</p></div></section>
       ${reasons.length ? `<h4>Flagged findings</h4>${reasons.join('')}` : ''}
       ${differences ? `<details class="review-differences"><summary>All comparison differences</summary>${differences}</details>` : ''}`;
   }
@@ -123,7 +131,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       && followUp.assessment.states.candidate === 'matched') contents.push('follow-up report and evidence');
     if (followUp.resolved) contents.push('verified closure');
     return `<details class="review-differences"><summary>Export review package or case</summary>
-      <p class="panel-description">The download includes the original report${matching}.</p>
+      <p class="panel-description">The download includes the original report${matching}.${item.invoice ? ' Invoice receipts are kept in this browser.' : ''}</p>
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
       <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
       <button type="button" id="download-review-package">Download review package</button>
@@ -137,11 +145,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     selected = items.find(item => item.id === id);
     records = [];
     if (warning) announce(warning, true);
+    if (!savingInvoice) updateInvoiceWorkflows();
     list.innerHTML = [...items].sort((a, b) => Number(a.reviewed) - Number(b.reviewed)
       || priority[a.report.status] - priority[b.report.status]).map(item => `<a class="chain-card review-card ${item.id === id ? 'selected' : ''}"
         href="${itemRoute(item.id)}" ${item.id === id ? 'aria-current="true"' : ''}>
         <span class="badge ${tones[item.report.status]}">${regressionLabels[item.report.status]}</span>
+        ${item.invoice ? `<strong>${escape(item.invoice.evidence?.caseId ?? 'Invoice run')}</strong>` : ''}
         <code>${escape(item.report.candidateId ?? 'Run ID unavailable')}</code>
+        ${item.invoice ? `<span class="muted">Output at import · ${escape(item.invoice.outputAtImport)}</span>` : ''}
         <span class="muted">${item.reviewed ? 'Reviewed' : 'Unreviewed'}</span></a>`).join('');
     if (!selected) {
       detail.innerHTML = `<p class="muted">${id ? 'This report is unavailable in this browser.'
@@ -154,11 +165,21 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     try {
       const assessment = await assessReview(item);
       const followUp = await assessFollowUp(item, assessment);
+      let receiptResults = '';
+      if (item.invoice) {
+        try {
+          receiptResults = invoiceMarkup(await assessSavedInvoice(item));
+        } catch (error) {
+          receiptResults = `<p class="import-error">${escape(error.message)}</p>`;
+        }
+      }
       if (currentRevision !== revision) return;
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
+        ${item.invoice ? `<p class="panel-description">Pinned workflow · ${escape(item.invoice.workflow)}</p>` : ''}
         ${renderEvidence(item, assessment)}
+        ${receiptResults}
         ${item.report.reasons.length ? `<details class="review-differences"><summary>Reasons recorded by the offline report</summary>
           <ul>${item.report.reasons.slice(0, 12).map(reason => `<li>${escape(reason.message)}</li>`).join('')}</ul>
           ${item.report.reasons.length > 12 ? `<p>Showing 12 of ${item.report.reasons.length} recorded reasons.</p>` : ''}</details>` : ''}
@@ -175,7 +196,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     }
   }
 
-  function renderInvoice({ caseId, authority, output, execution, receiptStates }) {
+  function invoiceMarkup({ caseId, authority, output, execution, receiptStates }) {
     const properties = entries => `<dl>${entries.map(([label, value]) =>
       `<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl>`;
     const panel = (title, check, body) => `<section class="compare-run" aria-label="${title}">
@@ -196,15 +217,66 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       matched: 'Matches manifest', missing: 'File missing', unlisted: 'Hash missing from manifest',
       mismatch: 'Hash mismatch', invalid: 'Invalid or unreadable',
     };
-    invoiceResults.innerHTML = `<h3>Invoice run · ${escape(caseId)}</h3>
+    return `<section class="invoice-results"><h3>Invoice run · ${escape(caseId)}</h3>
       <div class="invoice-checks">
       ${panel('Authority', authority, authorityBody)}
       ${panel('Output', output, outputBody)}
       ${panel('Execution', execution, executionBody.length ? properties(executionBody) : '<p>Supply matching execution and attempts receipts.</p>')}
       </div>
       <details class="review-differences"><summary>File checks against manifest</summary>
-      ${properties(Object.entries(receiptStates).map(([name, state]) => [name, receiptLabels[state]]))}</details>`;
+      ${properties(Object.entries(receiptStates).map(([name, state]) => [name, receiptLabels[state]]))}</details></section>`;
   }
+
+  function updateInvoiceWorkflows() {
+    invoiceForm.hidden = !invoiceDraft?.candidate;
+    if (invoiceForm.hidden) return;
+    const selectedPin = invoiceWorkflow.value ? pins[Number(invoiceWorkflow.value)] : undefined;
+    const saved = restoreWorkflowBaselines(getStorage);
+    pins = saved.baselines.filter(pin => !pin.runId.startsWith('CH-'));
+    invoiceWorkflow.innerHTML = '<option value="">Choose a saved workflow</option>' + pins.map((pin, index) =>
+      `<option value="${index}">${escape(pin.name)} · ${escape(pin.runId)}</option>`).join('');
+    const index = selectedPin ? pins.findIndex(pin => JSON.stringify(pin) === JSON.stringify(selectedPin)) : -1;
+    if (index >= 0) invoiceWorkflow.value = String(index);
+    invoiceWorkflow.disabled = !pins.length;
+    invoiceSave.disabled = !invoiceWorkflow.value;
+    invoiceHelp.textContent = saved.warning || (pins.length ? 'Saving keeps up to six receipt files, including any execution logs they contain, in this browser.'
+      : 'Import a baseline investigation, then save it under a workflow in Compare runs.');
+  }
+
+  invoiceWorkflow.addEventListener('change', () => {
+    invoiceSave.disabled = !invoiceWorkflow.value;
+  });
+
+  invoiceForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (savingInvoice || !invoiceWorkflow.value || !invoiceDraft?.candidate) return;
+    const pin = pins[Number(invoiceWorkflow.value)];
+    if (!pin) return;
+    const currentRoute = location.hash;
+    savingInvoice = true;
+    invoiceInput.disabled = invoiceWorkflow.disabled = invoiceSave.disabled = true;
+    invoiceStatus.classList.remove('import-error');
+    invoiceStatus.textContent = 'Checking the pinned baseline and saving the case…';
+    try {
+      const id = await saveInvoiceCandidate(getStorage, pin, invoiceDraft.evidence);
+      invoiceDraft = undefined;
+      invoiceResults.replaceChildren();
+      invoiceStatus.textContent = '';
+      document.querySelector('#invoice-folder-import').open = false;
+      announce('Invoice comparison and receipts saved in this browser.');
+      if (location.hash === currentRoute) {
+        if (location.hash === itemRoute(id)) render({ focus: true });
+        else location.hash = itemRoute(id);
+      }
+    } catch (error) {
+      invoiceStatus.classList.add('import-error');
+      invoiceStatus.textContent = error.message;
+    } finally {
+      savingInvoice = false;
+      invoiceInput.disabled = false;
+      updateInvoiceWorkflows();
+    }
+  });
 
   if (!('webkitdirectory' in invoiceInput)) {
     invoiceInput.disabled = true;
@@ -215,10 +287,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     if (!invoiceInput.files.length) return;
     invoiceInput.disabled = true;
     invoiceResults.replaceChildren();
+    invoiceDraft = undefined;
+    updateInvoiceWorkflows();
     invoiceStatus.classList.remove('import-error');
     invoiceStatus.textContent = 'Checking invoice folder…';
     try {
-      renderInvoice(await importInvoiceFolder(invoiceInput.files));
+      invoiceDraft = await importInvoiceFolder(invoiceInput.files);
+      invoiceResults.innerHTML = invoiceMarkup(invoiceDraft);
+      updateInvoiceWorkflows();
       invoiceStatus.textContent = 'Invoice folder checked. See the three results below.';
     } catch (error) {
       invoiceStatus.classList.add('import-error');

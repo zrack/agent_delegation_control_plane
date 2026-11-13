@@ -32,6 +32,30 @@ two allowed attempts, zero denied attempts, unchanged input, and sandbox cleanup
 The demo receipts are synthetic. The importer checks the supplied records
 locally against an unsigned manifest. Reload to confirm the summary clears.
 
+## Compare and save an invoice candidate
+
+Start the dashboard from the current source checkout. Use a saved fictional
+baseline and a different candidate run from the same workflow, such as
+invoice A as baseline and B or C as candidate from the sandbox pilot.
+
+1. Use **Import a completed run** to open the baseline's `investigation.json`.
+   Under **Compare runs**, select it as **Baseline run**. Open **Save or replace
+   a workflow baseline**, enter a name, and select **Save baseline**.
+2. Under **Regression inbox → Import invoice-run folder**, choose the candidate
+   folder containing `manifest.json`. Select the pinned workflow and choose
+   **Compare and save to inbox**.
+3. Review **Baseline regression**, **Authority**, **Output**, and **Execution**.
+   Expand **File checks against manifest** to see each receipt's result. A
+   missing validation receipt or altered output can fail the output check while
+   the comparison still shows **No regression found**.
+4. Reload at the same address and reopen the inbox entry. The dashboard rechecks
+   the saved baseline, candidate, and receipts. Copies with different receipt
+   contents keep separate entries even when they share a run ID.
+
+Saved invoice receipts count toward the inbox's 2 MiB limit. Review packages
+and case downloads carry the delegation evidence. The receipt files stay in
+this browser. [Privacy and sharing guidance](PRIVACY.md)
+
 ## Import a resolved case
 
 Use the alpha.4 dashboard started above for this exercise. The

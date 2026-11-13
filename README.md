@@ -29,6 +29,10 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 
 All four examples show **Within scope** and **Execution recorded complete**. The demo uses fictional records, checks six named files against an unsigned manifest, and clears results on reload. [Alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-offline-invoice-demo)
 
+## Save an invoice comparison from the current checkout
+
+Import the baseline's `investigation.json` and pin it under a workflow in **Compare runs**. Open **Regression inbox → Import invoice-run folder**, select a candidate folder from the same workflow, choose the saved workflow, and select **Compare and save to inbox**. Reopen the entry after reload to see the baseline comparison and the separate receipt results. [Candidate walkthrough](docs/ALPHA_REVIEW.md#compare-and-save-an-invoice-candidate)
+
 ## Inspect records
 
 Start with the three built-in examples or select **Import a completed run** to open a version 1 `investigation.json`. Choose an agent hop to inspect its recorded action, grant, parent grant, and findings.
