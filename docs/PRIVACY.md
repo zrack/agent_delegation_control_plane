@@ -8,7 +8,7 @@ The optional SDK runner alone reads the ignored `.env.local` key and sends gener
 
 The regression inbox keeps its own copies of matching exports, report reasons, decisions, follow-up evidence and review notes in the same browser profile and origin. **Remove from inbox** deletes the selected report and its local evidence, follow-up, decision and notes. **Clear imported runs** applies only to the separate investigation list. Browser site-data controls clear both collections. Use fictional or minimized evidence and notes.
 
-A downloaded review package is a separate local file containing the report and matching normalized investigation evidence. The saved note is included only when selected. Inspect the contents before handing the file to a reviewer. Downloads and other copies remain on disk when the inbox entry is removed.
+A downloaded review package is a separate local file containing the report and matching normalized investigation evidence. A review case download can also include the decision and its reason, the matching follow-up report and evidence, and the verified closure. The saved review note is included only when selected. Inspect the contents before handing either file to a reviewer. Downloads and other copies remain on disk when the inbox entry is removed.
 
 Local run directories may contain provider/request/tool identifiers, generated text, source mappings and usage metadata. Keep them outside source control, inspect them before sharing and define retention/deletion for any future real-data workflow. Do not upload `.env.local`, virtual environments, screenshots, raw captures or failure payloads to an issue. A sanitized source package does not sanitize future user-supplied records.
 

@@ -117,7 +117,15 @@ The review inbox stores up to 20 reports and 2 MiB total under `adcp.regression-
 
 A portable package is a version 1 JSON document capped at 2 MiB. It wraps the normalized report, optional matching version 1 investigation envelopes and an optional note. Imports use the same fingerprint checks as separate files. An altered attachment is excluded and marked as mismatched. Exports use a browser-local download, omit the note by default and leave review completion local to each inbox. An included note seeds a newly imported item. Existing local reviews take precedence on reimport.
 
-An inbox case can save a decision with its reason and one current follow-up. The follow-up must reference the original baseline ID and fingerprint and provide matching baseline and candidate exports. Its candidate must have a distinct run ID. The inbox stores the follow-up report and candidate snapshot and reuses the original baseline snapshot. A case can resolve only when the original check still flags the case, both evidence pairs verify, and the reported and recomputed follow-up verdicts pass. Resolution points to the saved follow-up and is verified again when the case opens. Decisions, follow-ups and resolution live in the bounded inbox collection. Portable packages carry the original report, evidence and optional note.
+An inbox case can save a decision with its reason and one current follow-up. The follow-up must reference the original baseline ID and fingerprint and provide matching baseline and candidate exports. Its candidate must have a distinct run ID. The inbox stores the follow-up report and candidate snapshot and reuses the original baseline snapshot. A case can resolve only when the original check still flags the case, both evidence pairs verify, and the reported and recomputed follow-up verdicts pass. Resolution points to the saved follow-up and is verified again when the case opens.
+
+A version 1 `adcp-review-case` file uses the same 2 MiB limit and adds the decision,
+matching follow-up report and candidate, and a closure fingerprint when verified
+on export. It binds the original report, decision, and follow-up. Import derives
+local report IDs and rechecks both evidence pairs before
+restoring closure. A case import writes once and preserves any existing local
+decision and follow-up. Fingerprints let the browser check the supplied records
+against their reports. They provide no proof of authorship.
 
 Unreadable collections leave examples usable; malformed individual records are skipped with a visible warning and are never silently overwritten on save. Capacity, quota or denied-storage failures leave the new import available only in the current tab with a warning. No run is automatically evicted. **Clear imported runs** removes only this application key and the current tab's imports; other open tabs retain loaded copies until reload. Original export files remain unchanged. Browser site-data deletion or storage eviction can remove saved runs, and changing browser profile, host or port selects different storage. This is local convenience storage, not a backup or shared evidence service. Stop processes to end execution and preserve run directories for diagnosis. Use a new directory for a new attempt. Read the [threat model](docs/architecture/THREAT_MODEL.md) and [privacy guidance](docs/PRIVACY.md) before sharing records.
 
