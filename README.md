@@ -33,6 +33,8 @@ All four examples show **Within scope** and **Execution recorded complete**. The
 
 Import the baseline's `investigation.json` and pin it under a workflow in **Compare runs**. Open **Regression inbox → Import invoice-run folder**, select a candidate folder from the same workflow, choose the saved workflow, and select **Compare and save to inbox**. Reopen the entry after reload to see the baseline comparison and the separate receipt results. [Candidate walkthrough](docs/ALPHA_REVIEW.md#compare-and-save-an-invoice-candidate)
 
+If a receipt check flags the case, save a decision and attach a corrected invoice folder from the same case. Check the follow-up against the original baseline, then choose **Close as resolved** once authority, output, and execution all pass. [Receipt follow-up walkthrough](docs/ALPHA_REVIEW.md#review-and-close-an-invoice-receipt-case)
+
 ## Inspect records
 
 Start with the three built-in examples or select **Import a completed run** to open a version 1 `investigation.json`. Choose an agent hop to inspect its recorded action, grant, parent grant, and findings.

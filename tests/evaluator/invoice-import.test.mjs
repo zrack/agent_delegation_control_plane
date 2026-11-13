@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { importInvoiceFolder } from '../../src/invoice-import.mjs';
-import { assessReview, assessSavedInvoice, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview } from '../../src/review.mjs';
+import {
+  assessFollowUp, assessReview, assessSavedInvoice, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase,
+  resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview, saveReviewDecision,
+} from '../../src/review.mjs';
 import { restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline } from '../../src/storage.mjs';
 import { parseInvestigation } from '../../src/import.mjs';
 
@@ -187,4 +190,97 @@ test('a changed pin or replaced baseline export cannot save an invoice compariso
   saveWorkflowBaseline(getStorage, pin.name, changed, await runFingerprint(changed), pin);
   await assert.rejects(saveInvoiceCandidate(getStorage, pin, checked.evidence), /pin changed/);
   assert.equal(restoreReviews(getStorage).items.length, 0);
+});
+
+test('invoice receipt failures stay open until a matching corrected folder passes after reload', async () => {
+  const { getStorage, pin } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const altered = { ...files, 'results.json': files['results.json'] + '\n' };
+  const corrected = await importInvoiceFolder(selectedFiles(files, manifest));
+  for (const original of [missing, altered]) {
+    const failed = await importInvoiceFolder(selectedFiles(original, manifest));
+    const id = await saveInvoiceCandidate(getStorage, pin, failed.evidence);
+    const read = () => restoreReviews(getStorage).items.find(item => item.id === id);
+    const assess = async () => assessFollowUp(read(), await assessReview(read()));
+    assert.equal((await assessReview(read())).verdict.status, 'pass');
+    assert.equal((await assess()).flagged, true);
+    assert.equal((await assess()).canResolve, false);
+    saveReviewDecision(getStorage, read(), 'fix-required', 'Restore the original receipt.');
+    await assert.rejects(attachReviewFollowUp(getStorage, read(), '{}'), /Attach an invoice folder/);
+    await attachInvoiceFollowUp(getStorage, read(), failed.evidence);
+    assert.equal((await assess()).invoice.checked.output.label, failed.output.label);
+    await assert.rejects(resolveReviewCase(getStorage, read()), /passing invoice follow-up/);
+
+    const failingExecution = { ...files, 'execution.json': JSON.stringify({
+      status: 'failed', exit_code: 1, input_unchanged: true, cleaned: true,
+    }) };
+    const execution = await importInvoiceFolder(selectedFiles(failingExecution));
+    await attachInvoiceFollowUp(getStorage, read(), execution.evidence);
+    assert.equal((await assess()).invoice.checked.execution.label, 'Execution needs review');
+    await assert.rejects(resolveReviewCase(getStorage, read()), /passing invoice follow-up/);
+
+    await attachInvoiceFollowUp(getStorage, read(), corrected.evidence);
+    const ready = await assess();
+    assert.equal(ready.canResolve, true);
+    assert.equal(ready.resolved, false);
+    await resolveReviewCase(getStorage, read());
+    assert.equal((await assess()).resolved, true);
+    assert.equal(read().followUp.report.baselineFingerprint, pin.fingerprint);
+    const exported = JSON.parse(await createReviewCase(read()));
+    assert.equal(exported.followUp, undefined);
+    assert.equal(exported.resolution, undefined);
+
+    const storage = getStorage();
+    const saved = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+    const entry = saved.items.find(item => item.id === id);
+    entry.followUp.invoice.evidence.files['results.json'] = btoa('altered after closure');
+    storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(saved));
+    assert.equal((await assess()).resolved, false);
+    assert.match((await assess()).invoice.error, /no longer match/);
+  }
+});
+
+test('a different pin cannot attach or close an invoice follow-up', async () => {
+  const { getStorage, baseline, pin } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const original = await importInvoiceFolder(selectedFiles(missing, manifest));
+  const corrected = await importInvoiceFolder(selectedFiles(files, manifest));
+  const id = await saveInvoiceCandidate(getStorage, pin, original.evidence);
+  const read = () => restoreReviews(getStorage).items.find(item => item.id === id);
+  saveReviewDecision(getStorage, read(), 'evidence-needed', 'Supply validation.');
+  await attachInvoiceFollowUp(getStorage, read(), corrected.evidence);
+  const changed = { ...baseline, title: 'Different evidence under the baseline ID' };
+  saveInvestigation(getStorage, changed);
+  saveWorkflowBaseline(getStorage, pin.name, changed, await runFingerprint(changed), pin);
+  await assert.rejects(attachInvoiceFollowUp(getStorage, read(), corrected.evidence), /different baseline/);
+  await assert.rejects(resolveReviewCase(getStorage, read()), /different baseline/);
+  const rechecked = await assessFollowUp(read(), await assessReview(read()), getStorage);
+  assert.equal(rechecked.pinChanged, true);
+  assert.equal(rechecked.canResolve, false);
+  assert.equal(rechecked.resolved, false);
+});
+
+test('a folder for a different case or a changed investigation under the same ID cannot be a correction', async () => {
+  const { getStorage, pin } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const original = await importInvoiceFolder(selectedFiles(missing, manifest));
+  const id = await saveInvoiceCandidate(getStorage, pin, original.evidence);
+  const read = () => restoreReviews(getStorage).items.find(item => item.id === id);
+  saveReviewDecision(getStorage, read(), 'evidence-needed', 'Supply validation.');
+  const unrelated = await importInvoiceFolder(selectedFiles(files, { ...manifest, case: 'invoice-c' }));
+  await assert.rejects(attachInvoiceFollowUp(getStorage, read(), unrelated.evidence), /same invoice case/);
+  const changed = JSON.parse(files['investigation.json']);
+  changed.chain.title = 'Modified investigation';
+  const replacement = await importInvoiceFolder(selectedFiles({ ...files, 'investigation.json': JSON.stringify(changed) }));
+  await assert.rejects(attachInvoiceFollowUp(getStorage, read(), replacement.evidence), /changed the investigation/);
+  assert.equal(read().followUp, undefined);
 });

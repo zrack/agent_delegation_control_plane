@@ -56,6 +56,29 @@ Saved invoice receipts count toward the inbox's 2 MiB limit. Review packages
 and case downloads carry the delegation evidence. The receipt files stay in
 this browser. [Privacy and sharing guidance](PRIVACY.md)
 
+## Review and close an invoice receipt case
+
+1. With invoice A pinned, save the missing-validation and altered-output
+   candidates as described above. Keep their original receipt folders.
+2. Open each inbox entry. In **Review decision and follow-up**, choose
+   **Evidence needed** for the missing receipt or **Fix required** for the hash
+   mismatch, enter your reason, and select **Save decision**.
+3. Use **Attach follow-up invoice folder** and select the matching complete folder
+   for invoice B or C. A restored receipt can keep the original run ID when the
+   investigation matches. Keep the workflow pinned to the original baseline.
+4. Open **Inspect follow-up evidence**. Confirm the baseline comparison shows
+   **No regression found**, authority shows **Within scope**, output shows
+   **Totals verified**, and execution shows **Execution recorded complete**.
+   Select **Close as resolved**, reload, and check the decision and **Resolved**
+   status again.
+
+As a negative check, attach the still-incomplete or altered folder before trying
+the corrected folder. The case should stay **Open** with the failing receipt
+visible. A replacement baseline prevents attachment and closure until the
+original pin is restored. The inbox retains both snapshots in this browser.
+The invoice decision can travel in a case download. Invoice receipt evidence,
+follow-ups, and closure stay local.
+
 ## Import a resolved case
 
 Use the alpha.4 dashboard started above for this exercise. The
