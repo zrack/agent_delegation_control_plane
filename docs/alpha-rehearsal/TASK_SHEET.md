@@ -8,7 +8,7 @@ could only finish with help.
 
 ## Review the three cases
 
-1. Open **Regression inbox** and use **Import review package** to open each of
+1. Open **Regression inbox** and use the review package import to open each of
    `case-01.json`, `case-02.json`, and `case-03.json` from this folder.
 2. For each case, record the current evidence check and explain it in your own
    words. Identify who acted for whom, the recorded action and resource, and the

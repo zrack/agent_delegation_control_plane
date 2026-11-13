@@ -31,7 +31,7 @@ separate `facilitator` folder until they finish.
 
 ## Try one review
 
-1. In **Regression inbox**, choose **Import review package** and open
+1. In **Regression inbox**, use the review package import to open
    `case-02.json` from the demo ZIP or the generated kit's `reviewer` folder.
 2. Open the evidence behind the unexpected export. Record who acted for whom,
    which action and resource were involved, and which grant explains the finding.

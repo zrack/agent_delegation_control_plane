@@ -14,6 +14,7 @@ export const reviewDecisions = Object.freeze({
   'expected-change': 'Expected change',
 });
 const packageKind = 'adcp-review-package';
+const caseKind = 'adcp-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
 const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution'];
@@ -66,9 +67,9 @@ async function evidenceState(report, side, chain) {
 
 const normalizeEvidence = chain => parseInvestigation(JSON.stringify({ schemaVersion: 1, chain }));
 
-export async function createReviewPackage(report, evidence, note) {
+async function reviewBundle(kind, report, evidence, note) {
   const normalized = parseRegressionReport(JSON.stringify(report));
-  const bundle = { kind: packageKind, schemaVersion: 1, report: normalized };
+  const bundle = { kind, schemaVersion: 1, report: normalized };
   for (const side of sides) {
     if (await evidenceState(normalized, side, evidence[side]) === 'matched') {
       bundle[side] = { schemaVersion: 1, chain: normalizeEvidence(evidence[side]) };
@@ -78,18 +79,44 @@ export async function createReviewPackage(report, evidence, note) {
     if (typeof note !== 'string' || note.length > MAX_REVIEW_NOTE) throw new Error('The review note is invalid.');
     if (note.trim()) bundle.note = note.trim();
   }
+  return bundle;
+}
+
+function serializeBundle(bundle) {
   const raw = JSON.stringify(bundle);
   if (bytes(raw) > MAX_REVIEW_PACKAGE_BYTES) throw new Error('The review package exceeds 2 MiB.');
   return raw;
 }
 
-function readReviewPackage(contents) {
+export async function createReviewPackage(report, evidence, note) {
+  return serializeBundle(await reviewBundle(packageKind, report, evidence, note));
+}
+
+const caseResolutionFingerprint = item => runFingerprint({
+  original: item.id, decision: item.decision, followUp: item.followUp.id,
+});
+
+export async function createReviewCase(item, note) {
+  const bundle = await reviewBundle(caseKind, item.report, item, note);
+  if (item.decision) bundle.decision = validateDecision(item.decision.kind, item.decision.reason);
+  const original = await assessReview(item);
+  const { assessment, resolved } = await assessFollowUp(item, original);
+  if (bundle.decision && assessment?.states.baseline === 'matched' && assessment.states.candidate === 'matched') {
+    bundle.followUp = { report: item.followUp.report, candidate: { schemaVersion: 1, chain: item.followUp.candidate } };
+    if (resolved) bundle.resolution = await caseResolutionFingerprint(item);
+  }
+  return serializeBundle(bundle);
+}
+
+function readReviewPackage(contents, allowCase = false) {
   if (typeof contents !== 'string' || contents.length > MAX_REVIEW_PACKAGE_BYTES || bytes(contents) > MAX_REVIEW_PACKAGE_BYTES) {
     throw new Error('Choose a review package no larger than 2 MiB.');
   }
   let bundle;
   try { bundle = JSON.parse(contents); } catch { throw new Error('The review package is not valid JSON.'); }
-  if (bundle?.kind !== packageKind || bundle.schemaVersion !== 1) throw new Error('Expected a version 1 review package.');
+  if (bundle?.schemaVersion !== 1 || (bundle.kind !== packageKind && !(allowCase && bundle.kind === caseKind))) {
+    throw new Error(allowCase ? 'Expected a version 1 review package or case.' : 'Expected a version 1 review package.');
+  }
   if (bundle.note !== undefined && (typeof bundle.note !== 'string' || bundle.note.length > MAX_REVIEW_NOTE)) {
     throw new Error('The review note in the package is invalid.');
   }
@@ -97,11 +124,12 @@ function readReviewPackage(contents) {
   for (const side of sides) {
     if (bundle[side] !== undefined) evidence[side] = parseInvestigation(JSON.stringify(bundle[side]));
   }
-  return { reportText: JSON.stringify(bundle.report), evidence, note: bundle.note?.trim() };
+  return { reportText: JSON.stringify(bundle.report), evidence, note: bundle.note?.trim(), bundle };
 }
 
 export function importReviewPackage(getStorage, contents) {
-  const { reportText, evidence, note } = readReviewPackage(contents);
+  const { reportText, evidence, note, bundle } = readReviewPackage(contents, true);
+  if (bundle.kind === caseKind) return importReview(getStorage, reportText, evidence, note, bundle);
   return importReview(getStorage, reportText, evidence, note);
 }
 
@@ -157,7 +185,7 @@ function writeReviews(storage, items) {
   return items;
 }
 
-export async function importReview(getStorage, reportText, evidence, initialNote = '') {
+export async function importReview(getStorage, reportText, evidence, initialNote = '', portableCase) {
   const report = parseRegressionReport(reportText);
   const id = await runFingerprint(report);
   const attachments = {};
@@ -167,12 +195,44 @@ export async function importReview(getStorage, reportText, evidence, initialNote
     if (await evidenceState(report, side, evidence[side]) === 'matched') attachments[side] = normalizeEvidence(evidence[side]);
     else mismatches.push(side);
   }
+  const incoming = { id, report, ...attachments };
+  const caseWarnings = [];
+  if (portableCase) {
+    if (portableCase.decision !== undefined) {
+      incoming.decision = validateDecision(portableCase.decision?.kind, portableCase.decision?.reason);
+    }
+    if (portableCase.followUp !== undefined) {
+      const followUp = parseRegressionReport(JSON.stringify(portableCase.followUp?.report));
+      const candidate = parseInvestigation(JSON.stringify(portableCase.followUp?.candidate));
+      if (incoming.decision && attachments.baseline && sameBaseline(report, followUp) && distinctCandidate(report, followUp)
+        && await evidenceState(followUp, 'candidate', candidate) === 'matched') {
+        incoming.followUp = { id: await runFingerprint(followUp), report: followUp, candidate };
+      } else caseWarnings.push('The follow-up needs matching evidence against the original baseline.');
+    }
+    if (portableCase.resolution !== undefined) {
+      const { canResolve } = await assessFollowUp(incoming, await assessReview(incoming));
+      if (canResolve && portableCase.resolution === await caseResolutionFingerprint(incoming)) {
+        incoming.resolution = incoming.followUp.id;
+      }
+      else caseWarnings.push('Closure could not be verified.');
+    }
+  }
+  // Read local state after the asynchronous checks so imports preserve recent edits.
   const storage = getStorage();
   const items = readReviews(storage);
   const current = items.find(item => item.id === id);
   const next = { ...current, id, report, note: current?.note ?? initialNote, reviewed: current?.reviewed ?? false, ...attachments };
+  if (incoming.decision) {
+    if (current?.decision || current?.followUp || current?.resolution) {
+      caseWarnings.push('The existing local decision and follow-up were kept.');
+    } else {
+      next.decision = incoming.decision;
+      next.followUp = incoming.followUp;
+      next.resolution = incoming.resolution;
+    }
+  }
   for (const side of mismatches) next[side] ??= null;
-  return { id, mismatches, items: writeReviews(storage, [next, ...items.filter(item => item.id !== id)]) };
+  return { id, mismatches, caseWarnings, items: writeReviews(storage, [next, ...items.filter(item => item.id !== id)]) };
 }
 
 export function saveReview(getStorage, expected, note, reviewed) {

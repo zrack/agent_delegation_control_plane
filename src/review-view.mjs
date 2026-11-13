@@ -1,7 +1,7 @@
 import { regressionLabels } from './comparison.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import {
-  assessFollowUp, assessReview, attachReviewFollowUp, createReviewPackage, importReview, importReviewPackage,
+  assessFollowUp, assessReview, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
   restoreReviews, reviewDecisions, saveReview, saveReviewDecision,
 } from './review.mjs';
@@ -32,9 +32,10 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     status.classList.toggle('import-error', error);
   }
 
-  function finishImport({ id, mismatches }, currentRoute) {
-    announce(mismatches.length ? `Report saved. The selected ${mismatches.join(' and ')} evidence did not match and was not saved.`
-      : 'Report saved in this browser.', Boolean(mismatches.length));
+  function finishImport({ id, mismatches, caseWarnings }, currentRoute) {
+    const message = mismatches.length ? `Report saved. The selected ${mismatches.join(' and ')} evidence did not match and was not saved.`
+      : 'Report saved in this browser.';
+    announce([message, ...caseWarnings].join(' '), Boolean(mismatches.length || caseWarnings.length));
     if (location.hash !== currentRoute) return;
     if (location.hash === itemRoute(id)) render({ focus: true });
     else location.hash = itemRoute(id);
@@ -109,6 +110,22 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     </section>`;
   }
 
+  function renderExport(item, original, followUp) {
+    const evidence = ['baseline', 'candidate'].filter(side => original.states[side] === 'matched');
+    const matching = evidence.length ? ` and matching ${evidence.join(' and ')} evidence` : '';
+    const contents = [];
+    if (item.decision) contents.push('saved decision and reason');
+    if (item.decision && followUp.assessment?.states.baseline === 'matched'
+      && followUp.assessment.states.candidate === 'matched') contents.push('follow-up report and evidence');
+    if (followUp.resolved) contents.push('verified closure');
+    return `<details class="review-differences"><summary>Export review package or case</summary>
+      <p class="panel-description">The download includes the original report${matching}.</p>
+      ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
+      <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
+      <button type="button" id="download-review-package">Download review package</button>
+      ${item.decision ? '<button type="button" id="download-review-case">Download review case</button>' : ''}</div></details>`;
+  }
+
   async function render({ focus = false } = {}) {
     const currentRevision = ++revision;
     const { items, warning } = restoreReviews(getStorage);
@@ -148,10 +165,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
           <div class="review-note-actions"><label><input type="checkbox" id="review-complete" ${item.reviewed ? 'checked' : ''}> Mark as reviewed</label>
           <button type="submit">Save review</button><button type="button" id="remove-review">Remove from inbox</button></div>
         </form>
-        <details class="review-differences"><summary>Export review package</summary>
-          <p class="panel-description">Download the saved report and matching evidence. Save a note before including it.</p>
-          <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
-          <button type="button" id="download-review-package">Download review package</button></div></details>`;
+        ${renderExport(item, assessment, followUp)}`;
     } catch (error) {
       if (currentRevision === revision) detail.innerHTML = `<p class="import-error">${escape(error.message)}</p>`;
     }
@@ -162,12 +176,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     if (!file) return;
     const currentRoute = location.hash;
     packageInput.disabled = true;
-    announce('Checking the review package…');
+    announce('Checking the review file…');
     try {
-      if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review package no larger than 2 MiB.');
+      if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review file no larger than 2 MiB.');
       finishImport(await importReviewPackage(getStorage, await file.text()), currentRoute);
     } catch (error) {
-      announce(`Could not import the review package. ${error.message}`, true);
+      announce(`Could not import the review file. ${error.message}`, true);
     } finally {
       packageInput.value = '';
       packageInput.disabled = false;
@@ -267,24 +281,26 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       }
       return;
     }
-    if (event.target.id === 'download-review-package') {
+    if (['download-review-package', 'download-review-case'].includes(event.target.id)) {
       const item = selected;
+      const completeCase = event.target.id === 'download-review-case';
+      const label = completeCase ? 'Review case' : 'Review package';
       const checkbox = detail.querySelector('#include-review-note');
       const note = checkbox.checked ? item.note : undefined;
       checkbox.checked = false;
       event.target.disabled = true;
       try {
-        const contents = await createReviewPackage(item.report, item, note);
+        const contents = completeCase ? await createReviewCase(item, note) : await createReviewPackage(item.report, item, note);
         const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'review-package.json';
+        link.download = completeCase ? 'review-case.json' : 'review-package.json';
         detail.append(link);
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        announce(note ? 'Review package downloaded with the saved note.' : 'Review package downloaded.');
-      } catch (error) { announce(`Could not download the review package. ${error.message}`, true); }
+        announce(`${label} downloaded${note ? ' with the saved note' : ''}.`);
+      } catch (error) { announce(`Could not download the ${label.toLowerCase()}. ${error.message}`, true); }
       finally { event.target.disabled = false; }
       return;
     }

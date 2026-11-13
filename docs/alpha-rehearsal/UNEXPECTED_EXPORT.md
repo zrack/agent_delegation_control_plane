@@ -22,7 +22,8 @@ JSON files and this walkthrough.
 
 ## Review the original case
 
-1. Open **Regression inbox** and select **Import review package**. Choose
+1. Open **Regression inbox** and select **Import review package or case** on
+   current `main` or **Import review package** in the alpha release. Choose
    `case-02.json` from the extracted demo ZIP. The inbox should show **Current
    evidence check · Regression detected**.
 2. Under **Flagged findings**, expand **Export agent** with the message “The

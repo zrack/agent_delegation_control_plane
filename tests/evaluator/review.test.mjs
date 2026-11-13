@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chains } from '../../src/fixtures.mjs';
 import { parseInvestigation } from '../../src/import.mjs';
-import { assessFollowUp, assessReview, attachReviewFollowUp, createReviewPackage, importReview, importReviewPackage,
+import { assessFollowUp, assessReview, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   removeReview, resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveReview, saveReviewDecision } from '../../src/review.mjs';
 import { runFingerprint } from '../../src/storage.mjs';
 
@@ -178,4 +178,81 @@ test('different pins, altered exports and a claimed pass cannot resolve a case',
   assert.equal((await assessFollowUp(attached, await assessReview(attached))).assessment.verdict.status, 'regression');
   await assert.rejects(resolveReviewCase(getStorage, attached), /passing follow-up/);
   assert.equal(restoreReviews(getStorage).items[0].resolution, undefined);
+});
+
+async function resolvedCase() {
+  const candidate = normalize(overreach);
+  const corrected = { ...baseline, id: 'offline-corrected' };
+  const storage = memory();
+  const getStorage = () => storage;
+  const { items: [item] } = await importReview(getStorage, await reportFor(candidate, 'regression'), { baseline, candidate });
+  const [decided] = saveReviewDecision(getStorage, item, 'fix-required', 'Export exceeds the read-only grant.');
+  const packageText = await createReviewPackage(JSON.parse(await reportFor(corrected, 'pass')), { baseline, candidate: corrected });
+  const [attached] = await attachReviewFollowUp(getStorage, decided, packageText);
+  const [resolved] = await resolveReviewCase(getStorage, attached);
+  return resolved;
+}
+
+test('a complete case restores the decision and independently verified closure without the optional note', async () => {
+  const resolved = await resolvedCase();
+  const raw = await createReviewCase({ ...resolved, note: 'Opt in to share this note.', reviewed: true });
+  const bundle = JSON.parse(raw);
+  assert.equal(bundle.note, undefined);
+  assert.equal(bundle.resolution, await runFingerprint({
+    original: resolved.id, decision: resolved.decision, followUp: resolved.followUp.id,
+  }));
+  assert.equal(JSON.parse(await createReviewCase(resolved, 'Share this note.')).note, 'Share this note.');
+  const storage = memory();
+  const getStorage = () => storage;
+  const { caseWarnings } = await importReviewPackage(getStorage, raw);
+  assert.deepEqual(caseWarnings, []);
+  const [saved] = restoreReviews(getStorage).items;
+  assert.deepEqual(saved.decision, resolved.decision);
+  assert.equal(saved.reviewed, false);
+  assert.deepEqual(saved.followUp, resolved.followUp);
+  assert.equal((await assessFollowUp(saved, await assessReview(saved))).resolved, true);
+
+  saveReviewDecision(getStorage, saved, 'evidence-needed', 'My local decision.');
+  const [edited] = restoreReviews(getStorage).items;
+  await importReviewPackage(getStorage, raw);
+  assert.deepEqual(restoreReviews(getStorage).items[0], edited);
+});
+
+test('altered evidence and a different pin cannot restore closure from a complete case', async () => {
+  const raw = await createReviewCase(await resolvedCase());
+  const edits = [
+    bundle => { bundle.candidate.chain.summary = 'Changed original evidence'; },
+    bundle => { bundle.followUp.candidate.chain.summary = 'Changed follow-up evidence'; },
+    bundle => { bundle.followUp.report.baselineFingerprint = '0'.repeat(64); },
+  ];
+  for (const edit of edits) {
+    const bundle = JSON.parse(raw);
+    edit(bundle);
+    const storage = memory();
+    const getStorage = () => storage;
+    const { caseWarnings } = await importReviewPackage(getStorage, JSON.stringify(bundle));
+    assert.ok(caseWarnings.includes('Closure could not be verified.'));
+    const [saved] = restoreReviews(getStorage).items;
+    assert.equal(saved.decision.kind, 'fix-required');
+    assert.equal(saved.resolution, undefined);
+    const { resolved, canResolve } = await assessFollowUp(saved, await assessReview(saved));
+    assert.equal(resolved, false);
+    assert.equal(canResolve, false);
+  }
+});
+
+test('a different passing follow-up does not inherit the exported resolution', async () => {
+  const bundle = JSON.parse(await createReviewCase(await resolvedCase()));
+  const differentCandidate = { ...baseline, id: 'offline-another-correction' };
+  bundle.followUp.candidate.chain = differentCandidate;
+  bundle.followUp.report = JSON.parse(await reportFor(differentCandidate, 'pass'));
+  const storage = memory();
+  const getStorage = () => storage;
+  const { caseWarnings } = await importReviewPackage(getStorage, JSON.stringify(bundle));
+  assert.deepEqual(caseWarnings, ['Closure could not be verified.']);
+  const [saved] = restoreReviews(getStorage).items;
+  assert.equal(saved.resolution, undefined);
+  const assessment = await assessFollowUp(saved, await assessReview(saved));
+  assert.equal(assessment.canResolve, true);
+  assert.equal(assessment.resolved, false);
 });
