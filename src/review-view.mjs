@@ -3,7 +3,7 @@ import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
 import { restoreWorkflowBaselines } from './storage.mjs';
 import {
-  assessFollowUp, assessReview, assessSavedInvoice, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
+  assessFollowUp, assessReview, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
   restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from './review.mjs';
@@ -90,17 +90,28 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
   }
 
   function renderCase(item, original, followUp) {
-    if (item.report.status === 'pass' && (!original.verdict || original.verdict.status === 'pass') && !item.decision) return '';
-    const { assessment, canResolve, resolved } = followUp;
+    if (item.report.status === 'pass' && !followUp.flagged && !item.decision) return '';
+    const { assessment, canResolve, pinChanged, resolved } = followUp;
     const comparison = (label, record, check) => `<div class="compare-run"><h3>${label}</h3>
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
       <p class="panel-description">Reported · ${regressionLabels[record.report.status]}</p>
       <p class="panel-description">${check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p></div>`;
     const nextStep = resolved ? 'The saved follow-up still passes against the original baseline.'
-      : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
-        : 'To close this case, save a decision and attach a passing follow-up with matching evidence against the original baseline.';
+      : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
+        : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
+        : item.invoice ? 'Save a decision and attach a folder for this invoice case. The original baseline comparison, authority, output, and execution checks must pass for the follow-up.'
+          : 'To close this case, save a decision and attach a passing follow-up with matching evidence against the original baseline.';
     const followUpRecords = assessment?.states.candidate === 'matched'
       ? evidenceDetails('Follow-up actions and grants', { snapshot: item.followUp.candidate }) : '';
+    const receiptCheck = followUp.invoice;
+    const receiptSummary = receiptCheck?.checked
+      ? `<p class="panel-description">Follow-up receipts · ${receiptCheck.checked.output.label} · ${receiptCheck.checked.execution.label}</p>`
+      : '';
+    const receiptDetails = receiptCheck?.checked ? invoiceMarkup(receiptCheck.checked)
+      : receiptCheck?.error ? `<p class="import-error">${escape(receiptCheck.error)}</p>` : '';
+    const label = item.invoice ? 'Attach follow-up invoice folder' : 'Attach follow-up package';
+    const picker = item.invoice ? 'webkitdirectory' : 'accept=".json,application/json"';
+    const folderUnsupported = item.invoice && !('webkitdirectory' in invoiceInput);
     return `<section class="review-case" aria-labelledby="review-case-title">
       <div class="panel-heading"><h3 id="review-case-title">Review decision and follow-up</h3>
         <span class="badge ${resolved ? 'valid' : 'unknown'}">${resolved ? 'Resolved' : 'Open'}</span></div>
@@ -112,12 +123,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         <textarea id="review-decision-reason" rows="2" maxlength="${MAX_REVIEW_NOTE}" required>${escape(item.decision?.reason ?? '')}</textarea>
         <button type="submit">Save decision</button>
       </form>
-      <label for="review-follow-up-file">Attach follow-up package</label>
-      <input id="review-follow-up-file" type="file" accept=".json,application/json" aria-describedby="review-case-help" ${item.decision ? '' : 'disabled'}>
+      <label for="review-follow-up-file">${label}</label>
+      <input id="review-follow-up-file" type="file" ${picker} aria-describedby="review-case-help" ${item.decision && !folderUnsupported ? '' : 'disabled'}>
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original)}
         ${comparison('Follow-up run', item.followUp, assessment)}</div>
-        ${assessment ? `<details class="review-differences"><summary>Inspect follow-up evidence</summary>${renderEvidence(item.followUp, assessment)}${followUpRecords}</details>` : ''}` : ''}
-      <p id="review-case-help" class="panel-description">${nextStep}</p>
+        ${receiptSummary}
+        ${assessment || receiptDetails ? `<details class="review-differences"><summary>Inspect follow-up evidence</summary>
+          ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}</details>` : ''}` : ''}
+      <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
       <button type="button" id="resolve-review-case" ${canResolve && !resolved ? '' : 'disabled'}>Close as resolved</button>
     </section>`;
   }
@@ -127,11 +140,11 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const matching = evidence.length ? ` and matching ${evidence.join(' and ')} evidence` : '';
     const contents = [];
     if (item.decision) contents.push('saved decision and reason');
-    if (item.decision && followUp.assessment?.states.baseline === 'matched'
+    if (!item.invoice && item.decision && followUp.assessment?.states.baseline === 'matched'
       && followUp.assessment.states.candidate === 'matched') contents.push('follow-up report and evidence');
-    if (followUp.resolved) contents.push('verified closure');
+    if (!item.invoice && followUp.resolved) contents.push('verified closure');
     return `<details class="review-differences"><summary>Export review package or case</summary>
-      <p class="panel-description">The download includes the original report${matching}.${item.invoice ? ' Invoice receipts are kept in this browser.' : ''}</p>
+      <p class="panel-description">The download includes the original report${matching}.${item.invoice ? ' Invoice receipts, follow-ups, and closure are kept in this browser.' : ''}</p>
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
       <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
       <button type="button" id="download-review-package">Download review package</button>
@@ -164,15 +177,10 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     if (focus) detail.focus();
     try {
       const assessment = await assessReview(item);
-      const followUp = await assessFollowUp(item, assessment);
-      let receiptResults = '';
-      if (item.invoice) {
-        try {
-          receiptResults = invoiceMarkup(await assessSavedInvoice(item));
-        } catch (error) {
-          receiptResults = `<p class="import-error">${escape(error.message)}</p>`;
-        }
-      }
+      const followUp = await assessFollowUp(item, assessment, getStorage);
+      const invoice = followUp.originalInvoice;
+      const receiptResults = invoice?.checked ? invoiceMarkup(invoice.checked)
+        : invoice?.error ? `<p class="import-error">${escape(invoice.error)}</p>` : '';
       if (currentRevision !== revision) return;
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
@@ -392,8 +400,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     input.disabled = true;
     announce('Checking the follow-up package…');
     try {
-      if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review package no larger than 2 MiB.');
-      await attachReviewFollowUp(getStorage, item, await file.text());
+      if (item.invoice) {
+        const { evidence } = await importInvoiceFolder(input.files);
+        await attachInvoiceFollowUp(getStorage, item, evidence);
+      } else {
+        if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review package no larger than 2 MiB.');
+        await attachReviewFollowUp(getStorage, item, await file.text());
+      }
       announce('Follow-up saved.');
       if (location.hash === itemRoute(item.id)) await render();
     } catch (error) { announce(`Could not attach the follow-up. ${error.message}`, true); }

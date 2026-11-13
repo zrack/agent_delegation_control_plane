@@ -118,8 +118,16 @@ exact saved workflow pin. Saving records the report, baseline and candidate,
 relevant manifest digests, and original receipt bytes in one bounded inbox write.
 The receipt snapshot fingerprint distinguishes copies with the same run ID and
 different files. Opening the entry recomputes the comparison from the saved
-runs and verifies the saved receipt bytes. Review downloads carry the existing
-delegation evidence and case fields.
+runs and verifies the saved receipt bytes.
+
+A failing invoice receipt check can open a review case alongside a passing
+baseline comparison. Invoice follow-ups use the case's original baseline
+snapshot and require its workflow pin when attaching or closing. A correction
+can use the original run ID when the investigation fingerprint matches. Closure
+binds the decision and follow-up snapshot to the original case and is rechecked
+against saved baseline, authority, output, and execution evidence on reopen.
+Invoice receipt snapshots, follow-ups and closure stay in the local inbox.
+Review downloads can carry the original delegation report and decision.
 
 ## Trust and recovery
 

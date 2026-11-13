@@ -100,6 +100,7 @@ const caseResolutionFingerprint = async item => runFingerprint({
 export async function createReviewCase(item, note) {
   const bundle = await reviewBundle(caseKind, item.report, item, note);
   if (item.decision) bundle.decision = validateDecision(item.decision.kind, item.decision.reason);
+  if (item.invoice) return serializeBundle(bundle);
   const original = await assessReview(item);
   const { assessment, resolved } = await assessFollowUp(item, original);
   if (bundle.decision && assessment?.states.baseline === 'matched' && assessment.states.candidate === 'matched') {
@@ -163,6 +164,7 @@ function readReviews(storage) {
       if (!isFingerprint(item.followUp?.id)) throw new Error('The saved follow-up is invalid.');
       restored.followUp = { id: item.followUp.id, report: parseRegressionReport(JSON.stringify(item.followUp.report)),
         candidate: normalizeEvidence(item.followUp.candidate) };
+      if (item.followUp.invoice !== undefined) restored.followUp.invoice = item.followUp.invoice;
     }
     if (item.resolution !== undefined) {
       if (!isFingerprint(item.resolution)) throw new Error('The saved resolution is invalid.');
@@ -196,7 +198,29 @@ export async function assessSavedInvoice(item) {
   if (!isFingerprint(invoice?.fingerprint) || await runFingerprint(invoice.evidence) !== invoice.fingerprint) {
     throw new Error('Saved invoice receipts no longer match the snapshot. Reimport the original folder to check them.');
   }
-  return assessInvoiceFolder(invoice.evidence);
+  const checked = await assessInvoiceFolder(invoice.evidence);
+  if (!checked.candidate || await evidenceState(item.report, 'candidate', checked.candidate) !== 'matched') {
+    throw new Error('Saved invoice receipts do not match the candidate investigation.');
+  }
+  return checked;
+}
+
+async function invoiceComparison(baseline, fingerprint, workflow, evidence, { candidate, output }) {
+  if (baseline.id === candidate.id) throw new Error('Choose a candidate with a different run ID from the baseline.');
+  const original = evaluateChain(baseline);
+  if (!canPinBaseline(baseline, original)) throw new Error('The pinned baseline no longer qualifies for comparison.');
+  const next = evaluateChain(candidate);
+  const { status, reasons } = checkRegression(compareRuns(baseline, candidate, original, next), next);
+  const report = parseRegressionReport(JSON.stringify({
+    schemaVersion: 1, status,
+    reasons: reasons.map(({ impact, message, eventId, row }) => ({
+      impact, message, baselineEventId: row?.eventLinks?.[0], candidateEventId: eventId ?? row?.eventLinks?.[1],
+    })),
+    baselineId: baseline.id, baselineFingerprint: fingerprint,
+    candidateId: candidate.id, candidateFingerprint: await runFingerprint(candidate),
+  }));
+  const invoice = { workflow, outputAtImport: output.label, evidence, fingerprint: await runFingerprint(evidence) };
+  return { id: await reviewId(report, invoice), report, candidate, invoice };
 }
 
 export async function saveInvoiceCandidate(getStorage, pin, evidence) {
@@ -212,21 +236,7 @@ export async function saveInvoiceCandidate(getStorage, pin, evidence) {
   if (!baseline || await runFingerprint(baseline) !== pin.fingerprint) {
     throw new Error('Reimport the original investigation for this pinned baseline.');
   }
-  if (baseline.id === candidate.id) throw new Error('Choose a candidate with a different run ID from the baseline.');
-  const original = evaluateChain(baseline);
-  if (!canPinBaseline(baseline, original)) throw new Error('The pinned baseline no longer qualifies for comparison.');
-  const next = evaluateChain(candidate);
-  const { status, reasons } = checkRegression(compareRuns(baseline, candidate, original, next), next);
-  const report = parseRegressionReport(JSON.stringify({
-    schemaVersion: 1, status,
-    reasons: reasons.map(({ impact, message, eventId, row }) => ({
-      impact, message, baselineEventId: row?.eventLinks?.[0], candidateEventId: eventId ?? row?.eventLinks?.[1],
-    })),
-    baselineId: baseline.id, baselineFingerprint: pin.fingerprint,
-    candidateId: candidate.id, candidateFingerprint: await runFingerprint(candidate),
-  }));
-  const invoice = { workflow: pin.name, outputAtImport: output.label, evidence, fingerprint: await runFingerprint(evidence) };
-  const id = await reviewId(report, invoice);
+  const { id, report, invoice } = await invoiceComparison(baseline, pin.fingerprint, pin.name, evidence, { candidate, output });
   // Check again after hashing so a concurrent pin or baseline change cannot
   // save a comparison against a run the reviewer did not select.
   const storage = getStorage();
@@ -341,6 +351,7 @@ function distinctCandidate(original, followUp) {
 }
 
 export async function attachReviewFollowUp(getStorage, expected, contents) {
+  if (expected.invoice) throw new Error('Attach an invoice folder to recheck its receipts.');
   if (!expected.decision) throw new Error('Save a review decision first.');
   const { reportText, evidence } = readReviewPackage(contents);
   const report = parseRegressionReport(reportText);
@@ -359,21 +370,87 @@ export async function attachReviewFollowUp(getStorage, expected, contents) {
   return updateCase(getStorage, expected, { followUp, resolution });
 }
 
-export async function assessFollowUp(item, original) {
-  const { followUp } = item;
-  if (!followUp || !sameBaseline(item.report, followUp.report) || !distinctCandidate(item.report, followUp.report)) {
-    return { canResolve: false, resolved: false };
+function invoicePasses(checked) {
+  return checked?.authority.tone === 'valid' && checked.output.tone === 'valid' && checked.execution.tone === 'valid';
+}
+
+async function inspectInvoice(item) {
+  try { return { checked: await assessSavedInvoice(item) }; }
+  catch (error) { return { error: error.message }; }
+}
+
+function sameInvoiceCandidate(original, followUp) {
+  // Restoring an original receipt keeps the run ID. In that case the
+  // investigation must be identical to the one the case already reviewed.
+  return followUp.candidateId === original.candidateId
+    ? followUp.candidateFingerprint === original.candidateFingerprint : distinctCandidate(original, followUp);
+}
+
+function invoicePinMatches(getStorage, item) {
+  const current = restoreWorkflowBaselines(getStorage).baselines.find(pin => workflowKey(pin.name) === workflowKey(item.invoice.workflow));
+  return Boolean(current && current.runId === item.report.baselineId && current.fingerprint === item.report.baselineFingerprint);
+}
+
+function requireInvoicePin(getStorage, item) {
+  if (!invoicePinMatches(getStorage, item)) {
+    throw new Error('The workflow uses a different baseline or is unavailable. Restore the original pin before continuing.');
   }
-  const assessment = await assessReview({ ...followUp, baseline: item.baseline }).catch(() => undefined);
-  const canResolve = Boolean(item.decision && original.verdict && original.verdict.status !== 'pass'
+}
+
+export async function attachInvoiceFollowUp(getStorage, expected, evidence) {
+  if (!expected.invoice || !expected.decision) throw new Error('Save an invoice review decision first.');
+  requireInvoicePin(getStorage, expected);
+  if (!(await assessReview(expected)).verdict) throw new Error('Restore the original baseline and candidate evidence.');
+  const original = await assessSavedInvoice(expected);
+  const corrected = await assessInvoiceFolder(evidence);
+  if (original.caseId !== corrected.caseId) throw new Error('Choose a follow-up folder for the same invoice case.');
+  if (!corrected.candidate) throw new Error('The follow-up needs an investigation that matches its manifest.');
+  const followUp = await invoiceComparison(expected.baseline, expected.report.baselineFingerprint,
+    expected.invoice.workflow, evidence, corrected);
+  if (!sameInvoiceCandidate(expected.report, followUp.report)) {
+    throw new Error('The follow-up changed the investigation under the original run ID. Use the original investigation or a new run ID.');
+  }
+
+  requireInvoicePin(getStorage, expected);
+  const resolution = expected.followUp?.id === followUp.id ? expected.resolution : undefined;
+  return updateCase(getStorage, expected, { followUp, resolution });
+}
+
+const resolutionFor = item => item.invoice
+  ? runFingerprint({ original: item.id, decision: item.decision, followUp: item.followUp.id })
+  : item.followUp.id;
+
+export async function assessFollowUp(item, original, getStorage) {
+  const { followUp } = item;
+  const originalInvoice = item.invoice ? await inspectInvoice(item) : undefined;
+  const flagged = Boolean((original.verdict && original.verdict.status !== 'pass')
+    || (originalInvoice && !invoicePasses(originalInvoice.checked)));
+  const pinChanged = Boolean(item.invoice && getStorage && !invoicePinMatches(getStorage, item));
+  const open = { originalInvoice, flagged, pinChanged, canResolve: false, resolved: false };
+  if (!followUp || !sameBaseline(item.report, followUp.report)) return open;
+  const compatible = item.invoice ? followUp.invoice && sameInvoiceCandidate(item.report, followUp.report)
+    : !followUp.invoice && distinctCandidate(item.report, followUp.report);
+  if (!compatible) return open;
+
+  const record = { ...followUp, baseline: item.baseline };
+  const assessment = await assessReview(record).catch(() => undefined);
+  const invoice = followUp.invoice ? await inspectInvoice(record) : undefined;
+  const receiptsPass = !item.invoice || (originalInvoice.checked && invoicePasses(invoice?.checked)
+    && originalInvoice.checked.caseId === invoice.checked.caseId && item.invoice.workflow === followUp.invoice.workflow);
+  const passes = Boolean(item.decision && original.verdict && flagged && receiptsPass
     && followUp.report.status === 'pass' && assessment?.verdict?.status === 'pass');
-  return { assessment, canResolve, resolved: canResolve && item.resolution === followUp.id };
+  return { ...open, assessment, invoice, canResolve: passes && !pinChanged,
+    resolved: passes && item.resolution === await resolutionFor(item) };
 }
 
 export async function resolveReviewCase(getStorage, expected) {
   const { canResolve } = await assessFollowUp(expected, await assessReview(expected));
-  if (!canResolve) throw new Error('Resolution requires a passing follow-up with matching evidence against the original pinned baseline.');
-  return updateCase(getStorage, expected, { resolution: expected.followUp.id });
+  if (!canResolve) throw new Error(expected.invoice
+    ? 'Closure requires matching baseline evidence and a passing invoice follow-up with verified receipts.'
+    : 'Resolution requires a passing follow-up with matching evidence against the original pinned baseline.');
+  const resolution = await resolutionFor(expected);
+  if (expected.invoice) requireInvoicePin(getStorage, expected);
+  return updateCase(getStorage, expected, { resolution });
 }
 
 export async function assessReview(item) {
