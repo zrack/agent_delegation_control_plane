@@ -72,6 +72,16 @@
           </form>
         </details>
         <p id="review-status" role="status"></p>
+        <details id="invoice-folder-import">
+          <summary>Import invoice-run folder</summary>
+          <div class="import-controls">
+            <label for="invoice-folder-file">Invoice-run folder</label>
+            <input id="invoice-folder-file" type="file" webkitdirectory aria-describedby="invoice-folder-help">
+            <p id="invoice-folder-help">Choose the folder containing manifest.json. The dashboard checks the selected receipts against that manifest. These checks do not authenticate the source. Results clear on reload.</p>
+          </div>
+          <p id="invoice-folder-status" role="status"></p>
+          <div id="invoice-folder-results"></div>
+        </details>
         <div class="review-layout">
           <nav id="review-list" aria-label="Saved regression reports"></nav>
           <section id="review-detail" tabindex="-1" aria-label="Selected regression report"></section>

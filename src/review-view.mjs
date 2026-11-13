@@ -1,5 +1,6 @@
 import { regressionLabels } from './comparison.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
+import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
 import {
   assessFollowUp, assessReview, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
@@ -20,6 +21,9 @@ const itemRoute = id => reviewRoute + new URLSearchParams({ item: id });
 export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
   const form = document.querySelector('#review-import');
   const packageInput = document.querySelector('#review-package-file');
+  const invoiceInput = document.querySelector('#invoice-folder-file');
+  const invoiceStatus = document.querySelector('#invoice-folder-status');
+  const invoiceResults = document.querySelector('#invoice-folder-results');
   const list = document.querySelector('#review-list');
   const detail = document.querySelector('#review-detail');
   const status = document.querySelector('#review-status');
@@ -170,6 +174,60 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       if (currentRevision === revision) detail.innerHTML = `<p class="import-error">${escape(error.message)}</p>`;
     }
   }
+
+  function renderInvoice({ caseId, authority, output, execution, receiptStates }) {
+    const properties = entries => `<dl>${entries.map(([label, value]) =>
+      `<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl>`;
+    const panel = (title, check, body) => `<section class="compare-run" aria-label="${title}">
+      <h4>${title}</h4><span class="badge ${check.tone}">${check.label}</span>${body}</section>`;
+    const authorityBody = authority.runId ? properties([['Run', authority.runId], ['Completed actions', authority.actions]])
+      + (authority.findings.length ? `<ul>${authority.findings.map(message => `<li>${escape(message)}</li>`).join('')}</ul>` : '')
+      : '<p>Supply the matching investigation to check the recorded grants.</p>';
+    const outputBody = output.totals ? properties(Object.entries(invoiceFields).map(([key, label]) => [label, output.totals[key]]))
+      : `<p>${output.message}</p>`;
+    const executionBody = [];
+    if (execution.receipt) {
+      const { status, exitCode, inputUnchanged, cleaned } = execution.receipt;
+      executionBody.push(['Sandbox status', status], ['Exit code', exitCode ?? 'Unavailable'],
+        ['Input unchanged', inputUnchanged ? 'Yes' : 'No'], ['Sandbox cleaned up', cleaned ? 'Yes' : 'No']);
+    }
+    if (execution.attempts) executionBody.push(['Allowed attempts', execution.attempts.allowed], ['Denied attempts', execution.attempts.denied]);
+    const receiptLabels = {
+      matched: 'Matches manifest', missing: 'File missing', unlisted: 'Hash missing from manifest',
+      mismatch: 'Hash mismatch', invalid: 'Invalid or unreadable',
+    };
+    invoiceResults.innerHTML = `<h3>Invoice run · ${escape(caseId)}</h3>
+      <div class="invoice-checks">
+      ${panel('Authority', authority, authorityBody)}
+      ${panel('Output', output, outputBody)}
+      ${panel('Execution', execution, executionBody.length ? properties(executionBody) : '<p>Supply matching execution and attempts receipts.</p>')}
+      </div>
+      <details class="review-differences"><summary>File checks against manifest</summary>
+      ${properties(Object.entries(receiptStates).map(([name, state]) => [name, receiptLabels[state]]))}</details>`;
+  }
+
+  if (!('webkitdirectory' in invoiceInput)) {
+    invoiceInput.disabled = true;
+    invoiceStatus.textContent = 'This browser does not support folder selection.';
+  }
+
+  invoiceInput.addEventListener('change', async () => {
+    if (!invoiceInput.files.length) return;
+    invoiceInput.disabled = true;
+    invoiceResults.replaceChildren();
+    invoiceStatus.classList.remove('import-error');
+    invoiceStatus.textContent = 'Checking invoice folder…';
+    try {
+      renderInvoice(await importInvoiceFolder(invoiceInput.files));
+      invoiceStatus.textContent = 'Invoice folder checked. See the three results below.';
+    } catch (error) {
+      invoiceStatus.classList.add('import-error');
+      invoiceStatus.textContent = error.message;
+    } finally {
+      invoiceInput.value = '';
+      invoiceInput.disabled = false;
+    }
+  });
 
   packageInput.addEventListener('change', async () => {
     const file = packageInput.files[0];

@@ -123,7 +123,7 @@
   .workflow-controls, .workflow-save { grid-template-columns: 1fr; }
 }
 
-#review-import-controls, #review-note-form, .review-case {
+#review-import-controls, #invoice-folder-import, #review-note-form, .review-case {
   margin-top: 16px;
   padding: 12px;
   border: 1px solid var(--line);
@@ -131,7 +131,7 @@
   background: #f8fafc;
 }
 #review-inbox .review-package-import { background: #f8fafc; }
-#review-import-controls summary, .review-differences > summary { color: var(--blue); cursor: pointer; font-size: .875rem; font-weight: 650; }
+#review-import-controls summary, #invoice-folder-import > summary, .review-differences > summary { color: var(--blue); cursor: pointer; font-size: .875rem; font-weight: 650; }
 #review-import { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 12px; }
 #review-import > div { min-width: 0; flex: 1 1 13rem; }
 #review-import label, #review-note-form > label { display: block; margin-bottom: 4px; font-size: .875rem; font-weight: 650; }
@@ -151,6 +151,17 @@
 #review-inbox :is(button, input, textarea, select):focus-visible { outline: 3px solid #4276e6; outline-offset: 3px; }
 #review-status { margin: 10px 0; color: var(--muted); font-size: .875rem; }
 #review-inbox .import-error { color: var(--violation); }
+#invoice-folder-import { margin-bottom: 16px; }
+#invoice-folder-status { margin-top: 8px; font-size: .875rem; color: var(--muted); }
+#invoice-folder-results h3 { margin: 12px 0 8px; }
+#invoice-folder-results dl, #invoice-folder-results p, #invoice-folder-results ul {
+  margin: 8px 0 0;
+  font-size: .8125rem;
+}
+#invoice-folder-results dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; }
+#invoice-folder-results dd { margin: 0; overflow-wrap: anywhere; }
+.invoice-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.invoice-checks h4 { margin: 0 0 6px; }
 .review-layout { display: grid; grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr); gap: 16px; }
 #review-list:empty { display: none; }
 #review-list:empty + #review-detail { grid-column: 1 / -1; }
@@ -176,7 +187,7 @@
 #resolve-review-case { margin-top: 8px; }
 .review-note-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 6px; font-size: .875rem; }
 @media (max-width: 760px) {
-  .review-layout { grid-template-columns: 1fr; }
+  .invoice-checks, .review-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 460px) {
   .review-evidence-status { grid-template-columns: 1fr; }

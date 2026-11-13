@@ -105,6 +105,15 @@ covers the capture files written before the check. Missing, altered or unusable
 inputs require review. The checker reads local files and uses no model or Docker
 calls. Browser pins and command-line pins are managed separately.
 
+The browser can also check a selected invoice case folder in the regression inbox.
+It hashes the original bytes of six allowlisted files against the supplied manifest.
+Authority reuses the delegation evaluator. Output checks the totals against the
+expected values and validation receipt, and binds the output digest to both
+completed actions. Execution reports completion, exit code, input preservation,
+cleanup and attempt counts from matching receipts. Each lane reports its own
+result. The importer keeps the summary in the current page only and never reads
+the generated program, input, or raw capture. The manifest is unsigned.
+
 ## Trust and recovery
 
 The static server permits only `/`, `/index.html`, `/styles.css`, `/app.js`, `/fixtures.mjs`, `/evaluator.mjs`, `/import.mjs`, `/storage.mjs`, `/comparison.mjs`, `/review.mjs` and `/review-view.mjs`. It rejects writes, unexpected Hosts and repository paths. Its content policy blocks outbound browser connections. Loopback is a development boundary, not authentication. Run artifacts and credentials are not served.

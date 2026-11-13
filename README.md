@@ -42,6 +42,12 @@ Start with the three built-in examples or select **Import a completed run** to o
 
 Open **Export review package or case** to see what each download includes. The review package contains the original report and matching evidence. The review case can also carry the saved decision, reason, and matching follow-up. Import restores **Resolved** only after the browser rechecks the original and follow-up against the same baseline. Existing local decisions take precedence, and notes are included only when selected. [Privacy and sharing guidance](docs/PRIVACY.md)
 
+## Check a sandbox invoice folder
+
+From the current source checkout, open **Regression inbox → Import invoice-run folder** and choose the pilot's invoice case folder containing `manifest.json`. Inspect **Authority** for the grant assessment, **Output** for the invoice totals and validation, and **Execution** for the sandbox outcome, cleanup, and allowed or denied attempts. Expand **File checks against manifest** to locate a missing receipt or a hash mismatch.
+
+The import runs locally, checks six named files against the supplied manifest, and clears its results on reload. The manifest is unsigned. [Sandbox pilot guide](experiments/sandbox-agent/README.md)
+
 ## Try the alpha rehearsal kit
 
 Generate the full rehearsal kit with **Node 22+**:
