@@ -20,6 +20,7 @@ checks += [
     ("browser-local persistence", ["node", "--test", "tests/evaluator/storage.test.mjs"]),
     ("offline regression command", ["node", "--test", "tests/evaluator/regression.test.mjs"]),
     ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs"]),
+    ("offline invoice folder", ["node", "--test", "tests/evaluator/invoice-import.test.mjs"]),
     ("private alpha rehearsal kit", ["node", "--test", "tests/evaluator/alpha-rehearsal.test.mjs"]),
     ("loopback HTTP", [sys.executable, "-m", "unittest", "discover", "-s", "tests/evaluator", "-p", "test_server.py", "-v"]),
     ("import and controlled capture", ["node", "--test", "integrations/openai-agents/import.test.mjs", "experiments/controlled-capture/capture.test.mjs"]),
