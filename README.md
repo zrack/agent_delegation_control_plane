@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.3) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.4](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.4) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -14,11 +14,20 @@ python3 scripts/serve.py
 
 Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choose a different port with `--port 48732`. The dashboard uses the browser and the Python standard library.
 
-## First exercise with a resolved case
+## Try the offline invoice demo
 
-1. Extract **Source code (zip)** from the alpha.3 release and start the dashboard from that directory. Extract the [complete review case demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip) separately.
-2. In **Regression inbox**, select **Import review package or case** and open `resolved-case.json`.
-3. Check the **Fix required** decision and its reason, the original **Regression detected** verdict, and the follow-up **No regression found** verdict. Reload the dashboard and confirm the decision and **Resolved** status persist. [Alpha guide](docs/ALPHA_REVIEW.md#import-a-resolved-case)
+1. Extract **Source code (zip)** from the alpha.4 release and start the dashboard from that directory. Extract the [invoice-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.4/adcp-invoice-folder-demo-v0.1.0-alpha.4.zip) separately.
+2. Open **Regression inbox → Import invoice-run folder**. Select one of the four folders containing `manifest.json` at a time.
+3. Read **Authority**, **Output**, and **Execution** separately. Expand **File checks against manifest** to see which files match.
+
+| Folder | Expected output |
+| --- | --- |
+| `invoice-b` | **Totals verified** · 4 invoices, 1,231 cents |
+| `invoice-c` | **Totals verified** · 3 invoices, 2,441 cents |
+| `invoice-b-missing-receipt` | **Unverifiable** · `validation.json` is missing |
+| `invoice-c-altered-output` | **Hash mismatch** · `results.json` differs from the manifest |
+
+All four examples show **Within scope** and **Execution recorded complete**. The demo uses fictional records, checks six named files against an unsigned manifest, and clears results on reload. [Alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-offline-invoice-demo)
 
 ## Inspect records
 
@@ -42,11 +51,7 @@ Start with the three built-in examples or select **Import a completed run** to o
 
 Open **Export review package or case** to see what each download includes. The review package contains the original report and matching evidence. The review case can also carry the saved decision, reason, and matching follow-up. Import restores **Resolved** only after the browser rechecks the original and follow-up against the same baseline. Existing local decisions take precedence, and notes are included only when selected. [Privacy and sharing guidance](docs/PRIVACY.md)
 
-## Check a sandbox invoice folder
-
-From the current source checkout, open **Regression inbox → Import invoice-run folder** and choose the pilot's invoice case folder containing `manifest.json`. Inspect **Authority** for the grant assessment, **Output** for the invoice totals and validation, and **Execution** for the sandbox outcome, cleanup, and allowed or denied attempts. Expand **File checks against manifest** to locate a missing receipt or a hash mismatch.
-
-The import runs locally, checks six named files against the supplied manifest, and clears its results on reload. The manifest is unsigned. [Sandbox pilot guide](experiments/sandbox-agent/README.md)
+To try a saved decision and verified closure, follow the [resolved case exercise](docs/ALPHA_REVIEW.md#import-a-resolved-case).
 
 ## Try the alpha rehearsal kit
 

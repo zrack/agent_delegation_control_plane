@@ -3,28 +3,54 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
-## Import a resolved case
+## Try the offline invoice demo
 
-1. Download **Source code (zip)** from the
-   [v0.1.0-alpha.3 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.3).
-   Extract it and the [complete review case demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
+1. Download **Source code (zip)** from
+   [v0.1.0-alpha.4](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.4).
+   Extract it and the [invoice-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.4/adcp-invoice-folder-demo-v0.1.0-alpha.4.zip)
    into separate directories.
 2. From the extracted source directory, run `python3 scripts/serve.py` with
    Python 3.11 or newer. Open the printed loopback address in a fresh browser
-   profile.
-3. In **Regression inbox**, select **Import review package or case** and open
-   `resolved-case.json` from the demo ZIP.
-4. Check the **Fix required** decision and its reason, “Export exceeds the parent
+   profile with folder selection support.
+3. In **Regression inbox**, expand **Import invoice-run folder** and use
+   **Invoice-run folder** to choose one case directory containing
+   `manifest.json`. Start with `invoice-b`, then repeat for each remaining
+   folder.
+4. For each case, check **Authority**, **Output**, and **Execution**. In
+   **File checks against manifest**, confirm the six file results below.
+
+| Folder | Output | File checks |
+| --- | --- | --- |
+| `invoice-b` | **Totals verified** · 4 invoices, subtotal 1,151 cents, tax 80 cents, total 1,231 cents | All six match |
+| `invoice-c` | **Totals verified** · 3 invoices, subtotal 2,282 cents, tax 159 cents, total 2,441 cents | All six match |
+| `invoice-b-missing-receipt` | **Unverifiable** | `validation.json` shows **File missing**. The other five match. |
+| `invoice-c-altered-output` | **Hash mismatch** | `results.json` shows **Hash mismatch**. The other five match. |
+
+In each case **Authority** should show **Within scope** and two completed
+actions. **Execution** should show **Execution recorded complete**, exit code 0,
+two allowed attempts, zero denied attempts, unchanged input, and sandbox cleanup.
+The demo receipts are synthetic. The importer checks the supplied records
+locally against an unsigned manifest. Reload to confirm the summary clears.
+
+## Import a resolved case
+
+Use the alpha.4 dashboard started above for this exercise. The
+[complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
+contains the saved case and follow-up files for this exercise and the next one.
+
+1. In **Regression inbox**, select **Import review package or case** and open
+   `resolved-case.json` from the review case demo ZIP.
+2. Check the **Fix required** decision and its reason, “Export exceeds the parent
    grant.” The original run should show **Rechecked · Regression detected** and
    the follow-up **Rechecked · No regression found**. Open **Inspect follow-up
    evidence** to see the recheck against the original baseline.
-5. Reload at the same address and confirm the decision, reason, and **Resolved**
+3. Reload at the same address and confirm the decision, reason, and **Resolved**
    status persist.
 
 ## Review and export the case yourself
 
 1. Open the dashboard in another fresh browser profile. In **Regression inbox**,
-   select **Import review package or case** and open `case-02.json` from the demo ZIP.
+   select **Import review package or case** and open `case-02.json` from the review case demo ZIP.
 2. Open the evidence behind the unexpected export. Record who acted for whom,
    which action and resource were involved, and which grant explains the finding.
 3. Choose a **Decision**, enter your reason, and select **Save decision**.
