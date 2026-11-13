@@ -153,13 +153,13 @@
 #review-inbox .import-error { color: var(--violation); }
 #invoice-folder-import { margin-bottom: 16px; }
 #invoice-folder-status { margin-top: 8px; font-size: .875rem; color: var(--muted); }
-#invoice-folder-results h3 { margin: 12px 0 8px; }
-#invoice-folder-results dl, #invoice-folder-results p, #invoice-folder-results ul {
+.invoice-results h3 { margin: 12px 0 8px; }
+.invoice-results dl, .invoice-results p, .invoice-results ul {
   margin: 8px 0 0;
   font-size: .8125rem;
 }
-#invoice-folder-results dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; }
-#invoice-folder-results dd { margin: 0; overflow-wrap: anywhere; }
+.invoice-results dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; }
+.invoice-results dd { margin: 0; overflow-wrap: anywhere; }
 .invoice-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .invoice-checks h4 { margin: 0 0 6px; }
 .review-layout { display: grid; grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr); gap: 16px; }
@@ -192,3 +192,6 @@
 @media (max-width: 460px) {
   .review-evidence-status { grid-template-columns: 1fr; }
 }
+
+#invoice-candidate-help { grid-column: 1 / -1; }
+.invoice-results details { overflow-wrap: anywhere; }

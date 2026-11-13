@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { importInvoiceFolder } from '../../src/invoice-import.mjs';
+import { assessReview, assessSavedInvoice, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview } from '../../src/review.mjs';
+import { restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline } from '../../src/storage.mjs';
+import { parseInvestigation } from '../../src/import.mjs';
 
-function folder() {
+function folder(id = 'SANDBOX-000000000001') {
   const stamp = '2026-01-01T00:00:00Z';
   const end = '2026-01-01T00:02:00Z';
   const scope = [
-    { action: 'code:execute', resource: 'sandbox:RUN-test' },
-    { action: 'artifact:verify', resource: 'sandbox:RUN-test:results.json' },
+    { action: 'code:execute', resource: `sandbox:${id}` },
+    { action: 'artifact:verify', resource: `sandbox:${id}:results.json` },
   ];
   const result = { invoice_count: 1, subtotal_cents: 100, tax_cents: 7, total_cents: 107 };
   const files = {
@@ -22,7 +25,7 @@ function folder() {
   }));
   const identity = { principal: 'owner', validFrom: stamp, expiresAt: end };
   files['investigation.json'] = JSON.stringify({ schemaVersion: 1, chain: {
-    id: 'RUN-test', principal: { id: 'owner' }, rootGrantId: 'g1',
+    id, principal: { id: 'owner' }, rootGrantId: 'g1',
     grants: [
       { ...identity, id: 'g1', parentGrantId: null, issuer: 'owner', subject: 'Coder', capabilities: scope, canDelegate: true },
       { ...identity, id: 'g2', parentGrantId: 'g1', issuer: 'Coder', subject: 'Verifier', capabilities: [scope[1]], canDelegate: false },
@@ -121,4 +124,67 @@ test('malformed or non-integer output is invalid even when the manifest hash mat
     assert.equal(check.receiptStates['results.json'], 'invalid');
     assert.equal(check.output.tone, 'unknown');
   }
+});
+
+async function savedWorkflow() {
+  const records = new Map();
+  const getStorage = () => ({
+    getItem: key => records.get(key) ?? null,
+    setItem: (key, value) => records.set(key, value),
+  });
+  const baseline = parseInvestigation(folder()['investigation.json']);
+  saveInvestigation(getStorage, baseline);
+  saveWorkflowBaseline(getStorage, 'Invoices', baseline, await runFingerprint(baseline));
+  return { getStorage, baseline, pin: restoreWorkflowBaselines(getStorage).baselines[0] };
+}
+
+test('saved invoice comparisons recheck exact receipts and preserve different snapshots of the same run', async () => {
+  const { getStorage, pin } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const clean = await importInvoiceFolder(selectedFiles(files));
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const altered = { ...files, 'results.json': files['results.json'] + '\n' };
+  const cases = [
+    [clean, 'Totals verified'],
+    [await importInvoiceFolder(selectedFiles(missing, manifest)), 'Unverifiable'],
+    [await importInvoiceFolder(selectedFiles(altered, manifest)), 'Hash mismatch'],
+  ];
+  for (const [folder, output] of cases) {
+    const id = await saveInvoiceCandidate(getStorage, pin, folder.evidence);
+    const item = restoreReviews(getStorage).items.find(item => item.id === id);
+    assert.equal((await assessReview(item)).verdict.status, 'pass');
+    const receipts = await assessSavedInvoice(item);
+    assert.equal(receipts.output.label, output);
+    assert.equal(receipts.execution.label, 'Execution recorded complete');
+    assert.deepEqual(receipts.receiptStates, folder.receiptStates);
+  }
+  const before = restoreReviews(getStorage).items;
+  assert.equal(before.length, 3);
+  const original = before.find(item => item.invoice.outputAtImport === 'Totals verified');
+  saveReview(getStorage, original, 'Check matches the snapshot.', true);
+  assert.equal(await saveInvoiceCandidate(getStorage, pin, clean.evidence), original.id);
+  const restored = restoreReviews(getStorage).items;
+  assert.equal(restored.length, 3);
+  assert.equal(restored[0].note, 'Check matches the snapshot.');
+
+  const storage = getStorage();
+  const raw = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+  raw.items[0].invoice.evidence.files['results.json'] = btoa('changed bytes');
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(raw));
+  const item = restoreReviews(getStorage).items[0];
+  assert.equal((await assessReview(item)).verdict.status, 'pass');
+  await assert.rejects(assessSavedInvoice(item), /no longer match the snapshot/);
+});
+
+test('a changed pin or replaced baseline export cannot save an invoice comparison', async () => {
+  const { getStorage, baseline, pin } = await savedWorkflow();
+  const checked = await importInvoiceFolder(selectedFiles(folder('SANDBOX-000000000002')));
+  const changed = { ...baseline, title: 'Changed baseline' };
+  saveInvestigation(getStorage, changed);
+  await assert.rejects(saveInvoiceCandidate(getStorage, pin, checked.evidence), /Reimport the original/);
+  saveWorkflowBaseline(getStorage, pin.name, changed, await runFingerprint(changed), pin);
+  await assert.rejects(saveInvoiceCandidate(getStorage, pin, checked.evidence), /pin changed/);
+  assert.equal(restoreReviews(getStorage).items.length, 0);
 });

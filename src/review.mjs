@@ -2,7 +2,8 @@
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
 import { evaluateChain } from './evaluator.mjs';
 import { parseInvestigation } from './import.mjs';
-import { runFingerprint } from './storage.mjs';
+import { assessInvoiceFolder } from './invoice-import.mjs';
+import { restoreInvestigations, restoreWorkflowBaselines, runFingerprint, workflowKey } from './storage.mjs';
 
 export const REVIEW_STORAGE_KEY = 'adcp.regression-reviews.v1';
 export const MAX_REPORT_BYTES = 2 * 1024 * 1024;
@@ -17,7 +18,7 @@ const packageKind = 'adcp-review-package';
 const caseKind = 'adcp-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
-const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution'];
+const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice'];
 const bytes = value => new TextEncoder().encode(value).length;
 const isId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(value);
 const isFingerprint = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -92,8 +93,8 @@ export async function createReviewPackage(report, evidence, note) {
   return serializeBundle(await reviewBundle(packageKind, report, evidence, note));
 }
 
-const caseResolutionFingerprint = item => runFingerprint({
-  original: item.id, decision: item.decision, followUp: item.followUp.id,
+const caseResolutionFingerprint = async item => runFingerprint({
+  original: await runFingerprint(item.report), decision: item.decision, followUp: item.followUp.id,
 });
 
 export async function createReviewCase(item, note) {
@@ -167,6 +168,7 @@ function readReviews(storage) {
       if (!isFingerprint(item.resolution)) throw new Error('The saved resolution is invalid.');
       restored.resolution = item.resolution;
     }
+    if (item.invoice !== undefined) restored.invoice = item.invoice;
     return restored;
   });
 }
@@ -183,6 +185,60 @@ function writeReviews(storage, items) {
   }
   storage.setItem(REVIEW_STORAGE_KEY, raw);
   return items;
+}
+
+function reviewId(report, invoice) {
+  return runFingerprint(invoice ? { report, workflow: invoice.workflow, outputAtImport: invoice.outputAtImport, receiptFingerprint: invoice.fingerprint } : report);
+}
+
+export async function assessSavedInvoice(item) {
+  const { invoice } = item;
+  if (!isFingerprint(invoice?.fingerprint) || await runFingerprint(invoice.evidence) !== invoice.fingerprint) {
+    throw new Error('Saved invoice receipts no longer match the snapshot. Reimport the original folder to check them.');
+  }
+  return assessInvoiceFolder(invoice.evidence);
+}
+
+export async function saveInvoiceCandidate(getStorage, pin, evidence) {
+  const { candidate, output } = await assessInvoiceFolder(evidence);
+  if (!candidate) throw new Error('The candidate needs an investigation that matches the invoice manifest.');
+  const readPin = () => restoreWorkflowBaselines(getStorage).baselines.find(item => workflowKey(item.name) === workflowKey(pin.name));
+  const readBaseline = () => restoreInvestigations(getStorage).chains.find(chain => chain.id === pin.runId);
+  const pinChanged = () => {
+    if (JSON.stringify(readPin()) !== JSON.stringify(pin)) throw new Error('This workflow pin changed. Select the baseline again.');
+  };
+  pinChanged();
+  const baseline = readBaseline();
+  if (!baseline || await runFingerprint(baseline) !== pin.fingerprint) {
+    throw new Error('Reimport the original investigation for this pinned baseline.');
+  }
+  if (baseline.id === candidate.id) throw new Error('Choose a candidate with a different run ID from the baseline.');
+  const original = evaluateChain(baseline);
+  if (!canPinBaseline(baseline, original)) throw new Error('The pinned baseline no longer qualifies for comparison.');
+  const next = evaluateChain(candidate);
+  const { status, reasons } = checkRegression(compareRuns(baseline, candidate, original, next), next);
+  const report = parseRegressionReport(JSON.stringify({
+    schemaVersion: 1, status,
+    reasons: reasons.map(({ impact, message, eventId, row }) => ({
+      impact, message, baselineEventId: row?.eventLinks?.[0], candidateEventId: eventId ?? row?.eventLinks?.[1],
+    })),
+    baselineId: baseline.id, baselineFingerprint: pin.fingerprint,
+    candidateId: candidate.id, candidateFingerprint: await runFingerprint(candidate),
+  }));
+  const invoice = { workflow: pin.name, outputAtImport: output.label, evidence, fingerprint: await runFingerprint(evidence) };
+  const id = await reviewId(report, invoice);
+  // Check again after hashing so a concurrent pin or baseline change cannot
+  // save a comparison against a run the reviewer did not select.
+  const storage = getStorage();
+  const items = readReviews(storage);
+  pinChanged();
+  if (JSON.stringify(readBaseline()) !== JSON.stringify(baseline)) {
+    throw new Error('The saved baseline investigation changed. Reimport the original run before trying again.');
+  }
+  const current = items.find(item => item.id === id);
+  const item = { note: '', reviewed: false, ...current, id, report, baseline, candidate, invoice };
+  writeReviews(storage, [item, ...items.filter(record => record.id !== id)]);
+  return id;
 }
 
 export async function importReview(getStorage, reportText, evidence, initialNote = '', portableCase) {
@@ -322,7 +378,7 @@ export async function resolveReviewCase(getStorage, expected) {
 
 export async function assessReview(item) {
   const { report, baseline, candidate } = item;
-  if (await runFingerprint(report) !== item.id) throw new Error('The saved report no longer matches this inbox item.');
+  if (await reviewId(report, item.invoice) !== item.id) throw new Error('The saved report no longer matches this inbox item.');
   const states = {
     baseline: await evidenceState(report, 'baseline', baseline),
     candidate: await evidenceState(report, 'candidate', candidate),

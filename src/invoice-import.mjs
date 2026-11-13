@@ -6,6 +6,7 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 const json = text => JSON.parse(text);
 const smallReceipt = 32 * 1024;
 const decoder = new TextDecoder('utf-8', { fatal: true });
+const casePattern = /^invoice-[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const invoiceFields = {
   invoice_count: 'Invoices',
@@ -111,20 +112,36 @@ async function readManifest(file) {
   let manifest;
   try { manifest = json(decoder.decode(await readBytes(file, 64 * 1024))); }
   catch { throw new Error('Could not read manifest.json as JSON within the 64 KiB limit.'); }
-  if (!object(manifest) || typeof manifest.case !== 'string' || !/^invoice-[a-z0-9][a-z0-9-]{0,63}$/.test(manifest.case)
+  if (!object(manifest) || typeof manifest.case !== 'string' || !casePattern.test(manifest.case)
     || !object(manifest.files)) throw new Error('Expected an invoice manifest with a case ID and file digests.');
   return manifest;
 }
 
-async function readReceipt(name, file, hashes) {
-  if (!file) return { state: 'missing' };
+// Preserve exact bytes for a fresh digest check after reload. Undefined means
+// the file was absent, and null means the selected file could not be read.
+async function captureReceipt(file, limit) {
+  if (!file) return undefined;
+  try {
+    const bytes = new Uint8Array(await readBytes(file, limit));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    return btoa(binary);
+  } catch {
+    return null;
+  }
+}
+
+async function assessReceipt(name, encoded, hashes) {
+  if (encoded === undefined) return { state: 'missing' };
   if (!Object.hasOwn(hashes, name)) return { state: 'unlisted' };
   const digest = hashes[name];
-  if (typeof digest !== 'string' || !digestPattern.test(digest)) return { state: 'invalid' };
+  const [limit, parse] = receipts[name];
+  if (typeof digest !== 'string' || !digestPattern.test(digest)
+    || typeof encoded !== 'string' || encoded.length > 4 * Math.ceil(limit / 3)) return { state: 'invalid' };
 
   try {
-    const [limit, parse] = receipts[name];
-    const bytes = await readBytes(file, limit);
+    const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
+    if (bytes.length > limit) return { state: 'invalid' };
     const hash = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
     const actual = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
     if (digest !== actual) return { state: 'mismatch' };
@@ -161,8 +178,29 @@ export async function importInvoiceFolder(files) {
   if (!globalThis.crypto?.subtle) throw new Error('Open the dashboard on localhost to verify file digests.');
   const selected = selectReceipts(files);
   const manifest = await readManifest(selected.get('manifest.json'));
+  const hashes = {};
+  const filesByName = {};
+  await Promise.all(Object.entries(receipts).map(async ([name, [limit]]) => {
+    if (Object.hasOwn(manifest.files, name)) {
+      const hash = manifest.files[name];
+      hashes[name] = typeof hash === 'string' && digestPattern.test(hash) ? hash : null;
+    }
+    const contents = await captureReceipt(selected.get(name), limit);
+    if (contents !== undefined) filesByName[name] = contents;
+  }));
+  // Preserve digest and file order regardless of when file reads finish.
+  const ordered = records => Object.fromEntries(Object.keys(receipts)
+    .filter(name => Object.hasOwn(records, name)).map(name => [name, records[name]]));
+  const evidence = { caseId: manifest.case, hashes: ordered(hashes), files: ordered(filesByName) };
+  return { evidence, ...await assessInvoiceFolder(evidence) };
+}
+
+export async function assessInvoiceFolder({ caseId, hashes, files }) {
+  if (typeof caseId !== 'string' || !casePattern.test(caseId) || !object(hashes) || !object(files)) {
+    throw new Error('The invoice receipt snapshot is invalid.');
+  }
   const checks = Object.fromEntries(await Promise.all(Object.keys(receipts).map(async name =>
-    [name, await readReceipt(name, selected.get(name), manifest.files)])));
+    [name, await assessReceipt(name, files[name], hashes)])));
   const chain = checks['investigation.json'].data;
   const authority = chain && evaluateChain(chain);
   const output = assessOutput(chain, checks['results.json'], checks['expected.json'], checks['validation.json']);
@@ -171,7 +209,8 @@ export async function importInvoiceFolder(files) {
   const executionTone = !reportedExecution || !reportedAttempts ? 'unknown'
     : reportedExecution.completed && reportedExecution.inputUnchanged && reportedExecution.cleaned ? 'valid' : 'violation';
   return {
-    caseId: manifest.case,
+    caseId,
+    candidate: chain,
     receiptStates: Object.fromEntries(Object.entries(checks).map(([name, check]) => [name, check.state])),
     authority: {
       tone: authority?.status ?? 'unknown',

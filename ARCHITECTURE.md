@@ -111,8 +111,15 @@ Authority reuses the delegation evaluator. Output checks the totals against the
 expected values and validation receipt, and binds the output digest to both
 completed actions. Execution reports completion, exit code, input preservation,
 cleanup and attempt counts from matching receipts. Each lane reports its own
-result. The importer keeps the summary in the current page only and never reads
-the generated program, input, or raw capture. The manifest is unsigned.
+result. The importer reads only allowlisted receipt files. The manifest is unsigned.
+
+The inbox can compare the selected folder's matching investigation against the
+exact saved workflow pin. Saving records the report, baseline and candidate,
+relevant manifest digests, and original receipt bytes in one bounded inbox write.
+The receipt snapshot fingerprint distinguishes copies with the same run ID and
+different files. Opening the entry recomputes the comparison from the saved
+runs and verifies the saved receipt bytes. Review downloads carry the existing
+delegation evidence and case fields.
 
 ## Trust and recovery
 
