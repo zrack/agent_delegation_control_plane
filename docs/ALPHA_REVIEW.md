@@ -3,19 +3,41 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
-## Try the offline invoice demo
+## Try the portable invoice review demo
 
-1. Download **Source code (zip)** from [v0.1.0-alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.5).
-   Extract it and the [invoice receipt follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip)
-   into separate directories.
-2. From the extracted source directory, run `python3 scripts/serve.py` with
-   Python 3.11 or newer. Open the printed loopback address in a fresh browser
-   profile with folder selection support.
+1. Extract **Source code (zip)** from [v0.1.0-alpha.6](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.6).
+   Run `python3 scripts/serve.py` from the extracted source with Python 3.11 or newer. Extract the
+   [portable invoice review demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.6/adcp-portable-invoice-review-demo-v0.1.0-alpha.6.zip) separately.
+2. Open the printed loopback address in a fresh browser profile. In **Regression
+   inbox**, choose **Import review package or case** and select
+   `invoice-b-resolved.json`.
+3. In **Review decision and follow-up**, check **Evidence needed** and
+   **Resolved**. Under **Inspect follow-up evidence**, check **Totals verified**
+   and expand **File checks against manifest** to see six matches. Reload at
+   the same address and confirm that the decision, follow-up, and **Resolved**
+   status return.
+4. Import `invoice-c-resolved.json` in the same inbox. Repeat the checks and
+   reload. The saved decision should be **Fix required**.
+5. Use a second fresh profile or start the dashboard on another loopback port
+   with `python3 scripts/serve.py --port 48732`. Import each **Open** variant
+   through **Import review package or case**. For each file, check the import
+   warning, confirm **Close as resolved** is disabled, and reload to verify
+   that the verdict stays **Open**. Separate storage lets you test the variants
+   independently of the existing local decisions and follow-ups.
 
-The demo uses fictional invoice records and synthetic receipts. Each candidate
-folder contains an unsigned `manifest.json` with the file digests the viewer checks.
+| Case file | Expected status after reload | What to verify |
+| --- | --- | --- |
+| `invoice-b-resolved.json` | **Resolved** | Missing validation receipt in the original case. Corrected follow-up verifies 1,231 cents. |
+| `invoice-c-resolved.json` | **Resolved** | Altered output in the original case. Corrected follow-up verifies 2,441 cents. |
+| `invoice-b-altered-receipt.json` | **Open** | Follow-up output changed after export. Closure verification fails. |
+| `invoice-c-different-baseline.json` | **Open** | The packaged baseline differs from the original. Closure verification fails. |
+
+All four cases contain fictional evidence. Import rechecks the included
+baseline and receipt snapshots and leaves workflow pins unchanged.
 
 ## Compare and save an invoice candidate
+
+Keep using the alpha.6 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -59,8 +81,8 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-Start the dashboard from the current source checkout for this exercise. Open a
-resolved invoice case and expand **Export review package or case**.
+In the alpha.6 dashboard, open a resolved invoice case and expand
+**Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
    case**. The file includes the baseline, original receipts, review decision,
@@ -80,7 +102,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.5 dashboard started above for this exercise. The
+Use the alpha.6 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 

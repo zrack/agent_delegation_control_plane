@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.5) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.6](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.6) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -14,24 +14,29 @@ python3 scripts/serve.py
 
 Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choose a different port with `--port 48732`. The dashboard uses the browser and the Python standard library.
 
-## Try the offline invoice demo
+## Try the portable invoice review demo
 
-1. Extract **Source code (zip)** from alpha.5 and start the dashboard from the extracted source. Unzip the [invoice receipt follow-up demo](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) separately.
-2. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`. In **Compare runs**, select invoice A as **Baseline run**, open **Save or replace a workflow baseline**, enter **Demo invoices**, and select **Save baseline**.
-3. For each candidate below, open **Regression inbox → Import invoice-run folder**, choose the folder, select **Demo invoices**, and choose **Compare and save to inbox**.
+1. Extract **Source code (zip)** from [v0.1.0-alpha.6](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.6).
+   Start the dashboard from the extracted source. Extract the
+   [portable invoice review demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.6/adcp-portable-invoice-review-demo-v0.1.0-alpha.6.zip) separately.
+2. In a fresh browser profile, open **Regression inbox → Import review package
+   or case**. Import the two resolved JSON files below, one at a time.
+3. Open each entry, check its decision and status, and reload at the same
+   address to verify that both return. Use another fresh profile or a different
+   loopback port for the two **Open** variants, then repeat the import and reload
+   checks. The inbox preserves existing local decisions and follow-ups on reimport.
 
-| Candidate folder | Output on import | Corrected follow-up |
+| Case file | Expected status after reload | What to verify |
 | --- | --- | --- |
-| `invoice-b-missing-receipt` | **Unverifiable** · `validation.json` is missing | `invoice-b-corrected` |
-| `invoice-c-altered-output` | **Hash mismatch** · `results.json` differs from the manifest | `invoice-c-corrected` |
+| `invoice-b-resolved.json` | **Resolved** | Missing validation receipt in the original case. Corrected follow-up verifies 1,231 cents. |
+| `invoice-c-resolved.json` | **Resolved** | Altered output in the original case. Corrected follow-up verifies 2,441 cents. |
+| `invoice-b-altered-receipt.json` | **Open** | Follow-up output changed after export. Closure verification fails. |
+| `invoice-c-different-baseline.json` | **Open** | The packaged baseline differs from the original. Closure verification fails. |
 
-For each case, save a decision and reason, then use **Attach follow-up invoice folder** to select its correction. Inspect the follow-up for **No regression found**, **Within scope**, **Totals verified**, and **Execution recorded complete**. Select **Close as resolved** and reload to verify that the decision and **Resolved** status return. [Alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-offline-invoice-demo)
-
-From the current source checkout, you can share a resolved invoice case through
-**Export review package or case**. Select **Include invoice receipts in case
-download**, then **Download review case**. The receiving browser can import the
-file through **Import review package or case** and recheck closure against the
-included baseline. [Portable invoice case walkthrough](docs/ALPHA_REVIEW.md#share-an-invoice-review-case)
+Under **Inspect follow-up evidence**, expand **File checks against manifest**.
+All six files should match in the corrected follow-ups. For the altered variants,
+check the import warning and confirm **Close as resolved** is disabled.
+[Full alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-portable-invoice-review-demo)
 
 ## Inspect records
 
