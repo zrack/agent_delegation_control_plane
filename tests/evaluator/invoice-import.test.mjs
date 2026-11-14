@@ -328,6 +328,18 @@ test('portable invoice cases opt in to receipts and reverify closure in a fresh 
       const assessed = await assessFollowUp(restored, await assessReview(restored), fresh);
       assert.equal(imported.id, item.id);
       assert.equal(assessed.resolved, resolved);
+      if (document === fileEdited) {
+        assert.equal(assessed.invoice.checked, undefined);
+        assert.equal(assessed.invoice.receiptStates['results.json'], 'mismatch');
+      }
+      if (document === baselineEdited) {
+        assert.equal(assessed.canResolve, false);
+        assert.equal(restored.baseline, null);
+        assert.equal(restored.suppliedBaseline.runId, portable.baseline.chain.id);
+        assert.notEqual(restored.suppliedBaseline.fingerprint, restored.report.baselineFingerprint);
+        await importReviewPackage(fresh, JSON.stringify(portable));
+        assert.equal(restoreReviews(fresh).items[0].suppliedBaseline, undefined);
+      }
       assert.deepEqual(restored.decision, item.decision);
       assert.deepEqual(restoreWorkflowBaselines(fresh).baselines, []);
       if (!resolved) assert.ok(imported.caseWarnings.length || imported.mismatches.length);
@@ -340,7 +352,10 @@ test('portable invoice cases opt in to receipts and reverify closure in a fresh 
     const conflict = await importReviewPackage(other.getStorage, JSON.stringify(portable));
     assert.match(conflict.caseWarnings.join(' '), /different baseline/);
     const [blocked] = restoreReviews(other.getStorage).items;
-    assert.equal((await assessFollowUp(blocked, await assessReview(blocked), other.getStorage)).resolved, false);
+    const conflictCheck = await assessFollowUp(blocked, await assessReview(blocked), other.getStorage);
+    assert.equal(conflictCheck.resolved, false);
+    assert.equal(conflictCheck.pinState.status, 'conflict');
+    assert.equal(conflictCheck.pinState.pin.fingerprint, await runFingerprint(otherBaseline));
     assert.equal(restoreWorkflowBaselines(other.getStorage).baselines[0].fingerprint, await runFingerprint(otherBaseline));
   }
 });
