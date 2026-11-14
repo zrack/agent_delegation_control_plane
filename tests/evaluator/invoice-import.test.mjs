@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { importInvoiceFolder } from '../../src/invoice-import.mjs';
 import {
-  assessFollowUp, assessReview, assessSavedInvoice, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase,
+  assessFollowUp, assessReview, assessSavedInvoice, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReviewPackage,
   resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from '../../src/review.mjs';
 import { restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline } from '../../src/storage.mjs';
@@ -283,4 +283,64 @@ test('a folder for a different case or a changed investigation under the same ID
   const replacement = await importInvoiceFolder(selectedFiles({ ...files, 'investigation.json': JSON.stringify(changed) }));
   await assert.rejects(attachInvoiceFollowUp(getStorage, read(), replacement.evidence), /changed the investigation/);
   assert.equal(read().followUp, undefined);
+});
+
+test('portable invoice cases opt in to receipts and reverify closure in a fresh inbox', async () => {
+  const { getStorage, pin } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const changed = { ...files, 'results.json': files['results.json'] + '\n' };
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const corrected = await importInvoiceFolder(selectedFiles(files, manifest));
+  for (const original of [missing, changed]) {
+    const failed = await importInvoiceFolder(selectedFiles(original, manifest));
+    const id = await saveInvoiceCandidate(getStorage, pin, failed.evidence);
+    const read = () => restoreReviews(getStorage).items.find(item => item.id === id);
+    saveReviewDecision(getStorage, read(), 'fix-required', 'Restore original receipts.');
+    await attachInvoiceFollowUp(getStorage, read(), corrected.evidence);
+    await resolveReviewCase(getStorage, read());
+    const item = read();
+
+    const portable = JSON.parse(await createReviewCase(item, undefined, { includeInvoiceReceipts: true }));
+    const ordinary = JSON.parse(await createReviewCase(item));
+    const reviewPackage = JSON.parse(await createReviewPackage(item.report, item));
+    assert.equal(ordinary.kind, 'adcp-review-case');
+    for (const redacted of [ordinary, reviewPackage]) {
+      assert.equal(redacted.invoice, undefined);
+      assert.equal(redacted.followUp, undefined);
+      assert.equal(redacted.resolution, undefined);
+    }
+    assert.equal(portable.kind, 'adcp-invoice-review-case');
+    assert.deepEqual(portable.invoice.evidence, failed.evidence);
+    assert.deepEqual(portable.followUp.invoice.evidence, corrected.evidence);
+    assert.equal(portable.note, undefined);
+
+    const fileEdited = structuredClone(portable);
+    fileEdited.followUp.invoice.evidence.files['results.json'] = btoa('altered');
+    const baselineEdited = structuredClone(portable);
+    baselineEdited.baseline.chain.title = 'Different baseline under the same ID';
+    for (const [document, resolved] of [[portable, true], [fileEdited, false], [baselineEdited, false]]) {
+      const records = new Map();
+      const fresh = () => ({ getItem: key => records.get(key) ?? null, setItem: (key, value) => records.set(key, value) });
+      const imported = await importReviewPackage(fresh, JSON.stringify(document));
+      const [restored] = restoreReviews(fresh).items;
+      const assessed = await assessFollowUp(restored, await assessReview(restored), fresh);
+      assert.equal(imported.id, item.id);
+      assert.equal(assessed.resolved, resolved);
+      assert.deepEqual(restored.decision, item.decision);
+      assert.deepEqual(restoreWorkflowBaselines(fresh).baselines, []);
+      if (!resolved) assert.ok(imported.caseWarnings.length || imported.mismatches.length);
+    }
+
+    const other = await savedWorkflow();
+    const otherBaseline = { ...other.baseline, title: 'Different local pin' };
+    saveInvestigation(other.getStorage, otherBaseline);
+    saveWorkflowBaseline(other.getStorage, other.pin.name, otherBaseline, await runFingerprint(otherBaseline), other.pin);
+    const conflict = await importReviewPackage(other.getStorage, JSON.stringify(portable));
+    assert.match(conflict.caseWarnings.join(' '), /different baseline/);
+    const [blocked] = restoreReviews(other.getStorage).items;
+    assert.equal((await assessFollowUp(blocked, await assessReview(blocked), other.getStorage)).resolved, false);
+    assert.equal(restoreWorkflowBaselines(other.getStorage).baselines[0].fingerprint, await runFingerprint(otherBaseline));
+  }
 });

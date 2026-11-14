@@ -27,6 +27,12 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 
 For each case, save a decision and reason, then use **Attach follow-up invoice folder** to select its correction. Inspect the follow-up for **No regression found**, **Within scope**, **Totals verified**, and **Execution recorded complete**. Select **Close as resolved** and reload to verify that the decision and **Resolved** status return. [Alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-offline-invoice-demo)
 
+From the current source checkout, you can share a resolved invoice case through
+**Export review package or case**. Select **Include invoice receipts in case
+download**, then **Download review case**. The receiving browser can import the
+file through **Import review package or case** and recheck closure against the
+included baseline. [Portable invoice case walkthrough](docs/ALPHA_REVIEW.md#share-an-invoice-review-case)
+
 ## Inspect records
 
 Start with the three built-in examples or select **Import a completed run** to open a version 1 `investigation.json`. Choose an agent hop to inspect its recorded action, grant, parent grant, and findings.
