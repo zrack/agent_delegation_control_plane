@@ -43,6 +43,19 @@ fingerprints. Reimport the case with its original baseline. If a local
 workflow pin conflicts, the checklist shows the current pin and keeps it in
 place.
 
+## Restore matching evidence
+
+From the current source checkout, import one of the open invoice demo variants
+in a fresh inbox. Open **Restore matching evidence** on the saved case and choose
+the corresponding resolved JSON file. Preview the baseline or follow-up that
+will be restored, then select **Apply evidence repair**. The case keeps its
+decision and notes. The restored follow-up must pass the baseline comparison
+and the invoice receipt checks.
+
+To close the repaired case, pin the original baseline under the case's workflow
+and select **Close as resolved**. A conflicting pin stays in place and blocks
+closure. Reload to verify the saved result.
+
 ## Compare and save an invoice candidate
 
 Keep using the alpha.6 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.

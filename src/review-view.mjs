@@ -5,7 +5,7 @@ import { restoreWorkflowBaselines } from './storage.mjs';
 import {
   assessFollowUp, assessReview, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
-  restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
+  previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from './review.mjs';
 
 const tones = { pass: 'valid', regression: 'violation', review: 'unknown' };
@@ -40,6 +40,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
   const detail = document.querySelector('#review-detail');
   const status = document.querySelector('#review-status');
   let selected;
+  let invoiceRestoreDraft;
   let revision = 0;
   let records = [];
 
@@ -98,7 +99,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const { pinState, assessment, incompatible, passes } = followUp;
     const checks = [];
     const targetLabels = {
-      'review-import-link': 'Go to case import', 'compare-link': 'Open Compare runs',
+      'invoice-evidence-restore': 'Restore matching evidence', 'compare-link': 'Open Compare runs',
       'review-decision': 'Go to decision', 'review-follow-up-file': 'Go to follow-up picker',
       'invoice-follow-up-evidence': 'Inspect receipt evidence', 'resolve-review-case': 'Go to close button',
     };
@@ -109,19 +110,20 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const identify = (label, runId, fingerprint) => `<p>${label} <code>${escape(runId)}</code>
       <code>${escape(fingerprint)}</code></p>`;
     const expected = identify('Expected baseline', report.baselineId, report.baselineFingerprint);
-    const reimport = 'Reimport the case with the original baseline and candidate evidence. Keep the same workflow and decision.';
+    const repairTarget = item.decision ? 'invoice-evidence-restore' : 'review-decision';
+    const reimport = 'Choose a portable copy with the original baseline and candidate evidence.';
     const attach = 'Attach the original corrected folder for this invoice case. Pin the original baseline first if needed.';
     if (original.states.baseline !== 'matched') {
       const supplied = suppliedBaseline ? identify('Supplied baseline', suppliedBaseline.runId, suppliedBaseline.fingerprint) : '';
       row('Baseline evidence', suppliedBaseline || original.states.baseline === 'mismatch' ? 'Baseline mismatch' : 'Baseline missing',
-        reimport, 'review-import-link', expected + supplied);
+        reimport, repairTarget, expected + supplied);
     } else {
       row('Baseline evidence', 'Matches the saved case');
     }
     if (original.states.candidate !== 'matched') {
-      row('Candidate evidence', evidenceLabels[original.states.candidate], reimport, 'review-import-link');
+      row('Candidate evidence', evidenceLabels[original.states.candidate], reimport, repairTarget);
     } else if (original.states.baseline === 'matched' && !original.verdict) {
-      row('Baseline comparison', 'The saved evidence cannot reproduce the comparison', reimport, 'review-import-link');
+      row('Baseline comparison', 'The saved evidence cannot reproduce the comparison', reimport, repairTarget);
     }
     if (pinState?.status === 'conflict') {
       row('Workflow pin', `“${invoice.workflow}” uses a different baseline`,
@@ -137,13 +139,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       row('Review decision', 'Decision needed', 'Choose a decision and save a reason.', 'review-decision');
     }
     if (!followUp.originalInvoice?.checked) {
-      row('Original receipts', 'Saved invoice snapshot could not be verified', reimport, 'review-import-link');
+      row('Original receipts', 'Saved invoice snapshot could not be verified', reimport, repairTarget);
     }
     if (!item.followUp) {
       row('Follow-up evidence', 'Corrected folder needed', attach, item.decision ? 'review-follow-up-file' : 'review-decision');
     } else if (incompatible) {
       row('Follow-up evidence', incompatible === 'baseline' ? 'Follow-up references a different baseline' : 'Follow-up candidate differs',
-        'Reimport a case with a follow-up checked against the original baseline.', 'review-import-link');
+        'Choose a portable copy with a follow-up checked against the original baseline.', repairTarget);
     } else {
       const receipts = followUp.invoice;
       const checked = receipts?.checked;
@@ -155,7 +157,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         const failedChecks = checked ? [checked.authority, checked.output, checked.execution]
           .filter(check => check.tone !== 'valid').map(check => check.label).join(', ') : '';
         const reason = files || failedChecks || (checked ? 'Follow-up does not match this invoice case' : 'Saved receipt snapshot could not be verified');
-        row('Follow-up evidence', reason, attach, 'invoice-follow-up-evidence');
+        row('Follow-up evidence', reason, 'Restore a matching portable copy or attach the original corrected folder.',
+          'invoice-follow-up-evidence');
       } else {
         row('Follow-up evidence', 'Receipt checks passed');
       }
@@ -213,6 +216,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         ${receiptSummary}
         ${assessment || receiptDetails ? `<details class="review-differences" id="invoice-follow-up-evidence"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}</details>` : ''}` : ''}
+      ${item.invoice && !resolved && item.decision ? `<details class="review-differences" id="invoice-evidence-restore">
+        <summary>Restore matching evidence</summary>
+        <p class="panel-description">Choose a portable copy of this case exported with receipts to preview matching replacements.</p>
+        <label for="invoice-restore-file">Matching invoice review case</label>
+        <input id="invoice-restore-file" type="file" accept=".json,application/json" aria-describedby="invoice-restore-status">
+        <p class="panel-description" id="invoice-restore-status" role="status"></p>
+        <button id="apply-invoice-restore" type="button" disabled>Apply evidence repair</button>
+      </details>` : ''}
       <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
       <button type="button" id="resolve-review-case" ${canResolve && !resolved ? '' : 'disabled'}>Close as resolved</button>
     </section>`;
@@ -243,6 +254,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const { items, warning } = restoreReviews(getStorage);
     const id = new URLSearchParams(location.hash.slice(reviewRoute.length)).get('item');
     selected = items.find(item => item.id === id);
+    invoiceRestoreDraft = undefined;
     records = [];
     if (warning) announce(warning, true);
     if (!savingInvoice) updateInvoiceWorkflows();
@@ -482,6 +494,35 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
 
   detail.addEventListener('change', async event => {
     const input = event.target;
+    if (input.id === 'invoice-restore-file' && selected) {
+      const item = selected;
+      const file = input.files[0];
+      const button = detail.querySelector('#apply-invoice-restore');
+      const message = detail.querySelector('#invoice-restore-status');
+      invoiceRestoreDraft = undefined;
+      button.disabled = true;
+      message.textContent = '';
+      if (!file) return;
+      input.disabled = true;
+      message.textContent = 'Checking replacement evidence…';
+      try {
+        if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review case no larger than 2 MiB.');
+        const contents = await file.text();
+        const { restored, pinState } = await previewInvoiceEvidenceRestore(getStorage, item, contents);
+        if (!input.isConnected || item !== selected) return;
+        invoiceRestoreDraft = { item, contents };
+        const next = {
+          matched: 'After applying, review the evidence and close explicitly.',
+          conflict: 'The conflicting workflow pin stays in place and still blocks closure.',
+          missing: 'Pin the original baseline before closing.',
+          unreadable: 'Restore access to your workflow pins before closing.',
+        };
+        message.textContent = `Ready to restore: ${restored.join('; ')}. Your decision and notes are kept. ${next[pinState.status]}`;
+        button.disabled = false;
+      } catch (error) { message.textContent = error.message; }
+      finally { input.disabled = false; input.value = ''; }
+      return;
+    }
     if (input.id !== 'review-follow-up-file' || !input.files[0] || !selected) return;
     const file = input.files[0];
     const item = selected;
@@ -505,7 +546,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     if (!selected) return;
     const targetId = event.target.dataset.closureTarget;
     if (targetId) {
-      const target = targetId === 'review-import-link' ? packageInput : document.getElementById(targetId);
+      const target = document.getElementById(targetId);
       if (!target) return;
       if (target.tagName === 'DETAILS') {
         target.open = true;
@@ -514,6 +555,24 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         (files ?? target).querySelector('summary').focus();
       } else if (target.id === 'compare-link') target.click();
       else target.focus();
+      return;
+    }
+    if (event.target.id === 'apply-invoice-restore') {
+      const draft = invoiceRestoreDraft;
+      if (!draft || draft.item !== selected) return;
+      invoiceRestoreDraft = undefined;
+      const input = detail.querySelector('#invoice-restore-file');
+      const message = detail.querySelector('#invoice-restore-status');
+      input.disabled = event.target.disabled = true;
+      message.textContent = 'Rechecking replacement evidence…';
+      try {
+        await restoreInvoiceEvidence(getStorage, draft.item, draft.contents);
+        announce('Matching evidence restored. Review the case before closing.');
+        if (location.hash === itemRoute(draft.item.id)) await render({ focus: true });
+      } catch (error) {
+        message.textContent = error.message;
+        if (input.isConnected) input.disabled = false;
+      }
       return;
     }
     if (event.target.id === 'resolve-review-case') {
