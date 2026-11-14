@@ -35,6 +35,14 @@ API key, account, Docker, or model calls.
 All four cases contain fictional evidence. Import rechecks the included
 baseline and receipt snapshots and leaves workflow pins unchanged.
 
+From the current source checkout, reopen an **Open** case after reload and
+check its **Closure checklist**. The altered-receipt case identifies
+`results.json` in the follow-up and points to the corrected folder.
+The different-baseline case shows the expected and supplied run IDs and
+fingerprints. Reimport the case with its original baseline. If a local
+workflow pin conflicts, the checklist shows the current pin and keeps it in
+place.
+
 ## Compare and save an invoice candidate
 
 Keep using the alpha.6 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.

@@ -19,7 +19,7 @@ const caseKind = 'adcp-review-case';
 const invoiceCaseKind = 'adcp-invoice-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
-const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice'];
+const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'suppliedBaseline'];
 const bytes = value => new TextEncoder().encode(value).length;
 const isId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(value);
 const isFingerprint = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -185,7 +185,12 @@ function readReviews(storage) {
       if (!isFingerprint(item.resolution)) throw new Error('The saved resolution is invalid.');
       restored.resolution = item.resolution;
     }
-    if (item.invoice !== undefined) restored.invoice = item.invoice;
+    if (item.invoice !== undefined) {
+      restored.invoice = item.invoice;
+      if (isId(item.suppliedBaseline?.runId) && isFingerprint(item.suppliedBaseline?.fingerprint)) {
+        restored.suppliedBaseline = { runId: item.suppliedBaseline.runId, fingerprint: item.suppliedBaseline.fingerprint };
+      }
+    }
     return restored;
   });
 }
@@ -341,12 +346,21 @@ export async function importReview(getStorage, reportText, evidence, initialNote
       else caseWarnings.push('Closure could not be verified.');
     }
   }
+  const suppliedBaseline = invoice && mismatches.includes('baseline')
+    ? { runId: evidence.baseline.id, fingerprint: await runFingerprint(evidence.baseline) } : undefined;
   // Read local state after the asynchronous checks so imports preserve recent edits.
   const storage = getStorage();
   const items = readReviews(storage);
   const current = items.find(item => item.id === id);
   const next = { ...current, id, report, note: current?.note ?? initialNote, reviewed: current?.reviewed ?? false, ...attachments };
-  if (invoice) next.invoice = current?.invoice ?? invoice;
+  if (invoice) {
+    next.invoice = current?.invoice ?? invoice;
+    if (attachments.baseline) delete next.suppliedBaseline;
+    else if (!next.baseline && suppliedBaseline) {
+      // Retain identifiers for diagnosis without saving the rejected investigation.
+      next.suppliedBaseline = suppliedBaseline;
+    }
+  }
   if (incoming.decision) {
     if (current?.decision || current?.followUp || current?.resolution) {
       caseWarnings.push('The existing local decision and follow-up were kept.');
@@ -435,7 +449,11 @@ function invoicePasses(checked) {
 
 async function inspectInvoice(item) {
   try { return { checked: await assessSavedInvoice(item) }; }
-  catch (error) { return { error: error.message }; }
+  catch (error) {
+    // Per-file results are diagnostic only when the saved snapshot fails verification.
+    const diagnostic = await assessInvoiceFolder(item.invoice.evidence).catch(() => null);
+    return { error: error.message, receiptStates: diagnostic?.receiptStates };
+  }
 }
 
 function sameInvoiceCandidate(original, followUp) {
@@ -445,9 +463,17 @@ function sameInvoiceCandidate(original, followUp) {
     ? followUp.candidateFingerprint === original.candidateFingerprint : distinctCandidate(original, followUp);
 }
 
+function invoicePinState(getStorage, item) {
+  const { baselines, warning } = restoreWorkflowBaselines(getStorage);
+  if (warning) return { status: 'unreadable' };
+  const pin = baselines.find(pin => workflowKey(pin.name) === workflowKey(item.invoice.workflow));
+  if (!pin) return { status: 'missing' };
+  const matching = pin.runId === item.report.baselineId && pin.fingerprint === item.report.baselineFingerprint;
+  return { status: matching ? 'matched' : 'conflict', pin };
+}
+
 function invoicePinMatches(getStorage, item) {
-  const current = restoreWorkflowBaselines(getStorage).baselines.find(pin => workflowKey(pin.name) === workflowKey(item.invoice.workflow));
-  return Boolean(current && current.runId === item.report.baselineId && current.fingerprint === item.report.baselineFingerprint);
+  return invoicePinState(getStorage, item).status === 'matched';
 }
 
 function requireInvoicePin(getStorage, item) {
@@ -484,12 +510,14 @@ export async function assessFollowUp(item, original, getStorage) {
   const originalInvoice = item.invoice ? await inspectInvoice(item) : undefined;
   const flagged = Boolean((original.verdict && original.verdict.status !== 'pass')
     || (originalInvoice && !invoicePasses(originalInvoice.checked)));
-  const pinChanged = Boolean(item.invoice && getStorage && !invoicePinMatches(getStorage, item));
-  const open = { originalInvoice, flagged, pinChanged, canResolve: false, resolved: false };
-  if (!followUp || !sameBaseline(item.report, followUp.report)) return open;
+  const pinState = item.invoice && getStorage ? invoicePinState(getStorage, item) : undefined;
+  const pinChanged = Boolean(pinState && pinState.status !== 'matched');
+  const open = { originalInvoice, flagged, pinState, pinChanged, canResolve: false, resolved: false };
+  if (!followUp) return open;
+  if (!sameBaseline(item.report, followUp.report)) return { ...open, incompatible: 'baseline' };
   const compatible = item.invoice ? followUp.invoice && sameInvoiceCandidate(item.report, followUp.report)
     : !followUp.invoice && distinctCandidate(item.report, followUp.report);
-  if (!compatible) return open;
+  if (!compatible) return { ...open, incompatible: 'candidate' };
 
   const record = { ...followUp, baseline: item.baseline };
   const assessment = await assessReview(record).catch(() => undefined);
@@ -498,7 +526,7 @@ export async function assessFollowUp(item, original, getStorage) {
     && originalInvoice.checked.caseId === invoice.checked.caseId && item.invoice.workflow === followUp.invoice.workflow);
   const passes = Boolean(item.decision && original.verdict && flagged && receiptsPass
     && followUp.report.status === 'pass' && assessment?.verdict?.status === 'pass');
-  return { ...open, assessment, invoice, canResolve: passes && !pinChanged,
+  return { ...open, assessment, invoice, passes, canResolve: passes && !pinChanged,
     resolved: passes && item.resolution === await resolutionFor(item) };
 }
 

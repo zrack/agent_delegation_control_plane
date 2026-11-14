@@ -10,6 +10,10 @@ import {
 
 const tones = { pass: 'valid', regression: 'violation', review: 'unknown' };
 const priority = { regression: 0, review: 1, pass: 2 };
+const receiptLabels = {
+  matched: 'Matches manifest', missing: 'File missing', unlisted: 'Hash missing from manifest',
+  mismatch: 'Hash mismatch', invalid: 'Invalid or unreadable',
+};
 const evidenceLabels = {
   matched: 'Matches report fingerprint',
   missing: 'Original export missing',
@@ -89,6 +93,83 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       ${differences ? `<details class="review-differences"><summary>All comparison differences</summary>${differences}</details>` : ''}`;
   }
 
+  function invoiceClosureChecklist(item, original, followUp) {
+    const { report, suppliedBaseline, invoice } = item;
+    const { pinState, assessment, incompatible, passes } = followUp;
+    const checks = [];
+    const targetLabels = {
+      'review-import-link': 'Go to case import', 'compare-link': 'Open Compare runs',
+      'review-decision': 'Go to decision', 'review-follow-up-file': 'Go to follow-up picker',
+      'invoice-follow-up-evidence': 'Inspect receipt evidence', 'resolve-review-case': 'Go to close button',
+    };
+    const row = (label, issue, action, target, evidence = '') => {
+      checks.push(`<li><strong>${escape(label)}</strong> · ${escape(issue)}${evidence}
+        ${action ? `<p>${escape(action)} ${target ? `<button type="button" data-closure-target="${target}">${targetLabels[target]}</button>` : ''}</p>` : ''}</li>`);
+    };
+    const identify = (label, runId, fingerprint) => `<p>${label} <code>${escape(runId)}</code>
+      <code>${escape(fingerprint)}</code></p>`;
+    const expected = identify('Expected baseline', report.baselineId, report.baselineFingerprint);
+    const reimport = 'Reimport the case with the original baseline and candidate evidence. Keep the same workflow and decision.';
+    const attach = 'Attach the original corrected folder for this invoice case. Pin the original baseline first if needed.';
+    if (original.states.baseline !== 'matched') {
+      const supplied = suppliedBaseline ? identify('Supplied baseline', suppliedBaseline.runId, suppliedBaseline.fingerprint) : '';
+      row('Baseline evidence', suppliedBaseline || original.states.baseline === 'mismatch' ? 'Baseline mismatch' : 'Baseline missing',
+        reimport, 'review-import-link', expected + supplied);
+    } else {
+      row('Baseline evidence', 'Matches the saved case');
+    }
+    if (original.states.candidate !== 'matched') {
+      row('Candidate evidence', evidenceLabels[original.states.candidate], reimport, 'review-import-link');
+    } else if (original.states.baseline === 'matched' && !original.verdict) {
+      row('Baseline comparison', 'The saved evidence cannot reproduce the comparison', reimport, 'review-import-link');
+    }
+    if (pinState?.status === 'conflict') {
+      row('Workflow pin', `“${invoice.workflow}” uses a different baseline`,
+        'Use the original baseline to continue this review. The current pin was kept.', 'compare-link',
+        expected + identify('Current pin', pinState.pin.runId, pinState.pin.fingerprint));
+    } else if (pinState?.status === 'unreadable') {
+      row('Workflow pin', 'Saved workflows could not be read', 'Check this browser’s site storage.');
+    } else if (pinState?.status === 'missing' && original.states.baseline === 'matched') {
+      row('Workflow pin', `“${invoice.workflow}” is not pinned in this browser`,
+        'To attach a replacement or close locally, import the original baseline run and pin it under this workflow.', 'compare-link');
+    }
+    if (!item.decision) {
+      row('Review decision', 'Decision needed', 'Choose a decision and save a reason.', 'review-decision');
+    }
+    if (!followUp.originalInvoice?.checked) {
+      row('Original receipts', 'Saved invoice snapshot could not be verified', reimport, 'review-import-link');
+    }
+    if (!item.followUp) {
+      row('Follow-up evidence', 'Corrected folder needed', attach, item.decision ? 'review-follow-up-file' : 'review-decision');
+    } else if (incompatible) {
+      row('Follow-up evidence', incompatible === 'baseline' ? 'Follow-up references a different baseline' : 'Follow-up candidate differs',
+        'Reimport a case with a follow-up checked against the original baseline.', 'review-import-link');
+    } else {
+      const receipts = followUp.invoice;
+      const checked = receipts?.checked;
+      if (!checked || [checked.authority, checked.output, checked.execution].some(check => check.tone !== 'valid')
+        || checked.caseId !== followUp.originalInvoice?.checked?.caseId || item.followUp.invoice.workflow !== invoice.workflow) {
+        const states = receipts?.receiptStates ?? checked?.receiptStates ?? {};
+        const files = Object.entries(states).filter(([, state]) => state !== 'matched')
+          .map(([name, state]) => `${name} · ${receiptLabels[state]}`).join(', ');
+        const failedChecks = checked ? [checked.authority, checked.output, checked.execution]
+          .filter(check => check.tone !== 'valid').map(check => check.label).join(', ') : '';
+        const reason = files || failedChecks || (checked ? 'Follow-up does not match this invoice case' : 'Saved receipt snapshot could not be verified');
+        row('Follow-up evidence', reason, attach, 'invoice-follow-up-evidence');
+      } else {
+        row('Follow-up evidence', 'Receipt checks passed');
+      }
+      if (original.verdict && (assessment?.verdict?.status !== 'pass' || item.followUp.report.status !== 'pass')) {
+        row('Follow-up comparison', 'The follow-up did not pass against the original baseline', attach, 'invoice-follow-up-evidence');
+      }
+    }
+    if (passes && followUp.canResolve) {
+      row('Closure', 'Ready to close', 'Review the checks and select Close as resolved.', 'resolve-review-case');
+    }
+    return `<section class="closure-checklist" aria-labelledby="invoice-closure-title">
+      <h4 id="invoice-closure-title">Closure checklist</h4><ul>${checks.join('')}</ul></section>`;
+  }
+
   function renderCase(item, original, followUp) {
     if (item.report.status === 'pass' && !followUp.flagged && !item.decision) return '';
     const { assessment, canResolve, pinChanged, resolved } = followUp;
@@ -96,7 +177,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
       <p class="panel-description">Reported · ${regressionLabels[record.report.status]}</p>
       <p class="panel-description">${check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p></div>`;
-    const nextStep = resolved ? 'The saved follow-up still passes against the original baseline.'
+    const nextStep = item.invoice && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
         : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
         : item.invoice ? 'Save a decision and attach a folder for this invoice case. The original baseline comparison, authority, output, and execution checks must pass for the follow-up.'
@@ -108,13 +189,15 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       ? `<p class="panel-description">Follow-up receipts · ${receiptCheck.checked.output.label} · ${receiptCheck.checked.execution.label}</p>`
       : '';
     const receiptDetails = receiptCheck?.checked ? invoiceMarkup(receiptCheck.checked)
-      : receiptCheck?.error ? `<p class="import-error">${escape(receiptCheck.error)}</p>` : '';
+      : receiptCheck?.error ? `<p class="import-error">${escape(receiptCheck.error)}</p>
+        ${receiptCheck.receiptStates ? receiptFileChecks(receiptCheck.receiptStates) : ''}` : '';
     const label = item.invoice ? 'Attach follow-up invoice folder' : 'Attach follow-up package';
     const picker = item.invoice ? 'webkitdirectory' : 'accept=".json,application/json"';
     const folderUnsupported = item.invoice && !('webkitdirectory' in invoiceInput);
     return `<section class="review-case" aria-labelledby="review-case-title">
       <div class="panel-heading"><h3 id="review-case-title">Review decision and follow-up</h3>
         <span class="badge ${resolved ? 'valid' : 'unknown'}">${resolved ? 'Resolved' : 'Open'}</span></div>
+      ${item.invoice && !resolved ? invoiceClosureChecklist(item, original, followUp) : ''}
       <form id="review-decision-form">
         <label for="review-decision">Decision</label>
         <select id="review-decision" required><option value="">Choose a decision</option>${Object.entries(reviewDecisions).map(([kind, label]) =>
@@ -128,7 +211,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original)}
         ${comparison('Follow-up run', item.followUp, assessment)}</div>
         ${receiptSummary}
-        ${assessment || receiptDetails ? `<details class="review-differences"><summary>Inspect follow-up evidence</summary>
+        ${assessment || receiptDetails ? `<details class="review-differences" id="invoice-follow-up-evidence"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}</details>` : ''}` : ''}
       <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
       <button type="button" id="resolve-review-case" ${canResolve && !resolved ? '' : 'disabled'}>Close as resolved</button>
@@ -208,6 +291,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     }
   }
 
+  function receiptFileChecks(states) {
+    return `<details class="review-differences receipt-file-checks"><summary>File checks against manifest</summary><dl>
+      ${Object.entries(states).map(([name, state]) => `<div><dt>${escape(name)}</dt><dd>${receiptLabels[state]}</dd></div>`).join('')}
+      </dl></details>`;
+  }
+
   function invoiceMarkup({ caseId, authority, output, execution, receiptStates }) {
     const properties = entries => `<dl>${entries.map(([label, value]) =>
       `<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl>`;
@@ -225,18 +314,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         ['Input unchanged', inputUnchanged ? 'Yes' : 'No'], ['Sandbox cleaned up', cleaned ? 'Yes' : 'No']);
     }
     if (execution.attempts) executionBody.push(['Allowed attempts', execution.attempts.allowed], ['Denied attempts', execution.attempts.denied]);
-    const receiptLabels = {
-      matched: 'Matches manifest', missing: 'File missing', unlisted: 'Hash missing from manifest',
-      mismatch: 'Hash mismatch', invalid: 'Invalid or unreadable',
-    };
     return `<section class="invoice-results"><h3>Invoice run · ${escape(caseId)}</h3>
       <div class="invoice-checks">
       ${panel('Authority', authority, authorityBody)}
       ${panel('Output', output, outputBody)}
       ${panel('Execution', execution, executionBody.length ? properties(executionBody) : '<p>Supply matching execution and attempts receipts.</p>')}
       </div>
-      <details class="review-differences"><summary>File checks against manifest</summary>
-      ${properties(Object.entries(receiptStates).map(([name, state]) => [name, receiptLabels[state]]))}</details></section>`;
+      ${receiptFileChecks(receiptStates)}</section>`;
   }
 
   function updateInvoiceWorkflows() {
@@ -419,6 +503,19 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
 
   detail.addEventListener('click', async event => {
     if (!selected) return;
+    const targetId = event.target.dataset.closureTarget;
+    if (targetId) {
+      const target = targetId === 'review-import-link' ? packageInput : document.getElementById(targetId);
+      if (!target) return;
+      if (target.tagName === 'DETAILS') {
+        target.open = true;
+        const files = target.querySelector('.receipt-file-checks');
+        if (files) files.open = true;
+        (files ?? target).querySelector('summary').focus();
+      } else if (target.id === 'compare-link') target.click();
+      else target.focus();
+      return;
+    }
     if (event.target.id === 'resolve-review-case') {
       const item = selected;
       event.target.disabled = true;
