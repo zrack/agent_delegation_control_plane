@@ -5,83 +5,63 @@ API key, account, Docker, or model calls.
 
 ## Try the offline invoice demo
 
-1. Download **Source code (zip)** from
-   [v0.1.0-alpha.4](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.4).
-   Extract it and the [invoice-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.4/adcp-invoice-folder-demo-v0.1.0-alpha.4.zip)
+1. Download **Source code (zip)** from [v0.1.0-alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.5).
+   Extract it and the [invoice receipt follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip)
    into separate directories.
 2. From the extracted source directory, run `python3 scripts/serve.py` with
    Python 3.11 or newer. Open the printed loopback address in a fresh browser
    profile with folder selection support.
-3. In **Regression inbox**, expand **Import invoice-run folder** and use
-   **Invoice-run folder** to choose one case directory containing
-   `manifest.json`. Start with `invoice-b`, then repeat for each remaining
-   folder.
-4. For each case, check **Authority**, **Output**, and **Execution**. In
-   **File checks against manifest**, confirm the six file results below.
 
-| Folder | Output | File checks |
-| --- | --- | --- |
-| `invoice-b` | **Totals verified** · 4 invoices, subtotal 1,151 cents, tax 80 cents, total 1,231 cents | All six match |
-| `invoice-c` | **Totals verified** · 3 invoices, subtotal 2,282 cents, tax 159 cents, total 2,441 cents | All six match |
-| `invoice-b-missing-receipt` | **Unverifiable** | `validation.json` shows **File missing**. The other five match. |
-| `invoice-c-altered-output` | **Hash mismatch** | `results.json` shows **Hash mismatch**. The other five match. |
-
-In each case **Authority** should show **Within scope** and two completed
-actions. **Execution** should show **Execution recorded complete**, exit code 0,
-two allowed attempts, zero denied attempts, unchanged input, and sandbox cleanup.
-The demo receipts are synthetic. The importer checks the supplied records
-locally against an unsigned manifest. Reload to confirm the summary clears.
+The demo uses fictional invoice records and synthetic receipts. Each candidate
+folder contains an unsigned `manifest.json` with the file digests the viewer checks.
 
 ## Compare and save an invoice candidate
 
-Start the dashboard from the current source checkout. Use a saved fictional
-baseline and a different candidate run from the same workflow, such as
-invoice A as baseline and B or C as candidate from the sandbox pilot.
+1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
+   from the demo ZIP. Under **Compare runs**, select the imported invoice A as
+   **Baseline run**.
+2. Open **Save or replace a workflow baseline**, enter **Demo invoices** as the
+   workflow name, and select **Save baseline**. Keep this pin for both cases.
+3. In **Regression inbox**, expand **Import invoice-run folder**. Choose
+   `invoice-b-missing-receipt`, select **Demo invoices** under **Compare against
+   pinned baseline**, and choose **Compare and save to inbox**. Repeat for
+   `invoice-c-altered-output`.
+4. Open each saved entry. Both should show **No regression found**, **Within
+   scope**, and **Execution recorded complete**. The **Output** panel and
+   **File checks against manifest** show the individual receipt problems.
 
-1. Use **Import a completed run** to open the baseline's `investigation.json`.
-   Under **Compare runs**, select it as **Baseline run**. Open **Save or replace
-   a workflow baseline**, enter a name, and select **Save baseline**.
-2. Under **Regression inbox → Import invoice-run folder**, choose the candidate
-   folder containing `manifest.json`. Select the pinned workflow and choose
-   **Compare and save to inbox**.
-3. Review **Baseline regression**, **Authority**, **Output**, and **Execution**.
-   Expand **File checks against manifest** to see each receipt's result. A
-   missing validation receipt or altered output can fail the output check while
-   the comparison still shows **No regression found**.
-4. Reload at the same address and reopen the inbox entry. The dashboard rechecks
-   the saved baseline, candidate, and receipts. Copies with different receipt
-   contents keep separate entries even when they share a run ID.
-
-Saved invoice receipts count toward the inbox's 2 MiB limit. Review packages
-and case downloads carry the delegation evidence. The receipt files stay in
-this browser. [Privacy and sharing guidance](PRIVACY.md)
+| Candidate folder | Expected output | Affected file |
+| --- | --- | --- |
+| `invoice-b-missing-receipt` | **Unverifiable** | `validation.json` shows **File missing** |
+| `invoice-c-altered-output` | **Hash mismatch** | `results.json` shows **Hash mismatch** |
 
 ## Review and close an invoice receipt case
 
-1. With invoice A pinned, save the missing-validation and altered-output
-   candidates as described above. Keep their original receipt folders.
-2. Open each inbox entry. In **Review decision and follow-up**, choose
-   **Evidence needed** for the missing receipt or **Fix required** for the hash
-   mismatch, enter your reason, and select **Save decision**.
-3. Use **Attach follow-up invoice folder** and select the matching complete folder
-   for invoice B or C. A restored receipt can keep the original run ID when the
-   investigation matches. Keep the workflow pinned to the original baseline.
-4. Open **Inspect follow-up evidence**. Confirm the baseline comparison shows
-   **No regression found**, authority shows **Within scope**, output shows
-   **Totals verified**, and execution shows **Execution recorded complete**.
-   Select **Close as resolved**, reload, and check the decision and **Resolved**
-   status again.
+1. Open the saved invoice B case. In **Review decision and follow-up**, choose
+   **Evidence needed**, explain that the validation receipt is missing, and
+   select **Save decision**. For invoice C, choose **Fix required** and record
+   that the output bytes differ from the manifest.
+2. Use **Attach follow-up invoice folder** to select `invoice-b-corrected` for
+   invoice B or `invoice-c-corrected` for invoice C. The corrected folders
+   retain the original candidate investigations and run IDs.
+3. Open **Inspect follow-up evidence**. Confirm the follow-up shows
+   **No regression found**, **Within scope**, **Totals verified**, and
+   **Execution recorded complete**. All six files should match the manifest.
+   The verified totals are 1,231 cents for B and 2,441 cents for C.
+4. Select **Close as resolved**, then reload at the same address. Confirm the
+   saved decision and **Resolved** status return for each case.
 
-As a negative check, attach the still-incomplete or altered folder before trying
-the corrected folder. The case should stay **Open** with the failing receipt
-visible. A replacement baseline prevents attachment and closure until the
-original pin is restored. The inbox retains both snapshots in this browser.
-The invoice decision can travel in a case download. Invoice receipt evidence,
-follow-ups, and closure stay local.
+Before attaching a correction, try the original failing folder as the follow-up.
+The case stays **Open**, and **Close as resolved** stays disabled. A replacement
+baseline also blocks attachment and closure until the original pin is restored.
+
+Receipt snapshots count toward the inbox's 2 MiB limit. A case download can carry
+the original delegation evidence and review decision. Invoice receipt evidence,
+follow-ups, and closure stay in this browser. [Privacy and sharing guidance](PRIVACY.md)
 
 ## Import a resolved case
 
-Use the alpha.4 dashboard started above for this exercise. The
+Use the alpha.5 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 

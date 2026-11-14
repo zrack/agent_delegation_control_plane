@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.4](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.4) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.5) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -16,24 +16,16 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 
 ## Try the offline invoice demo
 
-1. Extract **Source code (zip)** from the alpha.4 release and start the dashboard from that directory. Extract the [invoice-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.4/adcp-invoice-folder-demo-v0.1.0-alpha.4.zip) separately.
-2. Open **Regression inbox → Import invoice-run folder**. Select one of the four folders containing `manifest.json` at a time.
-3. Read **Authority**, **Output**, and **Execution** separately. Expand **File checks against manifest** to see which files match.
+1. Extract **Source code (zip)** from alpha.5 and start the dashboard from the extracted source. Unzip the [invoice receipt follow-up demo](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) separately.
+2. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`. In **Compare runs**, select invoice A as **Baseline run**, open **Save or replace a workflow baseline**, enter **Demo invoices**, and select **Save baseline**.
+3. For each candidate below, open **Regression inbox → Import invoice-run folder**, choose the folder, select **Demo invoices**, and choose **Compare and save to inbox**.
 
-| Folder | Expected output |
-| --- | --- |
-| `invoice-b` | **Totals verified** · 4 invoices, 1,231 cents |
-| `invoice-c` | **Totals verified** · 3 invoices, 2,441 cents |
-| `invoice-b-missing-receipt` | **Unverifiable** · `validation.json` is missing |
-| `invoice-c-altered-output` | **Hash mismatch** · `results.json` differs from the manifest |
+| Candidate folder | Output on import | Corrected follow-up |
+| --- | --- | --- |
+| `invoice-b-missing-receipt` | **Unverifiable** · `validation.json` is missing | `invoice-b-corrected` |
+| `invoice-c-altered-output` | **Hash mismatch** · `results.json` differs from the manifest | `invoice-c-corrected` |
 
-All four examples show **Within scope** and **Execution recorded complete**. The demo uses fictional records, checks six named files against an unsigned manifest, and clears results on reload. [Alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-offline-invoice-demo)
-
-## Save an invoice comparison from the current checkout
-
-Import the baseline's `investigation.json` and pin it under a workflow in **Compare runs**. Open **Regression inbox → Import invoice-run folder**, select a candidate folder from the same workflow, choose the saved workflow, and select **Compare and save to inbox**. Reopen the entry after reload to see the baseline comparison and the separate receipt results. [Candidate walkthrough](docs/ALPHA_REVIEW.md#compare-and-save-an-invoice-candidate)
-
-If a receipt check flags the case, save a decision and attach a corrected invoice folder from the same case. Check the follow-up against the original baseline, then choose **Close as resolved** once authority, output, and execution all pass. [Receipt follow-up walkthrough](docs/ALPHA_REVIEW.md#review-and-close-an-invoice-receipt-case)
+For each case, save a decision and reason, then use **Attach follow-up invoice folder** to select its correction. Inspect the follow-up for **No regression found**, **Within scope**, **Totals verified**, and **Execution recorded complete**. Select **Close as resolved** and reload to verify that the decision and **Resolved** status return. [Alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-offline-invoice-demo)
 
 ## Inspect records
 
