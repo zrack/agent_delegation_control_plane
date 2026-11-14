@@ -281,16 +281,20 @@ function portableInvoice(invoice) {
   return { workflow, outputAtImport, evidence: portableInvoiceEvidence(evidence), fingerprint };
 }
 
+async function readInvoiceFollowUp(original, file) {
+  const report = parseRegressionReport(JSON.stringify(file?.report));
+  const candidate = parseInvestigation(JSON.stringify(file?.candidate));
+  const invoice = portableInvoice(file?.invoice);
+  if (!sameBaseline(original, report) || !sameInvoiceCandidate(original, report)
+    || await evidenceState(report, 'candidate', candidate) !== 'matched') return undefined;
+  return { id: await reviewId(report, invoice), report, candidate, invoice };
+}
+
 async function importInvoiceCase(getStorage, incoming, bundle, warnings) {
   incoming.decision = validateDecision(bundle.decision?.kind, bundle.decision?.reason);
   if (bundle.followUp !== undefined) {
-    const report = parseRegressionReport(JSON.stringify(bundle.followUp?.report));
-    const candidate = parseInvestigation(JSON.stringify(bundle.followUp?.candidate));
-    const invoice = portableInvoice(bundle.followUp?.invoice);
-    if (sameBaseline(incoming.report, report) && sameInvoiceCandidate(incoming.report, report)
-      && await evidenceState(report, 'candidate', candidate) === 'matched') {
-      incoming.followUp = { id: await reviewId(report, invoice), report, candidate, invoice };
-    } else warnings.push('The invoice follow-up needs matching evidence against the original baseline.');
+    incoming.followUp = await readInvoiceFollowUp(incoming.report, bundle.followUp);
+    if (!incoming.followUp) warnings.push('The invoice follow-up needs matching evidence against the original baseline.');
   }
 
   const original = await assessReview(incoming);
@@ -522,12 +526,73 @@ export async function assessFollowUp(item, original, getStorage) {
   const record = { ...followUp, baseline: item.baseline };
   const assessment = await assessReview(record).catch(() => undefined);
   const invoice = followUp.invoice ? await inspectInvoice(record) : undefined;
-  const receiptsPass = !item.invoice || (originalInvoice.checked && invoicePasses(invoice?.checked)
-    && originalInvoice.checked.caseId === invoice.checked.caseId && item.invoice.workflow === followUp.invoice.workflow);
-  const passes = Boolean(item.decision && original.verdict && flagged && receiptsPass
-    && followUp.report.status === 'pass' && assessment?.verdict?.status === 'pass');
+  const passingFollowUp = item.invoice ? invoiceFollowUpPasses(item, { assessment, invoice, originalInvoice })
+    : followUp.report.status === 'pass' && assessment?.verdict?.status === 'pass';
+  const passes = Boolean(item.decision && original.verdict && flagged && passingFollowUp);
   return { ...open, assessment, invoice, passes, canResolve: passes && !pinChanged,
     resolved: passes && item.resolution === await resolutionFor(item) };
+}
+
+function invoiceFollowUpPasses(item, checked) {
+  return checked.assessment?.verdict?.status === 'pass' && item.followUp?.report.status === 'pass'
+    && checked.originalInvoice.checked && invoicePasses(checked.invoice?.checked)
+    && checked.originalInvoice.checked.caseId === checked.invoice.checked.caseId
+    && item.invoice.workflow === item.followUp.invoice.workflow;
+}
+
+export async function previewInvoiceEvidenceRestore(getStorage, item, contents) {
+  if (!item.invoice || !item.decision) throw new Error('Save an invoice review decision before restoring evidence.');
+  const { bundle, reportText, evidence } = readReviewPackage(contents, true);
+  if (bundle.kind !== invoiceCaseKind) throw new Error('Choose an invoice review case exported with receipts.');
+  const report = parseRegressionReport(reportText);
+  const invoice = portableInvoice(bundle.invoice);
+  if (await reviewId(report, invoice) !== item.id) {
+    throw new Error('This file belongs to a different invoice case. Choose a copy with the original report, workflow, and receipt snapshot.');
+  }
+  const replacement = { ...item, baseline: evidence.baseline, candidate: evidence.candidate, invoice };
+  const original = await assessReview(replacement);
+  if (!original.verdict) throw new Error('The replacement needs the original baseline and candidate investigations with matching fingerprints.');
+  await assessSavedInvoice(replacement);
+
+  const currentOriginal = await assessReview(item);
+  const currentChecks = await assessFollowUp(item, currentOriginal);
+  if (currentChecks.resolved) throw new Error('This invoice case is already resolved.');
+  const changes = {};
+  const restored = [];
+  for (const side of sides) {
+    if (currentOriginal.states[side] !== 'matched') {
+      changes[side] = evidence[side];
+      restored.push(side === 'baseline' ? 'Baseline investigation' : 'Candidate investigation');
+    }
+  }
+  if (changes.baseline) changes.suppliedBaseline = undefined;
+  if (!currentChecks.originalInvoice.checked) {
+    changes.invoice = invoice;
+    restored.push('Original receipt snapshot');
+  }
+
+  const repaired = { ...item, ...changes, resolution: undefined };
+  const repairedOriginal = await assessReview(repaired);
+  let checks = await assessFollowUp(repaired, repairedOriginal);
+  if (!invoiceFollowUpPasses(repaired, checks)) {
+    const followUp = bundle.followUp === undefined ? undefined : await readInvoiceFollowUp(item.report, bundle.followUp);
+    if (!followUp) throw new Error('The replacement needs a matching follow-up checked against the original baseline.');
+    changes.followUp = repaired.followUp = followUp;
+    restored.push('Follow-up investigation and receipts');
+    checks = await assessFollowUp(repaired, repairedOriginal);
+  }
+  if (!invoiceFollowUpPasses(repaired, checks)) {
+    throw new Error('The replacement follow-up did not pass the baseline comparison and invoice receipt checks.');
+  }
+  if (!restored.length) throw new Error('The saved case already has matching evidence.');
+  if (!checks.passes) throw new Error('The restored evidence does not reproduce an open case with a passing follow-up.');
+
+  return { restored, changes, pinState: invoicePinState(getStorage, item) };
+}
+
+export async function restoreInvoiceEvidence(getStorage, expected, contents) {
+  const { changes } = await previewInvoiceEvidenceRestore(getStorage, expected, contents);
+  return updateCase(getStorage, expected, { ...changes, resolution: undefined });
 }
 
 export async function resolveReviewCase(getStorage, expected) {

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { importInvoiceFolder } from '../../src/invoice-import.mjs';
 import {
   assessFollowUp, assessReview, assessSavedInvoice, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReviewPackage,
-  resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview, saveReviewDecision,
+  previewInvoiceEvidenceRestore, resolveReviewCase, restoreInvoiceEvidence, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from '../../src/review.mjs';
 import { restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline } from '../../src/storage.mjs';
 import { parseInvestigation } from '../../src/import.mjs';
@@ -357,5 +357,66 @@ test('portable invoice cases opt in to receipts and reverify closure in a fresh 
     assert.equal(conflictCheck.pinState.status, 'conflict');
     assert.equal(conflictCheck.pinState.pin.fingerprint, await runFingerprint(otherBaseline));
     assert.equal(restoreWorkflowBaselines(other.getStorage).baselines[0].fingerprint, await runFingerprint(otherBaseline));
+  }
+});
+
+test('matching portable evidence repairs open invoice cases without replacing reviews or pins', async () => {
+  const { getStorage, pin } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const failed = await importInvoiceFolder(selectedFiles(missing, manifest));
+  const corrected = await importInvoiceFolder(selectedFiles(files, manifest));
+  const id = await saveInvoiceCandidate(getStorage, pin, failed.evidence);
+  const read = storage => restoreReviews(storage).items.find(item => item.id === id);
+  saveReviewDecision(getStorage, read(getStorage), 'fix-required', 'Restore original receipts.');
+  await attachInvoiceFollowUp(getStorage, read(getStorage), corrected.evidence);
+  await resolveReviewCase(getStorage, read(getStorage));
+  const portable = await createReviewCase(read(getStorage), undefined, { includeInvoiceReceipts: true });
+
+  for (const blocker of ['receipt', 'baseline']) {
+    const receiver = await savedWorkflow();
+    const storage = receiver.getStorage;
+    const broken = JSON.parse(portable);
+    if (blocker === 'receipt') broken.followUp.invoice.evidence.files['results.json'] = btoa('changed');
+    else broken.baseline.chain.title = 'Substituted baseline';
+    await importReviewPackage(storage, JSON.stringify(broken));
+    saveReviewDecision(storage, read(storage), 'evidence-needed', 'Keep my local decision.');
+    saveReview(storage, read(storage), 'Keep my local note.', true);
+
+    const before = storage().getItem(REVIEW_STORAGE_KEY);
+    await assert.rejects(previewInvoiceEvidenceRestore(storage, read(storage), JSON.stringify(broken)));
+    const preview = await previewInvoiceEvidenceRestore(storage, read(storage), portable);
+    assert.deepEqual(preview.restored, [blocker === 'receipt' ? 'Follow-up investigation and receipts' : 'Baseline investigation']);
+    assert.equal(preview.pinState.status, 'matched');
+    assert.equal(storage().getItem(REVIEW_STORAGE_KEY), before);
+
+    const stale = read(storage);
+    saveReview(storage, stale, 'Updated after preview.', true);
+    await assert.rejects(restoreInvoiceEvidence(storage, stale, portable), /review changed/i);
+
+    const otherBaseline = { ...receiver.baseline, title: 'Conflicting local baseline' };
+    saveInvestigation(storage, otherBaseline);
+    saveWorkflowBaseline(storage, pin.name, otherBaseline, await runFingerprint(otherBaseline), receiver.pin);
+    const conflict = restoreWorkflowBaselines(storage).baselines;
+    assert.equal((await previewInvoiceEvidenceRestore(storage, read(storage), portable)).pinState.status, 'conflict');
+    await restoreInvoiceEvidence(storage, read(storage), portable);
+    let item = read(storage);
+    assert.equal(item.id, id);
+    assert.equal(item.decision.reason, 'Keep my local decision.');
+    assert.equal(item.note, 'Updated after preview.');
+    assert.equal(item.reviewed, true);
+    assert.equal(item.resolution, undefined);
+    assert.equal(item.suppliedBaseline, undefined);
+    assert.equal(restoreReviews(storage).items.length, 1);
+    assert.deepEqual(restoreWorkflowBaselines(storage).baselines, conflict);
+    await assert.rejects(resolveReviewCase(storage, item), /different baseline/);
+
+    saveInvestigation(storage, receiver.baseline);
+    saveWorkflowBaseline(storage, pin.name, receiver.baseline, pin.fingerprint, conflict[0]);
+    await resolveReviewCase(storage, item);
+    item = read(storage);
+    assert.equal((await assessFollowUp(item, await assessReview(item), storage)).resolved, true);
   }
 });
