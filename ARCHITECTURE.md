@@ -126,8 +126,12 @@ snapshot and require its workflow pin when attaching or closing. A correction
 can use the original run ID when the investigation fingerprint matches. Closure
 binds the decision and follow-up snapshot to the original case and is rechecked
 against saved baseline, authority, output, and execution evidence on reopen.
-Invoice receipt snapshots, follow-ups and closure stay in the local inbox.
-Review downloads can carry the original delegation report and decision.
+Ordinary invoice case downloads carry the original delegation report and decision.
+With explicit receipt opt-in, a version 1 `adcp-invoice-review-case` includes the
+allowlisted receipt snapshots and the matching follow-up. Import rechecks the
+packaged baseline and both invoice snapshots, and verifies the closure fingerprint
+before restoring resolution. A conflicting local workflow pin leaves the imported
+case open. Imports leave workflow pins unchanged.
 
 ## Trust and recovery
 

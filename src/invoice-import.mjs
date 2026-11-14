@@ -195,6 +195,30 @@ export async function importInvoiceFolder(files) {
   return { evidence, ...await assessInvoiceFolder(evidence) };
 }
 
+export function portableInvoiceEvidence({ caseId, hashes, files } = {}) {
+  if (typeof caseId !== 'string' || !casePattern.test(caseId) || !object(hashes) || !object(files)) {
+    throw new Error('The invoice receipt snapshot is invalid.');
+  }
+  const selected = { caseId, hashes: {}, files: {} };
+  for (const [name, [limit]] of Object.entries(receipts)) {
+    if (Object.hasOwn(hashes, name)) {
+      const digest = hashes[name];
+      if (digest !== null && (typeof digest !== 'string' || !digestPattern.test(digest))) {
+        throw new Error('The invoice receipt digest is invalid.');
+      }
+      selected.hashes[name] = digest;
+    }
+    if (Object.hasOwn(files, name)) {
+      const contents = files[name];
+      if (contents !== null && (typeof contents !== 'string' || contents.length > 4 * Math.ceil(limit / 3))) {
+        throw new Error('An invoice receipt exceeds its size limit or is invalid.');
+      }
+      selected.files[name] = contents;
+    }
+  }
+  return selected;
+}
+
 export async function assessInvoiceFolder({ caseId, hashes, files }) {
   if (typeof caseId !== 'string' || !casePattern.test(caseId) || !object(hashes) || !object(files)) {
     throw new Error('The invoice receipt snapshot is invalid.');

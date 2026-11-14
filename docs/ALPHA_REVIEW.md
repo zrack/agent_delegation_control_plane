@@ -55,9 +55,28 @@ Before attaching a correction, try the original failing folder as the follow-up.
 The case stays **Open**, and **Close as resolved** stays disabled. A replacement
 baseline also blocks attachment and closure until the original pin is restored.
 
-Receipt snapshots count toward the inbox's 2 MiB limit. A case download can carry
-the original delegation evidence and review decision. Invoice receipt evidence,
-follow-ups, and closure stay in this browser. [Privacy and sharing guidance](PRIVACY.md)
+Receipt snapshots count toward the inbox's 2 MiB limit.
+
+## Share an invoice review case
+
+Start the dashboard from the current source checkout for this exercise. Open a
+resolved invoice case and expand **Export review package or case**.
+
+1. Select **Include invoice receipts in case download**, then **Download review
+   case**. The file includes the baseline, original receipts, review decision,
+   corrected follow-up, and verified closure. Execution receipts may contain logs.
+   The note has its own checkbox.
+2. In a fresh browser profile, use **Import review package or case** to open the
+   downloaded file. The viewer checks the baseline and receipt snapshots before
+   showing **Resolved**. Reload and check that the decision and closure return.
+   The import does not create a workflow pin.
+3. Import a fictional copy with a changed receipt or substituted baseline.
+   Check the import warning and confirm the case stays **Open**. If the receiving
+   browser already pins a different baseline for the same workflow, it keeps
+   that pin and leaves the imported case open.
+
+The receipt checkbox starts unchecked. Ordinary invoice case downloads include
+the original delegation evidence and decision. [Privacy and sharing guidance](PRIVACY.md)
 
 ## Import a resolved case
 

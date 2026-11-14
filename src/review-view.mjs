@@ -143,10 +143,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     if (!item.invoice && item.decision && followUp.assessment?.states.baseline === 'matched'
       && followUp.assessment.states.candidate === 'matched') contents.push('follow-up report and evidence');
     if (!item.invoice && followUp.resolved) contents.push('verified closure');
+    const receiptOption = item.invoice && item.decision && original.verdict && followUp.originalInvoice?.checked;
     return `<details class="review-differences"><summary>Export review package or case</summary>
-      <p class="panel-description">The download includes the original report${matching}.${item.invoice ? ' Invoice receipts, follow-ups, and closure are kept in this browser.' : ''}</p>
+      <p class="panel-description">The download includes the original report${matching}.</p>
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
+      ${receiptOption ? `<p class="panel-description" id="invoice-export-help">Including invoice receipts adds the available original
+        and follow-up receipt files and any verified closure to the case download. Execution receipts may contain logs.</p>` : ''}
       <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
+      ${receiptOption ? '<label><input type="checkbox" id="include-invoice-receipts" aria-describedby="invoice-export-help"> Include invoice receipts in case download</label>' : ''}
       <button type="button" id="download-review-package">Download review package</button>
       ${item.decision ? '<button type="button" id="download-review-case">Download review case</button>' : ''}</div></details>`;
   }
@@ -435,9 +439,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       const checkbox = detail.querySelector('#include-review-note');
       const note = checkbox.checked ? item.note : undefined;
       checkbox.checked = false;
+      const receiptCheckbox = detail.querySelector('#include-invoice-receipts');
+      const includeInvoiceReceipts = Boolean(completeCase && receiptCheckbox?.checked);
+      if (receiptCheckbox) receiptCheckbox.checked = false;
       event.target.disabled = true;
       try {
-        const contents = completeCase ? await createReviewCase(item, note) : await createReviewPackage(item.report, item, note);
+        const contents = completeCase ? await createReviewCase(item, note, { includeInvoiceReceipts })
+          : await createReviewPackage(item.report, item, note);
         const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
         const link = document.createElement('a');
         link.href = url;
@@ -446,7 +454,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        announce(`${label} downloaded${note ? ' with the saved note' : ''}.`);
+        const included = [note && 'saved note', includeInvoiceReceipts && 'invoice receipts'].filter(Boolean);
+        announce(`${label} downloaded${included.length ? ' with ' + included.join(' and ') : ''}.`);
       } catch (error) { announce(`Could not download the ${label.toLowerCase()}. ${error.message}`, true); }
       finally { event.target.disabled = false; }
       return;

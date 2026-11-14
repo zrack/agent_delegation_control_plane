@@ -2,7 +2,7 @@
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
 import { evaluateChain } from './evaluator.mjs';
 import { parseInvestigation } from './import.mjs';
-import { assessInvoiceFolder } from './invoice-import.mjs';
+import { assessInvoiceFolder, portableInvoiceEvidence } from './invoice-import.mjs';
 import { restoreInvestigations, restoreWorkflowBaselines, runFingerprint, workflowKey } from './storage.mjs';
 
 export const REVIEW_STORAGE_KEY = 'adcp.regression-reviews.v1';
@@ -16,6 +16,7 @@ export const reviewDecisions = Object.freeze({
 });
 const packageKind = 'adcp-review-package';
 const caseKind = 'adcp-review-case';
+const invoiceCaseKind = 'adcp-invoice-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
 const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice'];
@@ -97,12 +98,25 @@ const caseResolutionFingerprint = async item => runFingerprint({
   original: await runFingerprint(item.report), decision: item.decision, followUp: item.followUp.id,
 });
 
-export async function createReviewCase(item, note) {
-  const bundle = await reviewBundle(caseKind, item.report, item, note);
+export async function createReviewCase(item, note, { includeInvoiceReceipts = false } = {}) {
+  const withReceipts = Boolean(item.invoice && includeInvoiceReceipts === true);
+  const bundle = await reviewBundle(withReceipts ? invoiceCaseKind : caseKind, item.report, item, note);
   if (item.decision) bundle.decision = validateDecision(item.decision.kind, item.decision.reason);
-  if (item.invoice) return serializeBundle(bundle);
+  if (item.invoice && !withReceipts) return serializeBundle(bundle);
   const original = await assessReview(item);
-  const { assessment, resolved } = await assessFollowUp(item, original);
+  const { assessment, invoice, originalInvoice, resolved } = await assessFollowUp(item, original);
+  if (withReceipts) {
+    if (!bundle.decision || !original.verdict || !originalInvoice.checked) {
+      throw new Error('Save a decision and restore the original invoice evidence before exporting receipts.');
+    }
+    bundle.invoice = portableInvoice(item.invoice);
+    if (assessment?.verdict && invoice?.checked) {
+      bundle.followUp = { report: item.followUp.report, candidate: { schemaVersion: 1, chain: item.followUp.candidate },
+        invoice: portableInvoice(item.followUp.invoice) };
+    }
+    if (resolved) bundle.resolution = await resolutionFor(item);
+    return serializeBundle(bundle);
+  }
   if (bundle.decision && assessment?.states.baseline === 'matched' && assessment.states.candidate === 'matched') {
     bundle.followUp = { report: item.followUp.report, candidate: { schemaVersion: 1, chain: item.followUp.candidate } };
     if (resolved) bundle.resolution = await caseResolutionFingerprint(item);
@@ -116,7 +130,8 @@ function readReviewPackage(contents, allowCase = false) {
   }
   let bundle;
   try { bundle = JSON.parse(contents); } catch { throw new Error('The review package is not valid JSON.'); }
-  if (bundle?.schemaVersion !== 1 || (bundle.kind !== packageKind && !(allowCase && bundle.kind === caseKind))) {
+  const kinds = allowCase ? [packageKind, caseKind, invoiceCaseKind] : [packageKind];
+  if (bundle?.schemaVersion !== 1 || !kinds.includes(bundle.kind)) {
     throw new Error(allowCase ? 'Expected a version 1 review package or case.' : 'Expected a version 1 review package.');
   }
   if (bundle.note !== undefined && (typeof bundle.note !== 'string' || bundle.note.length > MAX_REVIEW_NOTE)) {
@@ -131,7 +146,7 @@ function readReviewPackage(contents, allowCase = false) {
 
 export function importReviewPackage(getStorage, contents) {
   const { reportText, evidence, note, bundle } = readReviewPackage(contents, true);
-  if (bundle.kind === caseKind) return importReview(getStorage, reportText, evidence, note, bundle);
+  if (bundle.kind !== packageKind) return importReview(getStorage, reportText, evidence, note, bundle);
   return importReview(getStorage, reportText, evidence, note);
 }
 
@@ -251,9 +266,49 @@ export async function saveInvoiceCandidate(getStorage, pin, evidence) {
   return id;
 }
 
+function portableInvoice(invoice) {
+  const { workflow, outputAtImport, fingerprint, evidence } = invoice ?? {};
+  if (typeof workflow !== 'string' || !workflow.trim() || workflow !== workflow.trim() || workflow.length > 80
+    || /[\u0000-\u001f\u007f]/.test(workflow) || typeof outputAtImport !== 'string'
+    || outputAtImport.length > 80 || !isFingerprint(fingerprint)) {
+    throw new Error('The invoice receipt snapshot metadata is invalid.');
+  }
+  return { workflow, outputAtImport, evidence: portableInvoiceEvidence(evidence), fingerprint };
+}
+
+async function importInvoiceCase(getStorage, incoming, bundle, warnings) {
+  incoming.decision = validateDecision(bundle.decision?.kind, bundle.decision?.reason);
+  if (bundle.followUp !== undefined) {
+    const report = parseRegressionReport(JSON.stringify(bundle.followUp?.report));
+    const candidate = parseInvestigation(JSON.stringify(bundle.followUp?.candidate));
+    const invoice = portableInvoice(bundle.followUp?.invoice);
+    if (sameBaseline(incoming.report, report) && sameInvoiceCandidate(incoming.report, report)
+      && await evidenceState(report, 'candidate', candidate) === 'matched') {
+      incoming.followUp = { id: await reviewId(report, invoice), report, candidate, invoice };
+    } else warnings.push('The invoice follow-up needs matching evidence against the original baseline.');
+  }
+
+  const original = await assessReview(incoming);
+  const checked = await assessFollowUp(incoming, original);
+  if (!checked.originalInvoice.checked) warnings.push('The original invoice receipts could not be verified.');
+  if (checked.invoice?.error) warnings.push('The follow-up invoice receipts could not be verified.');
+  if (bundle.resolution !== undefined) {
+    const resolution = checked.canResolve ? await resolutionFor(incoming) : undefined;
+    // A fresh browser can verify the packaged baseline without creating a pin.
+    // A conflicting local pin takes precedence and leaves the imported case open.
+    const { baselines, warning } = restoreWorkflowBaselines(getStorage);
+    const pin = baselines.find(pin => workflowKey(pin.name) === workflowKey(incoming.invoice.workflow));
+    if (warning || (pin && !invoicePinMatches(getStorage, incoming))) {
+      warnings.push('The saved workflow uses a different baseline or could not be read. Closure was not restored.');
+    } else if (resolution && bundle.resolution === resolution) incoming.resolution = resolution;
+    else warnings.push('Invoice closure could not be verified.');
+  }
+}
+
 export async function importReview(getStorage, reportText, evidence, initialNote = '', portableCase) {
   const report = parseRegressionReport(reportText);
-  const id = await runFingerprint(report);
+  const invoice = portableCase?.kind === invoiceCaseKind ? portableInvoice(portableCase.invoice) : undefined;
+  const id = await reviewId(report, invoice);
   const attachments = {};
   const mismatches = [];
   for (const side of sides) {
@@ -263,7 +318,10 @@ export async function importReview(getStorage, reportText, evidence, initialNote
   }
   const incoming = { id, report, ...attachments };
   const caseWarnings = [];
-  if (portableCase) {
+  if (invoice) {
+    incoming.invoice = invoice;
+    await importInvoiceCase(getStorage, incoming, portableCase, caseWarnings);
+  } else if (portableCase) {
     if (portableCase.decision !== undefined) {
       incoming.decision = validateDecision(portableCase.decision?.kind, portableCase.decision?.reason);
     }
@@ -288,6 +346,7 @@ export async function importReview(getStorage, reportText, evidence, initialNote
   const items = readReviews(storage);
   const current = items.find(item => item.id === id);
   const next = { ...current, id, report, note: current?.note ?? initialNote, reviewed: current?.reviewed ?? false, ...attachments };
+  if (invoice) next.invoice = current?.invoice ?? invoice;
   if (incoming.decision) {
     if (current?.decision || current?.followUp || current?.resolution) {
       caseWarnings.push('The existing local decision and follow-up were kept.');
