@@ -1,28 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="386" viewBox="0 0 760 386" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="310" viewBox="0 0 920 310" role="img" aria-labelledby="title description">
   <title id="title">Three regression verdicts</title>
-  <desc id="description">No regression found when only invoice call IDs and artifact hashes change. Regression detected when a read-only chain records an unexpected export. Needs review when a referenced grant is missing.</desc>
-  <rect x="1" y="1" width="758" height="384" rx="20" fill="#f3f6fc" stroke="#cfd9e9" stroke-width="2"/>
-  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
-    <text x="33" y="36" fill="#38578e" font-size="16" font-weight="700" letter-spacing="2.3">BASELINE COMPARISON</text>
-    <text x="31" y="81" fill="#14253f" font-size="37" font-weight="700">Three regression verdicts</text>
+  <desc id="description">No regression found when invoice runs differ only in call IDs and artifact hashes. Regression detected when a read-only chain records an unexpected export. Needs review when an action references a grant missing from the record.</desc>
+  <rect x="1" y="1" width="918" height="308" rx="19" fill="#f5f3fb" stroke="#d9d2ec" stroke-width="2"/>
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="28" y="51" fill="#211a38" font-size="31" font-weight="730" letter-spacing="-.6">Three regression verdicts</text>
     <g stroke-width="1.5">
-      <rect x="32" y="105" width="696" height="78" rx="10" fill="#e9f5ef" stroke="#bed9cb"/>
-      <rect x="32" y="196" width="696" height="78" rx="10" fill="#fbecef" stroke="#ebc4cc"/>
-      <rect x="32" y="287" width="696" height="78" rx="10" fill="#fff3df" stroke="#e9d1a7"/>
+      <rect x="28" y="76" width="864" height="58" rx="10" fill="#e5f4ee" stroke="#aed4c5"/>
+      <rect x="28" y="149" width="864" height="58" rx="10" fill="#f8eaf0" stroke="#e5b9cd"/>
+      <rect x="28" y="222" width="864" height="58" rx="10" fill="#faf0d9" stroke="#e1c992"/>
     </g>
-    <circle cx="64" cy="144" r="18" fill="#14614b"/>
-    <circle cx="64" cy="235" r="18" fill="#912b42"/>
-    <circle cx="64" cy="326" r="18" fill="#775111"/>
-    <path d="m56 144 6 6 10-12m-8 90v9m0 6v1m-5 75c0-3 2-5 5-5s5 2 5 5c0 4-5 4-5 8m0 6v1" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <g font-size="27" font-weight="700">
-      <text x="96" y="140" fill="#124e3e">No regression found</text>
-      <text x="96" y="231" fill="#7e2339">Regression detected</text>
-      <text x="96" y="322" fill="#69460d">Needs review</text>
+    <circle cx="57" cy="105" r="16" fill="#226655"/>
+    <circle cx="57" cy="178" r="16" fill="#93355d"/>
+    <circle cx="57" cy="251" r="16" fill="#775214"/>
+    <path d="m50 105 5 5 8-10m-6 71v8m0 5v.5m-5 61a5 5 0 0 1 10 0c0 3-5 4-5 7m0 5v.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <g font-size="22" font-weight="720" letter-spacing="-.3">
+      <text x="83" y="112" fill="#15483d">No regression found</text>
+      <text x="83" y="185" fill="#702643">Regression detected</text>
+      <text x="83" y="258" fill="#61410e">Needs review</text>
     </g>
-    <g fill="#26394f" font-size="21">
-      <text x="96" y="168">Invoice runs differ only in call IDs and artifact hashes.</text>
-      <text x="96" y="259">A read-only chain records an unexpected export.</text>
-      <text x="96" y="350">An action references a grant missing from the record.</text>
+    <path d="M332 90v30m0 43v30m0 43v30" stroke="#594869" stroke-opacity=".28" stroke-width="1.5"/>
+    <g fill="#2b2635" font-size="21">
+      <text x="357" y="112">Only call IDs and artifact hashes changed.</text>
+      <text x="357" y="185">A read-only chain recorded an unexpected export.</text>
+      <text x="357" y="258">An action references a missing grant.</text>
     </g>
   </g>
 </svg>

@@ -4,6 +4,10 @@ Review **who acted for whom, which grant covered the action, and what changed be
 
 **Public technical alpha** · [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9) · [Roadmap](ROADMAP.md)
 
+![Trace the action back to its grant. In a fictional coding run, the repository owner grants authority to the coordinator, who delegates a single-file edit to the coding agent.](docs/images/delegation-hero.svg)
+
+[Try the three-case Codex demo](#try-the-codex-run-folder-demo)
+
 ## Run locally
 
 Requires **Python 3.11+**. From the repository root:
@@ -99,6 +103,8 @@ node scripts/alpha-rehearsal.mjs
 Open `output/private-alpha-rehearsal/reviewer/` for six ready-to-import fictional packages and the task sheet. The separate `facilitator/` folder contains the answer key. If the output already exists, select a new directory with `--output`. [Alpha rehearsal guide](docs/ALPHA_REVIEW.md)
 
 ## Architecture and limits
+
+![Local dashboard architecture. The browser reads user-selected files, evaluates evidence and saves runs, pins and reviews in browser storage. The Python loopback server serves UI assets only.](docs/images/readme-architecture.svg)
 
 The evaluator uses recorded action time to check ancestry, identity continuity, permission to delegate, exact action and resource pairs, and grant validity windows. A proven violation remains visible beside evidence gaps. Identities and source claims are self-reported. The dashboard serves allowlisted files on IPv4 loopback and evaluates completed actions locally.
 
