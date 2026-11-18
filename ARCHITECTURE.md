@@ -24,6 +24,7 @@ The [diagram guide](docs/architecture/README.md) links editable sources and rend
 | `src/app.js` | Chain, hop and run-pair selection, hash navigation, import state and escaped evidence rendering |
 | `src/comparison.mjs` | Deterministic alignment, comparison and regression classification of two normalized runs |
 | `src/import.mjs` | Bounded version 1 intake, normalization and imported-chain merge |
+| `src/codex-import.mjs` | Offline pilot-folder manifest and tool receipt checks before version 1 normalization |
 | `src/storage.mjs` | Versioned, bounded browser-local imports and workflow baseline pins |
 | `scripts/regression.mjs` | Offline baseline pinning and regression reports using the viewer's normalization and comparison rules |
 | `src/review.mjs`, `src/review-view.mjs` | Report and package intake, local downloads, bounded inbox storage, review decisions and follow-up verification |
@@ -50,6 +51,28 @@ The comparison uses both runs' existing evaluations. It aligns events by exact r
 Permissions compare exact capability pairs, delegation, principal, lineage and grant duration. For the known sandbox pilot, only each run's own execution and result targets are treated as equivalent across captures. Raw resource names, dates, call IDs and artifact hashes remain available in expanded records. The view compares recorded actions and parent references, evidence fields, referenced grant presence, evaluator outcomes and finding-code counts. It uses the existing import limits and renders raw records on expansion.
 
 Regression checks use the selected workflow's pinned baseline, the same aligned differences, and the candidate's evaluator result. A proved regression takes precedence over an evidence gap, and both types of reasons are shown when present. A candidate violation or widening of a matched grant flags a regression, as does a changed matched action/resource pair. Unmatched records, changes in authority lineage, and loss of previously supplied evidence require review. Optional evidence is required where the baseline supplied it. A change in call ID or a valid hash alone does not affect the verdict. Reasons link to the compared row or the candidate hop.
+
+## Offline Codex run folder
+
+The folder picker supports the disposable documentation-edit pilot capture.
+Select the directory containing a flat `manifest.json` with a lowercase
+SHA-256 digest for each of `actions.jsonl`, `grants.jsonl`, `attempts.jsonl`,
+`before.md`, `after.md`, `quickstart.diff`, and `codex-events.jsonl`. The picker
+uses top-level files only. File sizes are bounded, and each ledger can contain
+up to 200 records.
+
+ADCP checks all seven byte digests before normalizing the action and grant
+records. Preflight and quickstart reads point to the before receipt, and the
+paragraph edit points to the after receipt. Completed editor calls must match
+the tool and call ID in the attempt ledger. Missing files and mismatches stop
+the import. An omitted grant inside a verified ledger remains an authority
+gap for the evaluator. Distinct verified captures have distinct run IDs.
+The manifest establishes correspondence with the supplied files. Provenance and
+capture completeness remain unverified.
+
+The normal saved-run store keeps the normalized action, grant and receipt
+references. The browser hashes the diff and Codex event stream at import time.
+Keep the original capture for inspection of the file bytes.
 
 ## Optional actual-agent workflow
 
@@ -135,7 +158,7 @@ case open. Imports leave workflow pins unchanged.
 
 ## Trust and recovery
 
-The static server permits only `/`, `/index.html`, `/styles.css`, `/app.js`, `/fixtures.mjs`, `/evaluator.mjs`, `/import.mjs`, `/storage.mjs`, `/comparison.mjs`, `/review.mjs` and `/review-view.mjs`. It rejects writes, unexpected Hosts and repository paths. Its content policy blocks outbound browser connections. Loopback is a development boundary, not authentication. Run artifacts and credentials are not served.
+The static server permits only `/`, `/index.html`, `/styles.css`, `/app.js`, `/fixtures.mjs`, `/evaluator.mjs`, `/import.mjs`, `/codex-import.mjs`, `/storage.mjs`, `/comparison.mjs`, `/review.mjs`, `/review-view.mjs` and `/invoice-import.mjs`. It rejects writes, unexpected Hosts and repository paths. Its content policy blocks outbound browser connections. Loopback is a development boundary, not authentication. Run artifacts and credentials are not served.
 
 Imports are stored under `adcp.investigations.v1` as versioned normalized envelopes, with a 20-run / 2 MiB UTF-8 serialized collection limit in addition to per-import limits. Each saved envelope passes intake again on startup and findings are recomputed with the current evaluator before hash selection, so a chain/hop URL can reopen its saved evidence. Findings are never trusted from storage. Reimport replaces the same chain ID; writes merge against the latest saved collection to preserve imports from other tabs. Writes are synchronous but do not provide transactional cross-tab coordination.
 

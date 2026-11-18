@@ -1,6 +1,7 @@
 import { chains as examples } from './fixtures.mjs';
 import { evaluateChain, statusLabels } from './evaluator.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation, mergeInvestigation } from './import.mjs';
+import { importCodexFolder } from './codex-import.mjs';
 import {
   restoreInvestigations, saveInvestigation, clearInvestigations, restoreWorkflowBaselines,
   saveWorkflowBaseline, removeWorkflowBaseline, workflowKey, runFingerprint,
@@ -14,7 +15,12 @@ let chains = [...examples, ...restored.chains];
 
 const escape = value => String(value ?? 'Unknown').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const results = new Map(chains.map(chain => [chain.id, evaluateChain(chain)]));
+const investigationFile = document.querySelector('#investigation-file');
+const codexFolder = document.querySelector('#codex-folder');
+const supportsFolders = 'webkitdirectory' in codexFolder;
 const importStatus = document.querySelector('#import-status');
+const codexImportStatus = document.querySelector('#codex-import-status');
+let importBusy = false;
 importStatus.textContent = restored.warning || (restored.chains.length ? `Restored ${restored.chains.length} locally saved run(s). Source claims remain unverified.` : '');
 importStatus.classList.toggle('import-error', Boolean(restored.warning));
 const icon = status => ({ valid: '✓', violation: '!', unknown: '?' })[status];
@@ -242,7 +248,7 @@ function setView(view) {
 }
 
 function updateClearButton() {
-  document.querySelector('#clear-imports').disabled = !chains.some(item => item.imported) && !restored.warning;
+  document.querySelector('#clear-imports').disabled = importBusy || (!chains.some(item => item.imported) && !restored.warning);
 }
 
 function selectFromHash() {
@@ -439,13 +445,15 @@ document.querySelector('#investigation').addEventListener('toggle', event => {
   const finding = findingEvidence[Number(details.dataset.findingIndex)];
   if (finding) details.querySelector('pre').textContent = JSON.stringify(finding.compared, null, 2);
 }, true);
-document.querySelector('#investigation-file').addEventListener('change', async event => {
-  const status = document.querySelector('#import-status');
-  const file = event.target.files?.[0];
-  if (!file) return;
+async function importRun(picker, status, read, openRun = false) {
+  if (importBusy || !picker.files.length) return;
+  importBusy = true;
+  investigationFile.disabled = codexFolder.disabled = true;
+  updateClearButton();
+  status.classList.remove('import-error');
+  status.textContent = 'Checking the selected evidence…';
   try {
-    if (file.size > MAX_IMPORT_BYTES) throw new Error('Choose a JSON export smaller than 1 MB.');
-    const imported = parseInvestigation(await file.text());
+    const { chain: imported, notice = '' } = await read(picker.files);
     const evaluated = evaluateChain(imported);
     if (evaluated.events.length !== imported.events.length) throw new Error('The export cannot be displayed as a completed chain.');
     chains = mergeInvestigation(chains, imported);
@@ -454,21 +462,38 @@ document.querySelector('#investigation-file').addEventListener('change', async e
       ? ' Evaluation is incomplete: a work or finding limit was reached. Retained violations remain visible; other evidence is unassessed.' : '';
     try {
       saveInvestigation(getStorage, imported);
-      status.textContent = `Imported and saved in this browser. Reload restores the run and evidence. Source claims remain unverified.${assessment}`;
+      status.textContent = `${notice}Imported and saved in this browser. Reload restores the run and evidence. Source claims remain unverified.${assessment}`;
       status.classList.remove('import-error');
     } catch {
-      status.textContent = `Imported for this tab only; saving failed. Browser storage may be unavailable, full (20 runs / 2 MiB), or damaged. Keep the original export; this import will be lost on reload.${assessment}`;
+      status.textContent = `${notice}Imported for this tab only; saving failed. Browser storage may be unavailable, full (20 runs / 2 MiB), or damaged. Keep the original export; this import will be lost on reload.${assessment}`;
       status.classList.add('import-error');
     }
-    if (!reviewInbox.hidden) updateClearButton();
-    else if (!comparison.hidden) renderComparison(true);
+    if (!openRun && !reviewInbox.hidden) updateClearButton();
+    else if (!openRun && !comparison.hidden) renderComparison(true);
     else if (location.hash === `#${imported.id}`) selectFromHash();
     else location.hash = imported.id;
   } catch (error) {
     status.textContent = `Import failed: ${error.message}`;
     status.classList.add('import-error');
-  } finally { event.target.value = ''; }
-});
+  } finally {
+    picker.value = '';
+    importBusy = false;
+    investigationFile.disabled = false;
+    codexFolder.disabled = !supportsFolders;
+    updateClearButton();
+  }
+}
+
+investigationFile.addEventListener('change', () => importRun(investigationFile, importStatus, async ([file]) => {
+  if (file.size > MAX_IMPORT_BYTES) throw new Error('Choose a JSON export smaller than 1 MB.');
+  return { chain: parseInvestigation(await file.text()) };
+}));
+codexFolder.disabled = !supportsFolders;
+if (!supportsFolders) codexImportStatus.textContent = 'This browser does not support folder selection.';
+codexFolder.addEventListener('change', () => importRun(codexFolder, codexImportStatus, async files => {
+  const { chain, verifiedFileCount } = await importCodexFolder(files);
+  return { chain, notice: `Verified ${verifiedFileCount} manifest files and the action receipts. ` };
+}, true));
 document.querySelector('#clear-imports').addEventListener('click', () => {
   try {
     clearInvestigations(getStorage);
@@ -476,6 +501,10 @@ document.querySelector('#clear-imports').addEventListener('click', () => {
     results.clear();
     chains.forEach(chain => results.set(chain.id, evaluateChain(chain)));
     restored.warning = '';
+    if (supportsFolders) {
+      codexImportStatus.textContent = '';
+      codexImportStatus.classList.remove('import-error');
+    }
     importStatus.textContent = 'Imported runs cleared from this browser and this tab. Original export files are unchanged. Other open tabs may still display their loaded copies.';
     importStatus.classList.remove('import-error');
     if (!comparison.hidden) renderComparison();
