@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.8) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -14,10 +14,25 @@ python3 scripts/serve.py
 
 Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choose a different port with `--port 48732`. The dashboard uses the browser and the Python standard library.
 
+## Try the Codex run-folder demo
+
+1. Extract **Source code (zip)** from [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9) and start the dashboard as described above.
+2. Extract the [three-case Codex run-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.9/adcp-codex-run-folder-demo-v0.1.0-alpha.9.zip) separately.
+3. Select **Import a Codex run folder**, then choose each case folder in the order below.
+
+| Folder | What to expect |
+| --- | --- |
+| `complete-capture` | **Within scope**. All seven manifest files match, and the final hop shows the completed write and its grant. |
+| `missing-grant` | **Unverifiable**. The manifest checks pass, and both editor hops identify the missing delegated grant. |
+| `altered-receipt` | The importer reports an `after.md` hash mismatch. The two saved runs remain available. |
+
+Reload and reopen both accepted runs to verify their findings return.
+[Codex run-folder walkthrough](docs/ALPHA_REVIEW.md#try-the-codex-run-folder-demo)
+
 ## Try the coding-agent review demo
 
-1. Extract **Source code (zip)** from [v0.1.0-alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.8) and start the dashboard as described above.
-2. Extract the [four-case coding-agent demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip). Import `baseline.investigation.json` and pin it in **Compare runs** as **Demo coding agent**.
+1. Use the alpha.9 dashboard and extract the [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip).
+2. Import `baseline.investigation.json` and pin it in **Compare runs** as **Demo coding agent**.
 3. In **Regression inbox**, import the out-of-scope and missing-grant packages,
    then record a decision for each. Attach the corrected package as a follow-up,
    verify the passing check, and close each case. Reload and confirm both cases
@@ -25,7 +40,7 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.8 dashboard and extract the
+1. Use the alpha.9 dashboard and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. In a fresh browser profile, open **Regression inbox → Import review package
    or case**. Import the two resolved JSON files below, one at a time.
@@ -50,11 +65,8 @@ check the import warning and the **Closure checklist**. Confirm **Close as resol
 
 Start with the three built-in examples or select **Import a completed run** to open a version 1 `investigation.json`. Choose an agent hop to inspect its recorded action, grant, parent grant, and findings.
 
-From a source checkout that includes the offline importer, choose **Import a
-Codex run folder** and select the capture folder that contains `manifest.json`.
-ADCP checks the seven listed files and matches action receipts before opening
-the run. A missing grant record is visible as **Unverifiable** on the affected
-hops. See the [pilot folder format](ARCHITECTURE.md#offline-codex-run-folder).
+For other captures in the same format, see the
+[pilot folder format](ARCHITECTURE.md#offline-codex-run-folder).
 
 | Built-in example | What to inspect | Authority assessment |
 | --- | --- | --- |

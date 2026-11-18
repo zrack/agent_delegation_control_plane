@@ -3,11 +3,31 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
+## Try the Codex run-folder demo
+
+1. Extract **Source code (zip)** from [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9).
+   In the extracted source directory, run `python3 scripts/serve.py` with
+   Python 3.11 or newer. Open the printed address in a fresh browser profile.
+2. Extract the [three-case Codex run-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.9/adcp-codex-run-folder-demo-v0.1.0-alpha.9.zip) separately.
+3. Select **Import a Codex run folder** and choose `complete-capture`.
+   Select **Import a Codex run folder** again for each of the other two cases.
+   Choose the individual folder containing `manifest.json`.
+
+| Folder | What to expect |
+| --- | --- |
+| `complete-capture` | **Within scope**. All seven manifest files and the action receipts verify. Open the final hop to inspect the write, the editor's grant, and its parent grant. |
+| `missing-grant` | **Unverifiable**. The supplied files pass the manifest checks. Hops 2 and 3 both identify the missing editor grant. |
+| `altered-receipt` | The import stops with an `after.md` hash mismatch. Both accepted runs are still available in **Completed chains**. |
+
+Reload at the same address and reopen both accepted runs. Check that **Within
+scope** and **Unverifiable** return with their supporting action and grant
+records. The [pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
+describes the seven files and what ADCP keeps in browser storage.
+
 ## Try the coding-agent review demo
 
-Extract **Source code (zip)** from [v0.1.0-alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.8). In the extracted source directory, run `python3 scripts/serve.py`
-with Python 3.11 or newer and open the printed address in a fresh browser profile.
-Extract the [four-case coding-agent demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) separately.
+Use the alpha.9 dashboard from the first exercise. Extract the
+[four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) separately.
 
 These fictional records describe a repository owner authorizing a coordinator to
 read and delegate one documentation edit. The delegated coding agent may write
@@ -51,7 +71,7 @@ Use `--output NEW_DIRECTORY` to generate another copy.
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.8 dashboard from the first exercise and extract the
+1. Use the alpha.9 dashboard from the first exercise and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. Open the printed loopback address in a fresh browser profile. In **Regression
    inbox**, choose **Import review package or case** and select
@@ -103,7 +123,7 @@ closure. Reload to verify the saved result.
 
 ## Compare and save an invoice candidate
 
-Keep using the alpha.8 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
+Keep using the alpha.9 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -147,7 +167,7 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-In the alpha.8 dashboard, open a resolved invoice case and expand
+In the alpha.9 dashboard, open a resolved invoice case and expand
 **Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
@@ -168,7 +188,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.8 dashboard started above for this exercise. The
+Use the alpha.9 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 
