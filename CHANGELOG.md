@@ -2,6 +2,7 @@
 
 ## Unreleased technical alpha
 
+- Add a fictional coding-agent import demo covering a clean baseline, a write outside scope, a missing grant and a corrected follow-up verified against the original baseline.
 - Generate an offline private alpha kit with six fictional review packages, a reviewer task sheet and a separate facilitator answer key.
 - Record review decisions, check follow-up packages against the original pinned baseline, and resolve cases after a verified passing follow-up.
 - Import portable review packages in one step. The invoice check packages the report and matching evidence, and the inbox can download the package with an optional saved note.
@@ -29,4 +30,4 @@
 
 - Applied Apache-2.0, retained copyright attribution, removed private operational records and filtered retained source history for public preparation.
 
-The repository remains private until publication is explicitly authorized. Saved private run evidence and original private history are kept outside this tree.
+Saved private run evidence and the original repository's history are kept outside this public tree.

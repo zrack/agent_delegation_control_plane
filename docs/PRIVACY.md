@@ -14,6 +14,6 @@ A downloaded review package is a separate local file containing the report and m
 
 Local run directories may contain provider/request/tool identifiers, generated text, source mappings and usage metadata. Keep them outside source control, inspect them before sharing and define retention/deletion for any future real-data workflow. Do not upload `.env.local`, virtual environments, screenshots, raw captures or failure payloads to an issue. A sanitized source package does not sanitize future user-supplied records.
 
-Before making this repository public, verify every branch/tag and GitHub-hosted pull-request reference, cached diff, issue, workflow log and attachment. A rewritten main branch does not remove read-only pull-request refs or cached objects; those can require GitHub Support. Choose public-safe commit identities and configure private security reporting before publication. Keep private backups outside the repository.
+This repository distributes the public technical alpha and fictional examples. The original repository and its historical records are private. For new public releases, review the exact source revision, assets, commit metadata and new GitHub-hosted records. Keep raw runs, backups and private evidence outside the public repository. See the [release checklist](RELEASE_READINESS.md#checklist-for-future-public-prereleases).
 
-The repository remains private pending an explicit publication decision. Local privacy checks and tests are bounded evidence, not a guarantee of exhaustive secret detection or a production-security certification.
+Local privacy checks and tests cover the cases they exercise. Their scope is limited to the reviewed source and artifacts.
