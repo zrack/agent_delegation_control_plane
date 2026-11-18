@@ -2,6 +2,13 @@
 
 ## Published alpha
 
+[v0.1.0-alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.7) adds the invoice closure checklist and includes four
+fictional demo cases. Use the [invoice walkthrough](ALPHA_REVIEW.md#try-the-portable-invoice-review-demo)
+to check the released ZIP. Use the [coding-agent walkthrough](ALPHA_REVIEW.md#try-the-coding-agent-review-demo)
+with a source checkout that includes the demo generator.
+
+## Original public alpha release
+
 [v0.1.0-alpha.1](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.1)
 is a public prerelease for local, retrospective investigation with fictional
 records. The public repository started from a reviewed source snapshot.

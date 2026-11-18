@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { chains } from '../../src/fixtures.mjs';
 import { parseInvestigation } from '../../src/import.mjs';
 import { assessFollowUp, assessReview, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
@@ -153,6 +158,54 @@ test('corrected export and restored grant resolve only after review of a passing
     const rechecked = await assessFollowUp(changed, await assessReview(changed));
     assert.equal(rechecked.resolved, false);
     assert.equal(rechecked.canResolve, false);
+  }
+});
+
+test('the coding-agent demo resolves both flagged cases against the supplied baseline', async t => {
+  const scratch = mkdtempSync(join(tmpdir(), 'adcp-test-coding-demo-'));
+  t.after(() => rmSync(scratch, { recursive: true, force: true }));
+  const destination = join(scratch, 'demo');
+  const script = new URL('../../scripts/coding-agent-demo.mjs', import.meta.url);
+  execFileSync(process.execPath, [fileURLToPath(script), '--output', destination], { timeout: 10_000 });
+  const file = name => readFileSync(join(destination, name), 'utf8');
+  const pinned = parseInvestigation(file('baseline.investigation.json'));
+  const fingerprint = await runFingerprint(pinned);
+  const corrected = file('corrected.review-package.json');
+  const correction = JSON.parse(corrected);
+  const followCandidate = parseInvestigation(JSON.stringify(correction.candidate));
+  const otherBaseline = { ...pinned, summary: 'Different baseline evidence with the same ID.' };
+  const otherReport = JSON.parse(await reportFor(followCandidate, 'pass', otherBaseline));
+  const mismatchedFollowUp = await createReviewPackage(otherReport, { baseline: otherBaseline, candidate: followCandidate });
+
+  for (const [filename, verdict, authority, decision] of [
+    ['out-of-scope.review-package.json', 'regression', 'violation', 'fix-required'],
+    ['missing-grant.review-package.json', 'review', 'unknown', 'evidence-needed'],
+  ]) {
+    const storage = memory();
+    const getStorage = () => storage;
+    const { items: [original] } = await importReviewPackage(getStorage, file(filename));
+    assert.equal(original.report.baselineId, pinned.id);
+    assert.equal(original.report.baselineFingerprint, fingerprint);
+
+    const assessment = await assessReview(original);
+    assert.deepEqual(assessment.states, { baseline: 'matched', candidate: 'matched' });
+    assert.equal(assessment.verdict.status, verdict);
+    assert.equal(assessment.candidateResult.status, authority);
+
+    const [decided] = saveReviewDecision(getStorage, original, decision, 'Review the coding-agent write.');
+    await assert.rejects(attachReviewFollowUp(getStorage, decided, mismatchedFollowUp), /different baseline/);
+    await assert.rejects(resolveReviewCase(getStorage, decided), /passing follow-up/);
+
+    const [attached] = await attachReviewFollowUp(getStorage, decided, corrected);
+    assert.equal(attached.followUp.report.baselineFingerprint, fingerprint);
+    const ready = await assessFollowUp(attached, await assessReview(attached));
+    assert.equal(ready.assessment.verdict.status, 'pass');
+    assert.equal(ready.resolved, false);
+    await resolveReviewCase(getStorage, attached);
+
+    const [restored] = restoreReviews(getStorage).items;
+    assert.equal(restored.decision.kind, decision);
+    assert.equal((await assessFollowUp(restored, await assessReview(restored))).resolved, true);
   }
 });
 

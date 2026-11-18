@@ -3,11 +3,55 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
+## Try the coding-agent review demo
+
+Generate the four demo files from this source checkout with Node 22 or newer.
+
+```sh
+node scripts/coding-agent-demo.mjs
+```
+
+The files are in `output/coding-agent-review-demo/`. To generate another copy,
+pass `--output NEW_DIRECTORY`. Start the dashboard with `python3 scripts/serve.py`
+and open the printed address in a fresh browser profile. These fictional records describe a
+repository owner authorizing a coordinator to read and delegate one documentation
+edit. The delegated coding agent may write only `docs/quickstart.md`.
+
+| File | Where to import it | Expected result |
+| --- | --- | --- |
+| `baseline.investigation.json` | **Investigate a run → Import a completed run** | **Within scope**. The coordinator reads the quickstart and the agent writes it under a narrower grant. |
+| `out-of-scope.review-package.json` | **Regression inbox → Import review package or case** | **Current evidence check · Regression detected**. The agent writes `docs/release-notes.md`, outside the supplied grant. |
+| `missing-grant.review-package.json` | **Regression inbox → Import review package or case** | **Current evidence check · Needs review**. The write references a grant absent from the export. |
+| `corrected.review-package.json` | **Attach follow-up package** on the flagged case | **Rechecked · No regression found** against the original baseline. The write is back in scope and the matching grant is supplied. |
+
+1. Import the baseline. In **Compare runs**, select `CODING-DEMO-BASELINE`
+   under **Baseline run**, open **Save or replace a workflow baseline**, name it
+   **Demo coding agent**, and select **Save baseline**.
+2. Import each flagged package into the inbox. Inspect the candidate hop and the
+   evidence behind each finding. Confirm both packages reference
+   `CODING-DEMO-BASELINE`. The offline reports were built against the same run
+   ID and fingerprint as the browser pin.
+3. On the out-of-scope case, choose **Fix required**, enter a reason, and
+   select **Save decision**. On the missing-grant case, use **Evidence needed**.
+   **Close as resolved** stays disabled until a matching follow-up passes.
+4. On either case, select **Attach follow-up package** and open
+   `corrected.review-package.json`. Open **Inspect follow-up evidence** and
+   confirm the recheck passes. Select **Close as resolved**, then reload at the
+   same address. Confirm the decision, passing follow-up and **Resolved** status
+   return. Repeat for the other case.
+5. In **Compare runs**, select the saved **Demo coding agent** workflow and
+   confirm its baseline is still `CODING-DEMO-BASELINE`.
+
+The demo uses the existing version 1 investigation and review-package formats.
+Follow-up verification matches the original report's baseline run ID and fingerprint
+and rechecks its saved evidence. These fixtures represent completed records for
+review. They provide no live coding-agent capture or enforcement.
+
 ## Try the portable invoice review demo
 
-1. Extract **Source code (zip)** from [v0.1.0-alpha.6](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.6).
+1. Extract **Source code (zip)** from [v0.1.0-alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.7).
    Run `python3 scripts/serve.py` from the extracted source with Python 3.11 or newer. Extract the
-   [portable invoice review demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.6/adcp-portable-invoice-review-demo-v0.1.0-alpha.6.zip) separately.
+   [portable invoice review demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip) separately.
 2. Open the printed loopback address in a fresh browser profile. In **Regression
    inbox**, choose **Import review package or case** and select
    `invoice-b-resolved.json`.
@@ -35,7 +79,7 @@ API key, account, Docker, or model calls.
 All four cases contain fictional evidence. Import rechecks the included
 baseline and receipt snapshots and leaves workflow pins unchanged.
 
-From the current source checkout, reopen an **Open** case after reload and
+Reopen an **Open** case after reload and
 check its **Closure checklist**. The altered-receipt case identifies
 `results.json` in the follow-up and points to the corrected folder.
 The different-baseline case shows the expected and supplied run IDs and
@@ -58,7 +102,7 @@ closure. Reload to verify the saved result.
 
 ## Compare and save an invoice candidate
 
-Keep using the alpha.6 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
+Keep using the alpha.7 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -102,7 +146,7 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-In the alpha.6 dashboard, open a resolved invoice case and expand
+In the alpha.7 dashboard, open a resolved invoice case and expand
 **Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
@@ -123,7 +167,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.6 dashboard started above for this exercise. The
+Use the alpha.7 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 
