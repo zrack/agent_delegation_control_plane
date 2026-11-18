@@ -50,6 +50,12 @@ check the import warning and the **Closure checklist**. Confirm **Close as resol
 
 Start with the three built-in examples or select **Import a completed run** to open a version 1 `investigation.json`. Choose an agent hop to inspect its recorded action, grant, parent grant, and findings.
 
+From a source checkout that includes the offline importer, choose **Import a
+Codex run folder** and select the capture folder that contains `manifest.json`.
+ADCP checks the seven listed files and matches action receipts before opening
+the run. A missing grant record is visible as **Unverifiable** on the affected
+hops. See the [pilot folder format](ARCHITECTURE.md#offline-codex-run-folder).
+
 | Built-in example | What to inspect | Authority assessment |
 | --- | --- | --- |
 | CH-001 · Account review | Grants narrow at every hop | Within scope |

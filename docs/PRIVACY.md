@@ -8,6 +8,11 @@ The optional SDK runner alone reads the ignored `.env.local` key and sends gener
 
 The regression inbox keeps its own copies of matching exports, report reasons, decisions, follow-up evidence and review notes in the same browser profile and origin. **Remove from inbox** deletes the selected report and its local evidence, follow-up, decision and notes. **Clear imported runs** applies only to the separate investigation list. Browser site-data controls clear both collections. Use fictional or minimized evidence and notes.
 
+The Codex folder picker reads and checks the seven manifest-listed pilot files
+locally. The saved investigation retains normalized action and grant records,
+tool names, call IDs, and artifact hashes. The raw Codex event stream, diff,
+attempt ledger, and before and after files stay in the original capture folder.
+
 The invoice-folder preview reads the manifest and up to six named files. **Compare and save to inbox** stores the baseline and candidate, the relevant manifest digests, and exact bytes of the selected allowlisted files within the existing 20-report / 2 MiB inbox limit. These files can include execution logs inside the execution receipt. The browser rechecks saved bytes against the supplied manifest, which provides no independent source authentication. An invoice follow-up adds a second receipt snapshot within the same limit. **Remove from inbox** clears both saved receipt snapshots and the local closure record. Ordinary invoice case downloads carry the original delegation evidence and case decision. Selecting **Include invoice receipts in case download** also includes the receipt bytes, matching follow-up, and verified closure. Review the contents before sharing, especially the execution receipt, which can contain logs. The receipt and note options are independent and reset after download.
 
 A downloaded review package is a separate local file containing the report and matching normalized investigation evidence. A review case download can also include the decision and its reason, the matching follow-up report and evidence, and the verified closure. The saved review note is included only when selected. Inspect the contents before handing either file to a reviewer. Downloads and other copies remain on disk when the inbox entry is removed.

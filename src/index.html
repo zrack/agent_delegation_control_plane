@@ -26,6 +26,12 @@
         <p id="import-help">Runs and evidence are saved in this browser across reloads (up to 20 runs / 2 MiB). Clear imported runs to remove local copies. No upload or agent execution.</p>
         <p id="import-status" role="status" aria-live="polite"></p>
       </section>
+      <section class="import-controls" aria-label="Import a Codex capture">
+        <label for="codex-folder">Import a Codex run folder</label>
+        <input id="codex-folder" type="file" webkitdirectory aria-describedby="codex-import-help codex-import-status">
+        <p id="codex-import-help">Select a pilot capture folder with manifest.json. ADCP checks the local receipts before opening the investigation.</p>
+        <p id="codex-import-status" role="status" aria-live="polite"></p>
+      </section>
       <nav class="view-nav" aria-label="Dashboard views">
         <a id="investigate-link" href="#CH-002" aria-current="page">Investigate a run</a>
         <a id="compare-link" href="#compare?">Compare runs</a>
