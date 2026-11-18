@@ -5,17 +5,13 @@ API key, account, Docker, or model calls.
 
 ## Try the coding-agent review demo
 
-Generate the four demo files from this source checkout with Node 22 or newer.
+Extract **Source code (zip)** from [v0.1.0-alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.8). In the extracted source directory, run `python3 scripts/serve.py`
+with Python 3.11 or newer and open the printed address in a fresh browser profile.
+Extract the [four-case coding-agent demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) separately.
 
-```sh
-node scripts/coding-agent-demo.mjs
-```
-
-The files are in `output/coding-agent-review-demo/`. To generate another copy,
-pass `--output NEW_DIRECTORY`. Start the dashboard with `python3 scripts/serve.py`
-and open the printed address in a fresh browser profile. These fictional records describe a
-repository owner authorizing a coordinator to read and delegate one documentation
-edit. The delegated coding agent may write only `docs/quickstart.md`.
+These fictional records describe a repository owner authorizing a coordinator to
+read and delegate one documentation edit. The delegated coding agent may write
+only `docs/quickstart.md`.
 
 | File | Where to import it | Expected result |
 | --- | --- | --- |
@@ -47,11 +43,16 @@ Follow-up verification matches the original report's baseline run ID and fingerp
 and rechecks its saved evidence. These fixtures represent completed records for
 review. They provide no live coding-agent capture or enforcement.
 
+### Generate the demo files from source
+
+With Node 22 or newer, run `node scripts/coding-agent-demo.mjs` from the source
+directory. It writes the four files to `output/coding-agent-review-demo/`.
+Use `--output NEW_DIRECTORY` to generate another copy.
+
 ## Try the portable invoice review demo
 
-1. Extract **Source code (zip)** from [v0.1.0-alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.7).
-   Run `python3 scripts/serve.py` from the extracted source with Python 3.11 or newer. Extract the
-   [portable invoice review demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip) separately.
+1. Use the alpha.8 dashboard from the first exercise and extract the
+   [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. Open the printed loopback address in a fresh browser profile. In **Regression
    inbox**, choose **Import review package or case** and select
    `invoice-b-resolved.json`.
@@ -102,7 +103,7 @@ closure. Reload to verify the saved result.
 
 ## Compare and save an invoice candidate
 
-Keep using the alpha.7 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
+Keep using the alpha.8 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -146,7 +147,7 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-In the alpha.7 dashboard, open a resolved invoice case and expand
+In the alpha.8 dashboard, open a resolved invoice case and expand
 **Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
@@ -167,7 +168,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.7 dashboard started above for this exercise. The
+Use the alpha.8 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 

@@ -2,7 +2,7 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.7) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.8) · [Roadmap](ROADMAP.md)
 
 ## Run locally
 
@@ -16,21 +16,17 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 
 ## Try the coding-agent review demo
 
-From this source checkout, generate four ready-to-import files with **Node 22+**.
-
-```sh
-node scripts/coding-agent-demo.mjs
-```
-
-Open `output/coding-agent-review-demo/`. Pin the clean baseline, investigate a
-write outside scope and a missing grant, then verify the corrected follow-up.
-[Coding-agent walkthrough](docs/ALPHA_REVIEW.md#try-the-coding-agent-review-demo)
+1. Extract **Source code (zip)** from [v0.1.0-alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.8) and start the dashboard as described above.
+2. Extract the [four-case coding-agent demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip). Import `baseline.investigation.json` and pin it in **Compare runs** as **Demo coding agent**.
+3. In **Regression inbox**, import the out-of-scope and missing-grant packages,
+   then record a decision for each. Attach the corrected package as a follow-up,
+   verify the passing check, and close each case. Reload and confirm both cases
+   are **Resolved**. [Coding-agent walkthrough](docs/ALPHA_REVIEW.md#try-the-coding-agent-review-demo)
 
 ## Try the portable invoice review demo
 
-1. Extract **Source code (zip)** from [v0.1.0-alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.7).
-   Start the dashboard from the extracted source. Extract the
-   [portable invoice review demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip) separately.
+1. Use the alpha.8 dashboard and extract the
+   [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. In a fresh browser profile, open **Regression inbox → Import review package
    or case**. Import the two resolved JSON files below, one at a time.
 3. Open each entry, check its decision and status, and reload at the same
