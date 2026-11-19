@@ -4,7 +4,7 @@ import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
 import { restoreWorkflowBaselines, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
-  assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
+  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
   previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from './review.mjs';
@@ -24,7 +24,7 @@ const evidenceLabels = {
 export const reviewRoute = '#review?';
 const itemRoute = id => reviewRoute + new URLSearchParams({ item: id });
 
-export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
+export function createReviewInbox({ getStorage, escape, comparisonDetail, onBaselineAdopted }) {
   const form = document.querySelector('#review-import');
   const packageInput = document.querySelector('#review-package-file');
   const invoiceInput = document.querySelector('#invoice-folder-file');
@@ -204,10 +204,26 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     });
     return `<section class="invoice-results" aria-labelledby="${heading}">
       <h4 id="${heading}">${side === 'original' ? 'Codex folder evidence' : 'Corrected Codex folder evidence'}</h4>
-      <p>${Object.keys(hashes).length} files matched the supplied manifest at import.
+      <p>The capture manifest lists ${Object.keys(hashes).length} files.
         ${codex.verifiedFileCount} saved files passed the current receipt check.</p>
       ${missing.length ? '<h4>Actions with missing grants</h4>' + missing.join('') : ''}
       <details class="review-differences"><summary>Inspect files and digests</summary>${rows.join('')}</details></section>`;
+  }
+
+  function codexPinDetails(item, original, pinState) {
+    if (pinState.status === 'matched') return '';
+    if (pinState.status === 'unreadable') return '<p class="import-error">The browser could not read its saved workflow pins.</p>';
+    const pin = pinState.pin;
+    const pinLabel = pin ? 'Inspect case baseline and conflicting pin' : 'Inspect included baseline';
+    const canAdopt = !pin && original.codex && original.verdict;
+    return `<details id="codex-included-baseline" class="review-differences">
+      <summary>${pinLabel}</summary>
+      <p>Case baseline for <strong>${escape(item.codex.workflow)}</strong> · <code>${escape(item.report.baselineId)}</code></p>
+      <p class="receipt-digest">SHA-256 ${escape(item.report.baselineFingerprint)}</p>
+      ${original.states.baseline === 'matched' ? evidenceDetails('Baseline actions and grants', { snapshot: item.baseline }, item.baseline.title) : ''}
+      ${pin ? `<p>Current local pin · <code>${escape(pin.runId)}</code></p><p class="receipt-digest">SHA-256 ${escape(pin.fingerprint)}</p>` : ''}
+      ${canAdopt ? '<p>Pinning saves this baseline in this browser and rechecks the case against it.</p><button type="button" id="adopt-codex-baseline">Pin included baseline</button>' : ''}
+    </details>`;
   }
 
   function renderCase(item, original, followUp) {
@@ -218,6 +234,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       <p class="panel-description">Reported · ${regressionLabels[record.report.status]}</p>
       <p class="panel-description">${check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p></div>`;
     const nextStep = item.invoice && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
+      : item.codex && pinChanged ? (followUp.pinState.status === 'missing' ? 'This workflow has no local pin. Inspect the included baseline to decide whether to pin it.'
+        : 'Closure requires the original workflow pin. Inspect the case baseline and the current local pin.')
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
         : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
         : item.codex ? 'Save a decision and attach a corrected folder for the same Codex task. A passing comparison against the original pin lets you close the case.'
@@ -240,6 +258,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     return `<section class="review-case" aria-labelledby="review-case-title">
       <div class="panel-heading"><h3 id="review-case-title">Review decision and follow-up</h3>
         <span class="badge ${resolved ? 'valid' : 'unknown'}">${resolved ? 'Resolved' : 'Open'}</span></div>
+      ${item.codex ? codexPinDetails(item, original, followUp.pinState) : ''}
       ${item.invoice && !resolved ? invoiceClosureChecklist(item, original, followUp) : ''}
       ${decisionForm(item)}
       <label for="review-follow-up-file">${label}</label>
@@ -273,13 +292,15 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       && followUp.assessment.states.candidate === 'matched') contents.push('follow-up report and evidence');
     if (!item.invoice && !item.codex && followUp.resolved) contents.push('verified closure');
     const receiptOption = item.invoice && item.decision && original.verdict && followUp.originalInvoice?.checked;
+    const codexReceiptOption = Boolean(item.codex && item.decision && original.codex && original.verdict);
     return `<details class="review-differences"><summary>Export review package or case</summary>
       <p class="panel-description">The download includes the original report${matching}.</p>
-      ${item.codex ? '<p class="panel-description">Downloads contain the original normalized run evidence. Codex receipt files, corrected-folder evidence, and closure stay in this browser.</p>' : ''}
+      ${codexReceiptOption ? '<p class="panel-description" id="codex-export-help">Including receipts adds the saved Codex ledgers and before/after files for the original and any verified follow-up. They can contain source text and tool-call details. A resolved case also includes its verifiable closure.</p>' : ''}
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
       ${receiptOption ? `<p class="panel-description" id="invoice-export-help">Including invoice receipts adds the available original
         and follow-up receipt files and any verified closure to the case download. Execution receipts may contain logs.</p>` : ''}
       <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
+      ${codexReceiptOption ? '<label><input type="checkbox" id="include-codex-receipts" aria-describedby="codex-export-help"> Include Codex receipts in case download</label>' : ''}
       ${receiptOption ? '<label><input type="checkbox" id="include-invoice-receipts" aria-describedby="invoice-export-help"> Include invoice receipts in case download</label>' : ''}
       <button type="button" id="download-review-package">Download review package</button>
       ${item.decision ? '<button type="button" id="download-review-case">Download review case</button>' : ''}</div></details>`;
@@ -321,7 +342,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
-        ${item.invoice || item.codex ? `<p class="panel-description">Pinned workflow · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
+        ${item.invoice || item.codex ? `<p class="panel-description">${item.codex ? 'Case workflow' : 'Pinned workflow'} · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
         ${renderEvidence(item, assessment)}
         ${receiptResults}
         ${assessment.codex ? codexFolderEvidence(assessment) : ''}
@@ -337,7 +358,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         </form>
         ${renderExport(item, assessment, followUp)}`;
     } catch (error) {
-      if (currentRevision === revision) detail.innerHTML = `${item.codex ? '<p class="review-case"><span class="badge unknown">Open</span> · Original Codex evidence could not be verified.</p>' : ''}
+      if (currentRevision === revision) detail.innerHTML = `${item.codex ? `<section class="review-case">
+        <h3><span class="badge unknown">Open</span> · Original Codex evidence could not be verified</h3>
+        ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
+        ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
+        <p>Inspect the receipt named below. To compare a fresh export from the sender, open it in a separate browser profile.</p>
+        <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>` : ''}
         <p class="import-error">${escape(error.message)}</p>
         <button type="button" id="remove-review">Remove from inbox</button>`;
     }
@@ -637,6 +663,17 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       }
       return;
     }
+    if (event.target.id === 'adopt-codex-baseline') {
+      const item = selected;
+      event.target.disabled = true;
+      try {
+        const baseline = await adoptCodexBaseline(getStorage, item);
+        onBaselineAdopted(baseline);
+        announce('Included baseline pinned in this browser.');
+      } catch (error) { announce(`Could not pin the included baseline. ${error.message}`, true); }
+      if (location.hash === itemRoute(item.id)) await render({ focus: true });
+      return;
+    }
     if (event.target.id === 'resolve-review-case') {
       const item = selected;
       event.target.disabled = true;
@@ -657,12 +694,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       const checkbox = detail.querySelector('#include-review-note');
       const note = checkbox.checked ? item.note : undefined;
       checkbox.checked = false;
-      const receiptCheckbox = detail.querySelector('#include-invoice-receipts');
-      const includeInvoiceReceipts = Boolean(completeCase && receiptCheckbox?.checked);
+      const receiptCheckbox = detail.querySelector('#include-invoice-receipts, #include-codex-receipts');
+      const includeReceipts = completeCase && receiptCheckbox?.checked === true;
+      const includeInvoiceReceipts = includeReceipts && Boolean(item.invoice);
+      const includeCodexReceipts = includeReceipts && Boolean(item.codex);
       if (receiptCheckbox) receiptCheckbox.checked = false;
       event.target.disabled = true;
       try {
-        const contents = completeCase ? await createReviewCase(item, note, { includeInvoiceReceipts })
+        const contents = completeCase ? await createReviewCase(item, note, { includeInvoiceReceipts, includeCodexReceipts, getStorage })
           : await createReviewPackage(item.report, item, note);
         const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
         const link = document.createElement('a');
@@ -672,7 +711,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        const included = [note && 'saved note', includeInvoiceReceipts && 'invoice receipts'].filter(Boolean);
+        const included = [note && 'saved note', includeInvoiceReceipts && 'invoice receipts', includeCodexReceipts && 'Codex receipts'].filter(Boolean);
         announce(`${label} downloaded${included.length ? ' with ' + included.join(' and ') : ''}.`);
       } catch (error) { announce(`Could not download the ${label.toLowerCase()}. ${error.message}`, true); }
       finally { event.target.disabled = false; }

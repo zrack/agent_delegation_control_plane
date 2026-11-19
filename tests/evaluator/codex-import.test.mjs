@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { assessCodexEvidence, importCodexFolder } from '../../src/codex-import.mjs';
 import { evaluateChain } from '../../src/evaluator.mjs';
-import { assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, importReviewPackage,
+import { adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, importReviewPackage,
   resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveCodexCandidate, saveReview, saveReviewDecision } from '../../src/review.mjs';
-import { runFingerprint, saveInvestigation, saveWorkflowBaseline, WORKFLOW_BASELINE_KEY } from '../../src/storage.mjs';
+import { restoreInvestigations, restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline, STORAGE_KEY, WORKFLOW_BASELINE_KEY } from '../../src/storage.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const jsonl = records => records.map(record => JSON.stringify(record) + '\n').join('');
@@ -149,10 +149,19 @@ test('rejects changed receipt bytes, malformed or oversized snapshots, and refre
   await assert.rejects(assessCodexEvidence({ ...evidence, unrelated: 'extra data' }), /snapshot is invalid/);
 });
 
-async function savedCodexWorkflow() {
+function freshStorage() {
   const data = new Map();
-  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
-  const getStorage = () => storage;
+  const storage = {
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, value),
+    removeItem: key => data.delete(key),
+  };
+  return () => storage;
+}
+
+async function savedCodexWorkflow() {
+  const getStorage = freshStorage();
+  const storage = getStorage();
   const baseline = await importCodexFolder(selection(capture()), { retainEvidence: true });
   saveInvestigation(getStorage, baseline.chain);
   const [pin] = saveWorkflowBaseline(getStorage, 'Quickstart edits', baseline.chain, await runFingerprint(baseline.chain));
@@ -352,4 +361,183 @@ test('changed Codex inputs cannot replace a correction; changed pins or saved re
   storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(raw));
   await assert.rejects(assessReview(read()), /after\.md hash mismatch/);
   await assert.rejects(resolveReviewCase(getStorage, read()), /after\.md hash mismatch/);
+});
+
+async function portableCodexFixture() {
+  const source = await flaggedCodexCase();
+  const { getStorage, read, corrected } = source;
+  saveReview(getStorage, read(), 'Check the editor ledger.', true);
+  saveReviewDecision(getStorage, read(), 'evidence-needed', 'Supply the missing editor grant.');
+  await attachCodexFollowUp(getStorage, read(), corrected);
+  const options = { includeCodexReceipts: true, getStorage };
+  const open = await createReviewCase(read(), undefined, options);
+  await resolveReviewCase(getStorage, read());
+  const closed = await createReviewCase(read(), undefined, options);
+  return { ...source, closed, open };
+}
+
+function reloadCase(getStorage) {
+  const { items, warning } = restoreReviews(getStorage);
+  assert.equal(warning, '');
+  assert.equal(items.length, 1);
+  return items[0];
+}
+
+async function recheckCase(getStorage) {
+  const item = reloadCase(getStorage);
+  return assessFollowUp(item, await assessReview(item), getStorage);
+}
+
+test('portable Codex receipts and notes require separate opt-ins', async () => {
+  const { getStorage, read, closed, open } = await portableCodexFixture();
+  const item = read();
+  const ordinary = JSON.parse(await createReviewCase(item));
+  const notesOnly = JSON.parse(await createReviewCase(item, item.note));
+  for (const bundle of [ordinary, notesOnly]) {
+    assert.equal(bundle.kind, 'adcp-review-case');
+    assert.deepEqual(bundle.decision, item.decision);
+    for (const key of ['codex', 'followUp', 'resolution']) assert.equal(bundle[key], undefined);
+    assert(!JSON.stringify(bundle).includes(item.codex.evidence.files['before.md']));
+  }
+  assert.equal(ordinary.note, undefined);
+  assert.equal(notesOnly.note, item.note);
+
+  const portable = JSON.parse(closed);
+  assert.equal(portable.kind, 'adcp-codex-review-case');
+  assert.equal(portable.note, undefined);
+  assert.deepEqual(portable.codex.evidence, item.codex.evidence);
+  assert.deepEqual(portable.followUp.codex.evidence, item.followUp.codex.evidence);
+  for (const snapshot of [portable.codex, portable.followUp.codex]) {
+    assert.deepEqual(Object.keys(snapshot.evidence.files).sort(), ['actions.jsonl', 'after.md', 'attempts.jsonl', 'before.md', 'grants.jsonl']);
+    assert.deepEqual(Object.keys(snapshot.evidence.hashes).sort(), Object.keys(capture()).sort());
+  }
+  assert.equal(portable.resolution, item.resolution);
+  assert.equal(JSON.parse(open).resolution, undefined);
+  const both = await createReviewCase(item, item.note, { includeCodexReceipts: true, getStorage });
+  assert.equal(JSON.parse(both).note, item.note);
+
+  // Historical closure cannot travel as verified while the sender's pin is missing.
+  getStorage().removeItem(WORKFLOW_BASELINE_KEY);
+  const unpinned = JSON.parse(await createReviewCase(item, undefined, { includeCodexReceipts: true, getStorage }));
+  assert.deepEqual(unpinned.followUp, portable.followUp);
+  assert.equal(unpinned.resolution, undefined);
+});
+
+test('recipient with a matching pin rechecks both ledgers and preserves explicit closure or an open follow-up', async () => {
+  const source = await portableCodexFixture();
+  for (const [raw, expectedResolved] of [[source.closed, true], [source.open, false]]) {
+    const { getStorage, storage } = await savedCodexWorkflow();
+    const pin = storage.getItem(WORKFLOW_BASELINE_KEY);
+    await importReviewPackage(getStorage, raw);
+    const item = reloadCase(getStorage);
+    assert.equal(item.id, source.read().id);
+    assert.deepEqual(item.decision, source.read().decision);
+    const original = await assessReview(item);
+    assert.equal(original.verdict.status, 'review');
+    assert.equal(original.codex.verifiedFileCount, 5);
+    const checked = await recheckCase(getStorage);
+    assert.equal(checked.assessment.codex.verifiedFileCount, 5);
+    assert.equal(checked.assessment.verdict.status, 'pass');
+    assert.equal(checked.pinState.status, 'matched');
+    assert.equal(checked.canResolve, true);
+    assert.equal(checked.resolved, expectedResolved);
+    assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+    // An imported sender closure must not silently decide an existing local case.
+    if (!expectedResolved) {
+      saveReview(getStorage, item, 'Recipient still investigating.', true);
+      saveReviewDecision(getStorage, reloadCase(getStorage), 'fix-required', 'Request another check.');
+      await importReviewPackage(getStorage, source.closed);
+      const preserved = reloadCase(getStorage);
+      assert.equal(preserved.note, 'Recipient still investigating.');
+      assert.equal(preserved.decision.reason, 'Request another check.');
+      assert.equal(preserved.followUp.id, item.followUp.id);
+      assert.equal((await recheckCase(getStorage)).resolved, false);
+    }
+  }
+});
+
+test('an absent Codex pin requires explicit adoption; a conflicting pin and its investigation are preserved', async () => {
+  const source = await portableCodexFixture();
+  const getStorage = freshStorage();
+  await importReviewPackage(getStorage, source.closed);
+  assert.equal(getStorage().getItem(STORAGE_KEY), null);
+  assert.equal(getStorage().getItem(WORKFLOW_BASELINE_KEY), null);
+  const missing = await recheckCase(getStorage);
+  assert.equal(missing.pinState.status, 'missing');
+  assert.equal(missing.resolved, false);
+  assert.equal(missing.canResolve, false);
+  const pinQuota = () => ({
+    ...getStorage(),
+    setItem(key, value) {
+      if (key === WORKFLOW_BASELINE_KEY) throw new Error('pin quota exceeded');
+      getStorage().setItem(key, value);
+    },
+  });
+  await assert.rejects(adoptCodexBaseline(pinQuota, reloadCase(getStorage)), /pin quota exceeded/);
+  assert.equal(getStorage().getItem(STORAGE_KEY), null);
+  assert.equal(getStorage().getItem(WORKFLOW_BASELINE_KEY), null);
+  await adoptCodexBaseline(getStorage, reloadCase(getStorage));
+  assert.deepEqual(restoreWorkflowBaselines(getStorage).baselines, [source.pin]);
+  assert.deepEqual(restoreInvestigations(getStorage).chains, [source.baseline.chain]);
+  assert.equal((await recheckCase(getStorage)).resolved, true);
+
+  const other = freshStorage();
+  const different = { ...source.baseline.chain, title: 'Different baseline content under the same ID' };
+  saveInvestigation(other, different);
+  saveWorkflowBaseline(other, source.pin.name, different, await runFingerprint(different));
+  const existing = [STORAGE_KEY, WORKFLOW_BASELINE_KEY].map(key => other().getItem(key));
+  await importReviewPackage(other, source.closed);
+  const conflict = await recheckCase(other);
+  assert.equal(conflict.pinState.status, 'conflict');
+  assert.equal(conflict.resolved, false);
+  assert.equal(conflict.canResolve, false);
+  await assert.rejects(adoptCodexBaseline(other, reloadCase(other)));
+  assert.deepEqual([STORAGE_KEY, WORKFLOW_BASELINE_KEY].map(key => other().getItem(key)), existing);
+});
+
+test('altered Codex receipts keep the imported case open; later imports cannot damage an intact local case', async () => {
+  const { closed } = await portableCodexFixture();
+  for (const side of ['original', 'follow-up']) {
+    const altered = JSON.parse(closed);
+    const snapshot = side === 'original' ? altered.codex : altered.followUp.codex;
+    snapshot.evidence.files['after.md'] = btoa('Changed output bytes.');
+    const { getStorage, storage } = await savedCodexWorkflow();
+    const pin = storage.getItem(WORKFLOW_BASELINE_KEY);
+    await importReviewPackage(getStorage, JSON.stringify(altered));
+    const item = reloadCase(getStorage);
+    assert.deepEqual(item.decision, altered.decision);
+    assert.equal(item.resolution, undefined);
+    if (side === 'original') {
+      await assert.rejects(assessReview(item), /after\.md.*mismatch/);
+    } else {
+      const checked = await recheckCase(getStorage);
+      assert.equal(checked.resolved, false);
+      assert.equal(checked.canResolve, false);
+      assert.match(checked.error, /after\.md.*mismatch/);
+    }
+    await assert.rejects(resolveReviewCase(getStorage, item));
+    assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+
+    const intact = await savedCodexWorkflow();
+    await importReviewPackage(intact.getStorage, closed);
+    const before = reloadCase(intact.getStorage);
+    await importReviewPackage(intact.getStorage, JSON.stringify(altered));
+    assert.deepEqual(reloadCase(intact.getStorage), before);
+    assert.equal((await recheckCase(intact.getStorage)).resolved, true);
+  }
+});
+
+test('Codex case intake rejects extra receipt files and oversized packages without changing storage', async () => {
+  const { closed } = await portableCodexFixture();
+  const { getStorage, storage } = await savedCodexWorkflow();
+  const pin = storage.getItem(WORKFLOW_BASELINE_KEY);
+  const extra = JSON.parse(closed);
+  extra.followUp.codex.evidence.files['codex-events.jsonl'] = btoa('Raw event stream omitted from the portable format.');
+  await assert.rejects(async () => importReviewPackage(getStorage, JSON.stringify(extra)), /snapshot is invalid/);
+  const oversized = closed + ' '.repeat(2 * 1024 * 1024);
+  await assert.rejects(async () => importReviewPackage(getStorage, oversized), /2 MiB/);
+  const full = () => ({ getItem: storage.getItem, setItem() { throw new Error('quota exceeded'); } });
+  await assert.rejects(importReviewPackage(full, closed), /quota exceeded/);
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), null);
+  assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
 });

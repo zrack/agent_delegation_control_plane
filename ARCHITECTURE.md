@@ -97,8 +97,20 @@ follow-up to pass against the saved baseline, and the workflow's current pin to
 match the original run ID and fingerprint. Closure records the case, decision,
 and follow-up together. Reopening the case rechecks both snapshots and the
 current pin. A conflicting pin leaves the case open and preserves that pin.
-Codex case downloads carry the original normalized evidence and saved decision.
-Both receipt snapshots and the closure record stay in the local inbox.
+A standard Codex case download carries the original normalized evidence and
+saved decision. **Include Codex receipts in case download** produces a version 1
+`adcp-codex-review-case` file containing the five retained files and seven
+digests for the original and any attached, verified follow-up. An explicitly
+closed case includes its closure fingerprint when the exporter’s current pin
+still matches. The note has a separate export option.
+
+Import and reload recheck the evidence and compare the recipient’s workflow pin
+with the packaged baseline ID and fingerprint. A missing pin leaves the case
+open. After inspecting the included baseline, the recipient can pin it to save
+that investigation locally and recheck the recorded closure. A conflicting pin
+is preserved. Without a verified closure record, even a passing follow-up stays
+open until a reviewer closes it. An altered receipt is identified on the
+affected side and prevents closure. The package uses the existing 2 MiB limit.
 
 ## Optional actual-agent workflow
 

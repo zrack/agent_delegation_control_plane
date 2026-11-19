@@ -17,9 +17,16 @@ the local inbox. These can contain source text and tool metadata. The diff
 and raw Codex event stream stay in the original folder. The inbox keeps their
 import-time hashes. Attaching a corrected folder saves the same five files
 from that folder alongside the original evidence. Both snapshots count toward
-the inbox's 2 MiB limit. A Codex case download contains the original normalized
-evidence, saved decision, and any note selected for export. The receipt files,
-corrected folder, and closure record stay in this browser.
+the inbox's 2 MiB limit. By default a Codex case download contains the original
+normalized evidence and saved decision. **Include Codex receipts in case
+download** adds the five saved files and seven digests for the original and any
+verified follow-up, plus any currently verified closure. Inspect both sets of
+ledgers and Markdown files before sharing. The diff and raw event stream are
+represented by digests only. **Include saved review note** is independent of
+receipt export. Both options start unchecked and reset after download.
+Importing a receipt case stores the included evidence in the recipient’s inbox.
+Selecting **Pin included baseline** also saves the baseline in that browser’s
+investigation list and creates the missing workflow pin.
 **Remove from inbox** deletes the case and both local receipt snapshots.
 
 The invoice-folder preview reads the manifest and up to six named files. **Compare and save to inbox** stores the baseline and candidate, the relevant manifest digests, and exact bytes of the selected allowlisted files within the existing 20-report / 2 MiB inbox limit. These files can include execution logs inside the execution receipt. The browser rechecks saved bytes against the supplied manifest, which provides no independent source authentication. An invoice follow-up adds a second receipt snapshot within the same limit. **Remove from inbox** clears both saved receipt snapshots and the local closure record. Ordinary invoice case downloads carry the original delegation evidence and case decision. Selecting **Include invoice receipts in case download** also includes the receipt bytes, matching follow-up, and verified closure. Review the contents before sharing, especially the execution receipt, which can contain logs. The receipt and note options are independent and reset after download.

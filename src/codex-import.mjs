@@ -194,13 +194,27 @@ export async function importCodexFolder(files, { retainEvidence = false } = {}) 
   return result;
 }
 
-// Rehash the retained ledgers and document receipts. The diff and Codex event
-// stream were checked at import; their digests still contribute to the run ID.
-export async function assessCodexEvidence(evidence) {
+// A portable case may carry only the seven digests and five bounded receipts.
+// Copy them in capture order so imported object key order cannot alter the snapshot.
+export function portableCodexEvidence(evidence) {
   if (!hasExactKeys(evidence, ['hashes', 'files']) || !validHashes(evidence.hashes)
     || !hasExactKeys(evidence.files, receiptNames)) throw new Error('The saved Codex receipt snapshot is invalid.');
   const hashes = Object.fromEntries(captureNames.map(name => [name, evidence.hashes[name]]));
-  const files = Object.fromEntries(receiptNames.map(name => [name, evidence.files[name]]));
+  const files = {};
+  for (const name of receiptNames) {
+    const contents = evidence.files[name];
+    if (typeof contents !== 'string' || contents.length > 4 * Math.ceil(fileLimits[name] / 3)) {
+      throw new Error(`Invalid or oversized saved Codex receipt for ${name}.`);
+    }
+    files[name] = contents;
+  }
+  return { hashes, files };
+}
+
+// Rehash the retained ledgers and document receipts. The diff and Codex event
+// stream were checked at import; their digests still contribute to the run ID.
+export async function assessCodexEvidence(evidence) {
+  const { hashes, files } = portableCodexEvidence(evidence);
   const verified = new Map();
   for (const name of receiptNames) {
     const bytes = decodeFile(files[name], name);
