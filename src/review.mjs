@@ -1,10 +1,13 @@
 // Reports are recorded claims. Only matching evidence can reproduce a verdict.
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
-import { assessCodexEvidence } from './codex-import.mjs';
+import { assessCodexEvidence, portableCodexEvidence } from './codex-import.mjs';
 import { evaluateChain } from './evaluator.mjs';
 import { parseInvestigation } from './import.mjs';
 import { assessInvoiceFolder, portableInvoiceEvidence } from './invoice-import.mjs';
-import { restoreInvestigations, restoreWorkflowBaselines, runFingerprint, workflowKey } from './storage.mjs';
+import {
+  restoreInvestigations, restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline,
+  STORAGE_KEY, workflowKey,
+} from './storage.mjs';
 
 export const REVIEW_STORAGE_KEY = 'adcp.regression-reviews.v1';
 export const MAX_REPORT_BYTES = 2 * 1024 * 1024;
@@ -18,6 +21,7 @@ export const reviewDecisions = Object.freeze({
 const packageKind = 'adcp-review-package';
 const caseKind = 'adcp-review-case';
 const invoiceCaseKind = 'adcp-invoice-review-case';
+const codexCaseKind = 'adcp-codex-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
 const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'codex', 'suppliedBaseline'];
@@ -99,13 +103,29 @@ const caseResolutionFingerprint = async item => runFingerprint({
   original: await runFingerprint(item.report), decision: item.decision, followUp: item.followUp.id,
 });
 
-export async function createReviewCase(item, note, { includeInvoiceReceipts = false } = {}) {
+export async function createReviewCase(item, note, { includeInvoiceReceipts = false, includeCodexReceipts = false, getStorage } = {}) {
   const withReceipts = Boolean(item.invoice && includeInvoiceReceipts === true);
   const bundle = await reviewBundle(withReceipts ? invoiceCaseKind : caseKind, item.report, item, note);
   if (item.decision) bundle.decision = validateDecision(item.decision.kind, item.decision.reason);
   if (item.codex) {
-    // The portable format carries normalized runs and a decision only.
-    await assessReview(item);
+    const original = await assessReview(item);
+    if (includeCodexReceipts === true) {
+      if (!bundle.decision || !original.codex || !original.verdict) {
+        throw new Error('Save a decision and verify the original Codex receipts before exporting this case.');
+      }
+      bundle.kind = codexCaseKind;
+      bundle.codex = portableCodex(item.codex);
+      if (item.followUp) {
+        const checked = await assessFollowUp(item, original, getStorage);
+        if (checked.incompatible || checked.error || !checked.assessment?.codex) {
+          throw new Error(checked.error ?? 'The follow-up needs matching Codex evidence before it can be exported.');
+        }
+        bundle.followUp = { report: item.followUp.report, candidate: { schemaVersion: 1, chain: item.followUp.candidate },
+          codex: portableCodex(item.followUp.codex) };
+        if (checked.resolved) bundle.resolution = item.resolution;
+      }
+      if (getStorage) requireCurrentReview(readReviews(getStorage()), item);
+    }
     return serializeBundle(bundle);
   }
   if (item.invoice && !withReceipts) return serializeBundle(bundle);
@@ -136,7 +156,7 @@ function readReviewPackage(contents, allowCase = false) {
   }
   let bundle;
   try { bundle = JSON.parse(contents); } catch { throw new Error('The review package is not valid JSON.'); }
-  const kinds = allowCase ? [packageKind, caseKind, invoiceCaseKind] : [packageKind];
+  const kinds = allowCase ? [packageKind, caseKind, invoiceCaseKind, codexCaseKind] : [packageKind];
   if (bundle?.schemaVersion !== 1 || !kinds.includes(bundle.kind)) {
     throw new Error(allowCase ? 'Expected a version 1 review package or case.' : 'Expected a version 1 review package.');
   }
@@ -302,6 +322,48 @@ async function saveFolderCandidate(getStorage, pin, candidate, snapshot) {
   return id;
 }
 
+function portableCodex(codex) {
+  const { workflow, fingerprint, evidence } = codex ?? {};
+  if (typeof workflow !== 'string' || !workflow.trim() || workflow !== workflow.trim()
+    || workflow.length > 80 || /[\u0000-\u001f\u007f]/.test(workflow) || !isFingerprint(fingerprint)) {
+    throw new Error('The Codex receipt snapshot metadata is invalid.');
+  }
+  return { workflow, fingerprint, evidence: portableCodexEvidence(evidence) };
+}
+
+async function importCodexCase(getStorage, incoming, bundle, warnings) {
+  incoming.decision = validateDecision(bundle.decision?.kind, bundle.decision?.reason);
+  if (bundle.followUp !== undefined) {
+    const file = bundle.followUp;
+    const report = parseRegressionReport(JSON.stringify(file?.report));
+    const candidate = parseInvestigation(JSON.stringify(file?.candidate));
+    const codex = portableCodex(file?.codex);
+    if (codex.workflow === incoming.codex.workflow && sameBaseline(incoming.report, report)
+      && distinctCandidate(incoming.report, report) && await evidenceState(report, 'candidate', candidate) === 'matched') {
+      incoming.followUp = { id: await reviewId(report, undefined, codex), report, candidate, codex };
+    } else warnings.push('The Codex follow-up does not match the workflow, original baseline, or candidate.');
+  }
+  let original;
+  try { original = await assessReview(incoming); }
+  catch (error) {
+    warnings.push(`Original Codex evidence: ${error.message}`);
+    return;
+  }
+  const checked = await assessFollowUp(incoming, original, getStorage);
+  if (checked.error) warnings.push(checked.error);
+  if (checked.incompatible) warnings.push('The corrected folder does not match the original Codex case.');
+  if (bundle.resolution !== undefined) {
+    // Keep a verified historical decision even on an unpinned browser. The
+    // current view independently requires the matching local pin for Resolved.
+    if (checked.passes && original.verdict?.status === incoming.report.status
+      && bundle.resolution === await resolutionFor(incoming)) incoming.resolution = bundle.resolution;
+    else warnings.push('The recorded Codex closure could not be verified.');
+  }
+  if (checked.pinState.status === 'missing') warnings.push('The workflow has no local pin. Inspect the included baseline before pinning it.');
+  if (checked.pinState.status === 'conflict') warnings.push('The existing workflow pin differs from the original baseline and was preserved.');
+  if (checked.pinState.status === 'unreadable') warnings.push('The saved workflow pins could not be read.');
+}
+
 function portableInvoice(invoice) {
   const { workflow, outputAtImport, fingerprint, evidence } = invoice ?? {};
   if (typeof workflow !== 'string' || !workflow.trim() || workflow !== workflow.trim() || workflow.length > 80
@@ -348,7 +410,8 @@ async function importInvoiceCase(getStorage, incoming, bundle, warnings) {
 export async function importReview(getStorage, reportText, evidence, initialNote = '', portableCase) {
   const report = parseRegressionReport(reportText);
   const invoice = portableCase?.kind === invoiceCaseKind ? portableInvoice(portableCase.invoice) : undefined;
-  const id = await reviewId(report, invoice);
+  const codex = portableCase?.kind === codexCaseKind ? portableCodex(portableCase.codex) : undefined;
+  const id = await reviewId(report, invoice, codex);
   const attachments = {};
   const mismatches = [];
   for (const side of sides) {
@@ -361,6 +424,9 @@ export async function importReview(getStorage, reportText, evidence, initialNote
   if (invoice) {
     incoming.invoice = invoice;
     await importInvoiceCase(getStorage, incoming, portableCase, caseWarnings);
+  } else if (codex) {
+    incoming.codex = codex;
+    await importCodexCase(getStorage, incoming, portableCase, caseWarnings);
   } else if (portableCase) {
     if (portableCase.decision !== undefined) {
       incoming.decision = validateDecision(portableCase.decision?.kind, portableCase.decision?.reason);
@@ -388,6 +454,7 @@ export async function importReview(getStorage, reportText, evidence, initialNote
   const items = readReviews(storage);
   const current = items.find(item => item.id === id);
   const next = { ...current, id, report, note: current?.note ?? initialNote, reviewed: current?.reviewed ?? false, ...attachments };
+  if (codex) next.codex = current?.codex ?? codex;
   if (invoice) {
     next.invoice = current?.invoice ?? invoice;
     if (attachments.baseline) delete next.suppliedBaseline;
@@ -518,6 +585,43 @@ function requireFolderPin(getStorage, item) {
   }
 }
 
+export async function adoptCodexBaseline(getStorage, expected) {
+  if (!expected.codex) throw new Error('Choose a Codex review case.');
+  const original = await assessReview(expected);
+  if (!original.codex || !original.verdict) {
+    throw new Error('The included baseline and original Codex evidence must verify before pinning.');
+  }
+  const storage = getStorage();
+  requireCurrentReview(readReviews(storage), expected);
+  if (folderPinState(getStorage, expected).status !== 'missing') {
+    throw new Error('A workflow pin already exists or cannot be checked. It was preserved.');
+  }
+
+  const { baseline } = expected;
+  const saved = restoreInvestigations(getStorage);
+  if (saved.warning) throw new Error(saved.warning);
+  const existing = saved.chains.find(chain => chain.id === baseline.id);
+  if (existing && JSON.stringify(existing) !== JSON.stringify(baseline)) {
+    throw new Error('A different investigation already uses the included baseline run ID.');
+  }
+
+  const previous = storage.getItem(STORAGE_KEY);
+  if (!existing) saveInvestigation(getStorage, baseline);
+  const stored = storage.getItem(STORAGE_KEY);
+  try {
+    // No replacement is authorized. The storage helper checks the pin again
+    // even if it changed after the reviewer inspected the package.
+    saveWorkflowBaseline(getStorage, expected.codex.workflow, baseline, expected.report.baselineFingerprint);
+  } catch (error) {
+    if (!existing && storage.getItem(STORAGE_KEY) === stored) {
+      if (previous === null) storage.removeItem(STORAGE_KEY);
+      else storage.setItem(STORAGE_KEY, previous);
+    }
+    throw error;
+  }
+  return baseline;
+}
+
 export async function attachInvoiceFollowUp(getStorage, expected, evidence) {
   if (!expected.invoice || !expected.decision) throw new Error('Save an invoice review decision first.');
   requireFolderPin(getStorage, expected);
@@ -591,7 +695,7 @@ export async function assessFollowUp(item, original, getStorage) {
   let assessment;
   try { assessment = await assessReview(record); }
   catch (error) {
-    if (item.codex) return { ...open, error: error.message };
+    if (item.codex) return { ...open, error: `Follow-up Codex evidence: ${error.message}` };
   }
   if (item.codex && (!original.codex || !assessment?.codex
     || !sameCodexWork(original.codex.chain, assessment.codex.chain))) return { ...open, assessment, incompatible: 'candidate' };

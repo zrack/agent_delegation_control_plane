@@ -33,6 +33,19 @@ Under **Attach corrected Codex folder**, choose `altered-receipt`. Its `after.md
 
 On reload, the inbox rechecks the three saved ledgers and both Markdown receipts for each folder. The diff and raw event stream retain their import-time digests. [Development browser checks for corrected folders](CODEX_FOLLOWUP_VALIDATION.md) · [Pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
 
+### Hand off a Codex case in the development checkout
+
+Run this exercise with a checkout that includes portable Codex cases. Use the
+alpha.11 demo folders above. Export the resolved missing-grant case **before
+replacing its pin**, while the badge still reads **Resolved**.
+
+1. Expand **Export review package or case**. Select **Include Codex receipts in case download**, then **Download review case**. This copies both sets of receipt files, including document text and tool-call details. Select **Include saved review note** separately if you want to share your note.
+2. In a fresh browser profile, open **Regression inbox → Import review package or case** and choose the downloaded JSON. Without a local pin the case stays **Open** after reload. Expand **Inspect included baseline**, check the run ID, fingerprint, actions and grants, then select **Pin included baseline** if you accept it. Reload to verify **Resolved** and inspect the original and corrected grant ledgers.
+3. In a profile that already has the matching pin, the same file reopens as **Resolved**. A different pin under the same workflow name keeps it **Open** and preserves the local pin. A changed receipt in either snapshot also keeps it **Open** and identifies the affected file.
+4. To check the reviewer’s role in closure, export a passing follow-up **before** selecting **Close as resolved**. Import it in a fresh profile with the matching pin and reload. The case stays **Open** until someone explicitly closes it.
+
+[Fresh-browser verification](CODEX_PORTABLE_CASE_VALIDATION.md)
+
 ## Try the coding-agent review demo
 
 Use the alpha.11 dashboard from the first exercise. Extract the

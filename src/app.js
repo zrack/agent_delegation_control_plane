@@ -52,7 +52,15 @@ const investigateLink = document.querySelector('#investigate-link');
 const compareLink = document.querySelector('#compare-link');
 const reviewLink = document.querySelector('#review-link');
 const reviewInbox = document.querySelector('#review-inbox');
-const reviewView = createReviewInbox({ getStorage, escape, comparisonDetail });
+const reviewView = createReviewInbox({
+  getStorage, escape, comparisonDetail,
+  onBaselineAdopted(baseline) {
+    chains = mergeInvestigation(chains, baseline);
+    results.set(baseline.id, evaluateChain(baseline));
+    updateClearButton();
+    updateCodexForm();
+  },
+});
 const compareRoute = '#compare?';
 let comparisonRows = [];
 let comparisonPair = [];
