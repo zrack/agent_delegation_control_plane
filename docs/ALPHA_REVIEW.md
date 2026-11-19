@@ -3,11 +3,41 @@
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 
+## Try the portable Codex review demo
+
+A reviewer closed a missing-grant case after a corrected run supplied the editor’s grant. As the recipient, you can check that decision against your own workflow baseline. Extract the [alpha.12 portable Codex demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.12/adcp-portable-codex-review-demo-v0.1.0-alpha.12.zip) and **Source code (zip)** from the [alpha.12 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.12) into separate directories.
+
+From the source directory, start the dashboard with Python 3.11 or newer.
+
+```sh
+python3 scripts/serve.py
+```
+
+Open the printed address in a fresh browser profile with folder selection support. Use a fresh profile or a different loopback port for each scenario, since reimport preserves an existing local review. Keep the same profile, address and port when reloading within a scenario.
+
+### Start with no local pin
+
+1. Open **Regression inbox → Import review package or case** and select `cases/resolved.json`. Reload. The badge reads **Open** and the sender’s **Evidence needed** decision and reason are visible.
+2. Expand **Inspect included baseline**. Check the workflow name **Follow-up review**, the run ID beginning with `CODEX-3e20f2ce5add`, the fingerprint, and the baseline actions and grants. Inspection alone leaves the case **Open**.
+3. Select **Pin included baseline** and reload again. The case now reads **Resolved**. Under **Inspect files and digests**, open the original `grants.jsonl`. Then open the corrected ledger under **Inspect follow-up evidence**. The corrected ledger contains the editor grant linked to its parent.
+
+### Compare recipients with a saved pin
+
+Start each row below in its own fresh profile or on a separate port. In **Investigate a run → Import a Codex run folder**, choose the pin folder shown. In **Compare runs**, select that run under **Baseline run**, expand **Save or replace a workflow baseline**, enter **Follow-up review** under **Workflow name**, and select **Save baseline**. Import the case file through **Regression inbox → Import review package or case** and reload.
+
+| Pin folder | Case file | What to check after reload |
+| --- | --- | --- |
+| `pins/complete-capture` | `cases/resolved.json` | **Resolved**. The original result is **Needs review**, the correction shows **No regression found**, and you can inspect both grant ledgers. |
+| `pins/clean-candidate` | `cases/resolved.json` | **Open**. Expand **Inspect case baseline and conflicting pin**. The required run starts with `CODEX-3e20f2ce5add`. The local pin still starts with `CODEX-f559c2afd796`, and closure is disabled. |
+| `pins/complete-capture` | `cases/altered-original-receipt.json` | **Open**. The original `after.md` fails its digest check. The saved decision remains visible and closure is disabled. |
+| `pins/complete-capture` | `cases/altered-follow-up-receipt.json` | **Open**. The corrected `after.md` fails its digest check. The original evidence remains available and closure is disabled. |
+| `pins/complete-capture` | `cases/follow-up-open.json` | **Open**. The follow-up passes, but its reviewer left the case open. **Close as resolved** is available if you decide to close it. |
+
+[Portable case browser validation](CODEX_PORTABLE_CASE_VALIDATION.md)
+
 ## Try the Codex run-folder demo
 
-A fictional editor read and changed a quickstart, but its grant is missing from the captured ledger. Use the [alpha.11 four-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) to open the case, try a correction, and check whether the evidence still supports closure after a reload.
-
-Download **Source code (zip)** from the [alpha.11 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.11) and extract it separately from the demo. In the source directory, run `python3 scripts/serve.py` with Python 3.11 or newer. Open the printed address in a fresh browser profile with folder selection support. For each picker below, choose the individual folder containing `manifest.json`. Keep the same profile, address and port for all reloads.
+To create a case yourself, keep using the alpha.12 dashboard and extract the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) separately. Start this exercise with fresh browser storage. Each folder picker takes the directory containing `manifest.json`.
 
 ### Pin the baseline and open the missing-grant case
 
@@ -25,6 +55,10 @@ Under **Attach corrected Codex folder**, choose `altered-receipt`. Its `after.md
 2. Check both verdicts. The original still shows **Needs review** and the follow-up shows **No regression found** against the original pin. Reload before closing. The case should still be **Open**.
 3. Select **Close as resolved** and reload again. Confirm the badge reads **Resolved**, your decision and reason are present, and you can reopen each grant ledger.
 
+### Export your case for a second reviewer
+
+With the case still **Resolved**, expand **Export review package or case** and select **Include Codex receipts in case download**. Select **Include saved review note** separately if the note belongs in the handoff. **Download review case** creates a JSON file with the decision, both sets of receipts and the verified closure. The ledgers and Markdown files can contain tool-call details and source text. Review them before sharing.
+
 ### Change the pin and recheck the same case
 
 1. Leave the resolved case open. In a second tab at the same dashboard address, use **Investigate a run → Import a Codex run folder** to import `clean-candidate`. This makes the corrected run available in the baseline selector.
@@ -33,22 +67,9 @@ Under **Attach corrected Codex folder**, choose `altered-receipt`. Its `after.md
 
 On reload, the inbox rechecks the three saved ledgers and both Markdown receipts for each folder. The diff and raw event stream retain their import-time digests. [Development browser checks for corrected folders](CODEX_FOLLOWUP_VALIDATION.md) · [Pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
 
-### Hand off a Codex case in the development checkout
-
-Run this exercise with a checkout that includes portable Codex cases. Use the
-alpha.11 demo folders above. Export the resolved missing-grant case **before
-replacing its pin**, while the badge still reads **Resolved**.
-
-1. Expand **Export review package or case**. Select **Include Codex receipts in case download**, then **Download review case**. This copies both sets of receipt files, including document text and tool-call details. Select **Include saved review note** separately if you want to share your note.
-2. In a fresh browser profile, open **Regression inbox → Import review package or case** and choose the downloaded JSON. Without a local pin the case stays **Open** after reload. Expand **Inspect included baseline**, check the run ID, fingerprint, actions and grants, then select **Pin included baseline** if you accept it. Reload to verify **Resolved** and inspect the original and corrected grant ledgers.
-3. In a profile that already has the matching pin, the same file reopens as **Resolved**. A different pin under the same workflow name keeps it **Open** and preserves the local pin. A changed receipt in either snapshot also keeps it **Open** and identifies the affected file.
-4. To check the reviewer’s role in closure, export a passing follow-up **before** selecting **Close as resolved**. Import it in a fresh profile with the matching pin and reload. The case stays **Open** until someone explicitly closes it.
-
-[Fresh-browser verification](CODEX_PORTABLE_CASE_VALIDATION.md)
-
 ## Try the coding-agent review demo
 
-Use the alpha.11 dashboard from the first exercise. Extract the
+Use the alpha.12 dashboard from the first exercise. Extract the
 [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) separately.
 
 These fictional records describe a repository owner authorizing a coordinator to
@@ -93,7 +114,7 @@ Use `--output NEW_DIRECTORY` to generate another copy.
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.11 dashboard from the first exercise and extract the
+1. Use the alpha.12 dashboard from the first exercise and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. Open the printed loopback address in a fresh browser profile. In **Regression
    inbox**, choose **Import review package or case** and select
@@ -145,7 +166,7 @@ closure. Reload to verify the saved result.
 
 ## Compare and save an invoice candidate
 
-Keep using the alpha.11 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
+Keep using the alpha.12 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -189,7 +210,7 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-In the alpha.11 dashboard, open a resolved invoice case and expand
+In the alpha.12 dashboard, open a resolved invoice case and expand
 **Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
@@ -210,7 +231,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.11 dashboard started above for this exercise. The
+Use the alpha.12 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 
