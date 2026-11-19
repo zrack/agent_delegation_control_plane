@@ -1,18 +1,24 @@
 # Roadmap
 
-The [v0.1.0-alpha.10 public prerelease](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.10) adds Codex folder comparisons to the local regression inbox. Reviewers can save a candidate against a pinned workflow baseline and reopen the verdict, receipts, and decision. The [sandbox validation report](docs/SANDBOX_VALIDATION.md) records what the invoice pilot demonstrated.
+The public alpha now lets a reviewer close a flagged Codex run with a corrected folder. The inbox retains the original finding and decision alongside the follow-up grant ledger. [v0.1.0-alpha.11 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.11)
 
 ## Coding-agent review
 
-Start with the [four-folder Codex inbox demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.10/adcp-codex-inbox-demo-v0.1.0-alpha.10.zip) and [first-use walkthrough](docs/ALPHA_REVIEW.md#try-the-codex-run-folder-demo). Pin `complete-capture` in **Compare runs**. Use **Compare and save to inbox** for `clean-candidate` and `missing-grant` against that pin, then record an **Evidence needed** decision on the missing grant. Importing `altered-receipt` stops at the `after.md` mismatch.
+Start with the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) and the [first-use walkthrough](docs/ALPHA_REVIEW.md#try-the-codex-run-folder-demo). Pin `complete-capture` and save the `missing-grant` case against it. The demo exercises three outcomes on that case.
 
-After reload, the clean case should reproduce **No regression found** and the missing-grant case **Needs review**, with its saved decision and reason. The [Codex candidate validation](docs/CODEX_CANDIDATE_VALIDATION.md) records the automated results.
+| Evidence or pin change | Case after reload |
+| --- | --- |
+| Attach `altered-receipt`. Its `after.md` digest differs from the manifest. | **Open**. Attachment fails and the saved decision remains. |
+| Attach `clean-candidate` and inspect the restored editor grant. | **Open** until the reviewer selects **Close as resolved**. After closure, **Resolved** with both ledgers available. |
+| Replace the same workflow’s pin with the corrected run after closing the case. | **Open**. Closure is disabled and the replacement pin is preserved. |
+
+The [Codex follow-up validation](docs/CODEX_FOLLOWUP_VALIDATION.md) records the browser checks. The [sandbox validation report](docs/SANDBOX_VALIDATION.md) covers the invoice pilot.
 
 ## Next evidence gates
 
 1. **Observe first use.** Ask a small group of engineers to start with the
-   alpha.10 four-folder Codex inbox demo. Record setup time, where they need help, and
-   whether the evidence supports their decision.
+   alpha.11 corrected-folder demo. Record setup time, where they need help, and
+   whether they can explain why a passing follow-up permits closure and a changed pin reopens the case.
 2. **Compare one permissioned workflow.** Freeze a completed record set and
    compare the dashboard with the investigator's existing method. Record accuracy,
    time to prepare and review the records, missed issues, and results that stayed
