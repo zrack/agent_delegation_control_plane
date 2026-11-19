@@ -10,8 +10,13 @@ The regression inbox keeps its own copies of matching exports, report reasons, d
 
 The Codex folder picker reads and checks the seven manifest-listed pilot files
 locally. The saved investigation retains normalized action and grant records,
-tool names, call IDs, and artifact hashes. The raw Codex event stream, diff,
-attempt ledger, and before and after files stay in the original capture folder.
+tool names, call IDs, and artifact hashes. Selecting **Compare and save to
+inbox** additionally stores exact bytes of
+`actions.jsonl`, `grants.jsonl`, `attempts.jsonl`, `before.md` and `after.md` in
+the local inbox. These can contain source text and tool metadata. The diff
+and raw Codex event stream stay in the original folder. The inbox keeps their
+import-time hashes. Codex receipt bytes are excluded from review downloads.
+**Remove from inbox** deletes the saved case and its local receipt copies.
 
 The invoice-folder preview reads the manifest and up to six named files. **Compare and save to inbox** stores the baseline and candidate, the relevant manifest digests, and exact bytes of the selected allowlisted files within the existing 20-report / 2 MiB inbox limit. These files can include execution logs inside the execution receipt. The browser rechecks saved bytes against the supplied manifest, which provides no independent source authentication. An invoice follow-up adds a second receipt snapshot within the same limit. **Remove from inbox** clears both saved receipt snapshots and the local closure record. Ordinary invoice case downloads carry the original delegation evidence and case decision. Selecting **Include invoice receipts in case download** also includes the receipt bytes, matching follow-up, and verified closure. Review the contents before sharing, especially the execution receipt, which can contain logs. The receipt and note options are independent and reset after download.
 

@@ -173,8 +173,45 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       <h4 id="invoice-closure-title">Closure checklist</h4><ul>${checks.join('')}</ul></section>`;
   }
 
+  function decisionForm(item) {
+    return `<form id="review-decision-form">
+        <label for="review-decision">Decision</label>
+        <select id="review-decision" required><option value="">Choose a decision</option>${Object.entries(reviewDecisions).map(([kind, label]) =>
+          `<option value="${kind}" ${item.decision?.kind === kind ? 'selected' : ''}>${label}</option>`).join('')}</select>
+        <label for="review-decision-reason">Reason for decision</label>
+        <textarea id="review-decision-reason" rows="2" maxlength="${MAX_REVIEW_NOTE}" required>${escape(item.decision?.reason ?? '')}</textarea>
+        <button type="submit">Save decision</button>
+      </form>`;
+  }
+
+  function codexFolderEvidence({ codex, candidateResult }) {
+    const { hashes, files } = codex.evidence;
+    const grants = candidateResult.findings.filter(finding => finding.code === 'GRANT_MISSING');
+    const missing = grants.map(({ eventId, grantId }) => {
+      const event = codex.chain.events.find(record => record.id === eventId);
+      if (!event) return '';
+      return evidenceDetails(event.label, { snapshot: { event, missingGrantId: grantId } },
+        `${event.action.action} · Missing grant ${grantId}`);
+    });
+    const rows = Object.entries(hashes).map(([name, hash]) => {
+      const retained = Object.hasOwn(files, name);
+      const summary = `<code>${escape(name)}</code> · ${retained ? 'Rechecked from saved bytes' : 'Verified at import only'}`;
+      return retained ? `<details class="run-difference" data-codex-file="${escape(name)}">
+        <summary>${summary}</summary><code class="receipt-digest">SHA-256 ${escape(hash)}</code><pre tabindex="0"></pre></details>`
+        : `<div class="codex-digest-only">${summary}<code class="receipt-digest">SHA-256 ${escape(hash)}</code></div>`;
+    });
+    return `<section class="invoice-results" aria-labelledby="codex-evidence-title">
+      <h4 id="codex-evidence-title">Codex folder evidence</h4>
+      <p>${Object.keys(hashes).length} files matched the supplied manifest at import.
+        ${codex.verifiedFileCount} saved files passed the current receipt check.</p>
+      ${missing.length ? '<h4>Actions with missing grants</h4>' + missing.join('') : ''}
+      <details class="review-differences"><summary>Inspect files and digests</summary>${rows.join('')}</details></section>`;
+  }
+
   function renderCase(item, original, followUp) {
     if (item.report.status === 'pass' && !followUp.flagged && !item.decision) return '';
+    if (item.codex) return `<section class="review-case" aria-labelledby="review-case-title">
+      <h3 id="review-case-title">Review decision</h3>${decisionForm(item)}</section>`;
     const { assessment, canResolve, pinChanged, resolved } = followUp;
     const comparison = (label, record, check) => `<div class="compare-run"><h3>${label}</h3>
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
@@ -201,14 +238,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       <div class="panel-heading"><h3 id="review-case-title">Review decision and follow-up</h3>
         <span class="badge ${resolved ? 'valid' : 'unknown'}">${resolved ? 'Resolved' : 'Open'}</span></div>
       ${item.invoice && !resolved ? invoiceClosureChecklist(item, original, followUp) : ''}
-      <form id="review-decision-form">
-        <label for="review-decision">Decision</label>
-        <select id="review-decision" required><option value="">Choose a decision</option>${Object.entries(reviewDecisions).map(([kind, label]) =>
-          `<option value="${kind}" ${item.decision?.kind === kind ? 'selected' : ''}>${label}</option>`).join('')}</select>
-        <label for="review-decision-reason">Reason for decision</label>
-        <textarea id="review-decision-reason" rows="2" maxlength="${MAX_REVIEW_NOTE}" required>${escape(item.decision?.reason ?? '')}</textarea>
-        <button type="submit">Save decision</button>
-      </form>
+      ${decisionForm(item)}
       <label for="review-follow-up-file">${label}</label>
       <input id="review-follow-up-file" type="file" ${picker} aria-describedby="review-case-help" ${item.decision && !folderUnsupported ? '' : 'disabled'}>
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original)}
@@ -240,6 +270,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const receiptOption = item.invoice && item.decision && original.verdict && followUp.originalInvoice?.checked;
     return `<details class="review-differences"><summary>Export review package or case</summary>
       <p class="panel-description">The download includes the original report${matching}.</p>
+      ${item.codex ? '<p class="panel-description">Codex folder receipt bytes stay in this browser. Downloads contain the normalized run evidence.</p>' : ''}
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
       ${receiptOption ? `<p class="panel-description" id="invoice-export-help">Including invoice receipts adds the available original
         and follow-up receipt files and any verified closure to the case download. Execution receipts may contain logs.</p>` : ''}
@@ -262,6 +293,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       || priority[a.report.status] - priority[b.report.status]).map(item => `<a class="chain-card review-card ${item.id === id ? 'selected' : ''}"
         href="${itemRoute(item.id)}" ${item.id === id ? 'aria-current="true"' : ''}>
         <span class="badge ${tones[item.report.status]}">${regressionLabels[item.report.status]}</span>
+        ${item.codex ? '<strong>Codex folder</strong>' : ''}
         ${item.invoice ? `<strong>${escape(item.invoice.evidence?.caseId ?? 'Invoice run')}</strong>` : ''}
         <code>${escape(item.report.candidateId ?? 'Run ID unavailable')}</code>
         ${item.invoice ? `<span class="muted">Output at import · ${escape(item.invoice.outputAtImport)}</span>` : ''}
@@ -284,9 +316,10 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
-        ${item.invoice ? `<p class="panel-description">Pinned workflow · ${escape(item.invoice.workflow)}</p>` : ''}
+        ${item.invoice || item.codex ? `<p class="panel-description">Pinned workflow · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
         ${renderEvidence(item, assessment)}
         ${receiptResults}
+        ${assessment.codex ? codexFolderEvidence(assessment) : ''}
         ${item.report.reasons.length ? `<details class="review-differences"><summary>Reasons recorded by the offline report</summary>
           <ul>${item.report.reasons.slice(0, 12).map(reason => `<li>${escape(reason.message)}</li>`).join('')}</ul>
           ${item.report.reasons.length > 12 ? `<p>Showing 12 of ${item.report.reasons.length} recorded reasons.</p>` : ''}</details>` : ''}
@@ -299,7 +332,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         </form>
         ${renderExport(item, assessment, followUp)}`;
     } catch (error) {
-      if (currentRevision === revision) detail.innerHTML = `<p class="import-error">${escape(error.message)}</p>`;
+      if (currentRevision === revision) detail.innerHTML = `<p class="import-error">${escape(error.message)}</p>
+        <button type="button" id="remove-review">Remove from inbox</button>`;
     }
   }
 
@@ -457,7 +491,18 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
 
   detail.addEventListener('toggle', event => {
     const element = event.target;
-    if (!element.matches('details[data-review-evidence]') || !element.open) return;
+    if (!element.open) return;
+    if (element.matches('details[data-codex-file]')) {
+      const pre = element.querySelector('pre');
+      if (!pre.hasChildNodes()) {
+        const encoded = selected.codex.evidence.files[element.dataset.codexFile];
+        const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+        try { pre.textContent = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+        catch { pre.textContent = 'Binary content. Inspect the original file to read these bytes.'; }
+      }
+      return;
+    }
+    if (!element.matches('details[data-review-evidence]')) return;
     const container = element.querySelector('.compare-detail');
     const record = records[Number(element.dataset.reviewEvidence)];
     if (!record || container.hasChildNodes()) return;

@@ -201,3 +201,11 @@
 .closure-checklist li { margin: 6px 0; }
 .closure-checklist p { margin: 4px 0; }
 .closure-checklist code { overflow-wrap: anywhere; }
+
+#codex-candidate-form { flex-basis: 100%; margin-top: 0; }
+#codex-candidate-form p { grid-column: 1 / -1; }
+#codex-save-status:empty { display: none; }
+#codex-save:not(:disabled) { background: var(--blue); color: #fff; }
+
+.receipt-digest { display: block; margin: 4px 0; overflow-wrap: anywhere; color: var(--muted); }
+.codex-digest-only { padding: 8px 0; font-size: .8125rem; }

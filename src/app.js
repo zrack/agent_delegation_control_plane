@@ -7,6 +7,7 @@ import {
   saveWorkflowBaseline, removeWorkflowBaseline, workflowKey, runFingerprint,
 } from './storage.mjs';
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
+import { saveCodexCandidate } from './review.mjs';
 import { createReviewInbox, reviewRoute } from './review-view.mjs';
 
 const getStorage = () => window.localStorage;
@@ -20,6 +21,13 @@ const codexFolder = document.querySelector('#codex-folder');
 const supportsFolders = 'webkitdirectory' in codexFolder;
 const importStatus = document.querySelector('#import-status');
 const codexImportStatus = document.querySelector('#codex-import-status');
+const codexForm = document.querySelector('#codex-candidate-form');
+const codexWorkflow = document.querySelector('#codex-workflow');
+const codexSave = document.querySelector('#codex-save');
+const codexHelp = document.querySelector('#codex-candidate-help');
+const codexSaveStatus = document.querySelector('#codex-save-status');
+let codexDraft;
+let codexPins = [];
 let importBusy = false;
 importStatus.textContent = restored.warning || (restored.chains.length ? `Restored ${restored.chains.length} locally saved run(s). Source claims remain unverified.` : '');
 importStatus.classList.toggle('import-error', Boolean(restored.warning));
@@ -227,6 +235,7 @@ function comparisonDetail(row, pair = comparisonPair) {
 }
 
 function setView(view) {
+  if (view !== 'investigation') codexForm.hidden = true;
   comparison.hidden = view !== 'comparison';
   reviewInbox.hidden = view !== 'review-inbox';
   for (const selector of ['.workspace', '#overview', '.demo-note', '.dataset-note']) document.querySelector(selector).hidden = view !== 'investigation';
@@ -301,6 +310,7 @@ function selectFromHash() {
 }
 
 function render() {
+  updateCodexForm();
   const chain = selectedChain;
   const result = results.get(chain.id);
   document.querySelector('#overview').innerHTML = [
@@ -448,12 +458,16 @@ document.querySelector('#investigation').addEventListener('toggle', event => {
 async function importRun(picker, status, read, openRun = false) {
   if (importBusy || !picker.files.length) return;
   importBusy = true;
+  codexDraft = undefined;
+  codexForm.hidden = true;
+  codexWorkflow.value = '';
+  codexSaveStatus.textContent = '';
   investigationFile.disabled = codexFolder.disabled = true;
   updateClearButton();
   status.classList.remove('import-error');
   status.textContent = 'Checking the selected evidence…';
   try {
-    const { chain: imported, notice = '' } = await read(picker.files);
+    const { chain: imported, notice = '', evidence } = await read(picker.files);
     const evaluated = evaluateChain(imported);
     if (evaluated.events.length !== imported.events.length) throw new Error('The export cannot be displayed as a completed chain.');
     chains = mergeInvestigation(chains, imported);
@@ -468,6 +482,7 @@ async function importRun(picker, status, read, openRun = false) {
       status.textContent = `${notice}Imported for this tab only; saving failed. Browser storage may be unavailable, full (20 runs / 2 MiB), or damaged. Keep the original export; this import will be lost on reload.${assessment}`;
       status.classList.add('import-error');
     }
+    if (evidence) codexDraft = { runId: imported.id, evidence };
     if (!openRun && !reviewInbox.hidden) updateClearButton();
     else if (!openRun && !comparison.hidden) renderComparison(true);
     else if (location.hash === `#${imported.id}`) selectFromHash();
@@ -480,9 +495,63 @@ async function importRun(picker, status, read, openRun = false) {
     importBusy = false;
     investigationFile.disabled = false;
     codexFolder.disabled = !supportsFolders;
+    updateCodexForm();
     updateClearButton();
   }
 }
+
+function updateCodexForm() {
+  codexForm.hidden = !codexDraft || selectedChain?.id !== codexDraft.runId || !comparison.hidden || !reviewInbox.hidden;
+  if (codexForm.hidden) return;
+  const selected = codexPins.find(pin => workflowKey(pin.name) === codexWorkflow.value);
+  const { baselines, warning } = restoreWorkflowBaselines(getStorage);
+  codexPins = baselines.filter(pin => !pin.runId.startsWith('CH-'));
+  codexWorkflow.replaceChildren(new Option('Choose a saved workflow', ''));
+  for (const pin of codexPins) {
+    const key = workflowKey(pin.name);
+    codexWorkflow.add(new Option(`${pin.name} · ${pin.runId}`, key));
+    if (selected && pin.name === selected.name && pin.runId === selected.runId && pin.fingerprint === selected.fingerprint) {
+      codexWorkflow.value = key;
+    }
+  }
+  codexWorkflow.disabled = importBusy || !codexPins.length;
+  codexSave.disabled = importBusy || !codexWorkflow.value;
+  codexHelp.textContent = warning || (codexPins.length
+    ? 'Saving keeps the action, grant and attempt ledgers and both Markdown receipts in this browser. The diff and Codex event stream are kept as hashes only.'
+    : 'Pin a complete run under a workflow name in Compare runs, then import a different candidate folder.');
+}
+
+codexWorkflow.addEventListener('change', () => {
+  codexSave.disabled = importBusy || !codexWorkflow.value;
+  codexSaveStatus.textContent = '';
+});
+
+codexForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const pin = codexPins.find(item => workflowKey(item.name) === codexWorkflow.value);
+  if (importBusy || !pin || !codexDraft || codexForm.hidden) return;
+  const currentRoute = location.hash;
+  importBusy = true;
+  investigationFile.disabled = codexFolder.disabled = codexWorkflow.disabled = codexSave.disabled = true;
+  updateClearButton();
+  codexSaveStatus.classList.remove('import-error');
+  codexSaveStatus.textContent = 'Checking the baseline and receipts…';
+  try {
+    const id = await saveCodexCandidate(getStorage, pin, codexDraft.evidence);
+    codexDraft = undefined;
+    codexImportStatus.textContent = 'Codex comparison and evidence saved to the regression inbox.';
+    if (location.hash === currentRoute) location.hash = reviewRoute + new URLSearchParams({ item: id });
+  } catch (error) {
+    codexSaveStatus.textContent = error.message;
+    codexSaveStatus.classList.add('import-error');
+  } finally {
+    importBusy = false;
+    investigationFile.disabled = false;
+    codexFolder.disabled = !supportsFolders;
+    updateCodexForm();
+    updateClearButton();
+  }
+});
 
 investigationFile.addEventListener('change', () => importRun(investigationFile, importStatus, async ([file]) => {
   if (file.size > MAX_IMPORT_BYTES) throw new Error('Choose a JSON export smaller than 1 MB.');
@@ -491,12 +560,14 @@ investigationFile.addEventListener('change', () => importRun(investigationFile, 
 codexFolder.disabled = !supportsFolders;
 if (!supportsFolders) codexImportStatus.textContent = 'This browser does not support folder selection.';
 codexFolder.addEventListener('change', () => importRun(codexFolder, codexImportStatus, async files => {
-  const { chain, verifiedFileCount } = await importCodexFolder(files);
-  return { chain, notice: `Verified ${verifiedFileCount} manifest files and the action receipts. ` };
+  const { chain, verifiedFileCount, evidence } = await importCodexFolder(files, { retainEvidence: true });
+  return { chain, evidence, notice: `Verified ${verifiedFileCount} manifest files and the action receipts. ` };
 }, true));
 document.querySelector('#clear-imports').addEventListener('click', () => {
   try {
     clearInvestigations(getStorage);
+    codexDraft = undefined;
+    codexForm.hidden = true;
     chains = [...examples];
     results.clear();
     chains.forEach(chain => results.set(chain.id, evaluateChain(chain)));

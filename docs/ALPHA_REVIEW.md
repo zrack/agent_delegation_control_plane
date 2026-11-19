@@ -24,6 +24,27 @@ scope** and **Unverifiable** return with their supporting action and grant
 records. The [pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
 describes the seven files and what ADCP keeps in browser storage.
 
+### Compare a folder and save its evidence in the inbox
+
+Use the development checkout for this exercise and the alpha.9 demo ZIP for the
+folders. Import `complete-capture`, open **Compare runs**, select that run as
+the baseline, and save it under a workflow name.
+
+1. Import `missing-grant`, choose the saved workflow under **Compare against
+   pinned baseline**, and select **Compare and save to inbox**.
+2. Open each editor action under **Actions with missing grants**. The verdict
+   should be **Needs review**. Save an **Evidence needed** decision and reason.
+3. Reload the dashboard and reopen the case. Under **Inspect files and digests**,
+   open a ledger or Markdown receipt. Five files are rechecked from saved bytes.
+   The diff and event stream show their import-time digests.
+4. Select `altered-receipt` in the folder picker. The `after.md` mismatch stops
+   the import. Reopen the existing case to verify the decision and pin.
+
+A passing comparison requires a second, distinct clean run from the same
+workflow. Selecting the baseline folder again produces the same run ID. The
+[Codex candidate validation](CODEX_CANDIDATE_VALIDATION.md) describes the clean
+candidate fixture and the measured review paths.
+
 ## Try the coding-agent review demo
 
 Use the alpha.9 dashboard from the first exercise. Extract the
