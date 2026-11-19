@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { assessCodexEvidence, importCodexFolder } from '../../src/codex-import.mjs';
 import { evaluateChain } from '../../src/evaluator.mjs';
-import { assessFollowUp, assessReview, attachReviewFollowUp, createReviewCase, importReviewPackage,
+import { assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, importReviewPackage,
   resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveCodexCandidate, saveReview, saveReviewDecision } from '../../src/review.mjs';
 import { runFingerprint, saveInvestigation, saveWorkflowBaseline, WORKFLOW_BASELINE_KEY } from '../../src/storage.mjs';
 
@@ -237,4 +237,119 @@ test('Codex inbox preserves existing cases and pins on duplicate baseline, chang
   saved.items[0].codex.evidence = altered;
   storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(saved));
   await assert.rejects(assessReview(restoreReviews(getStorage).items[0]), /after\.md hash mismatch/);
+});
+
+const evidenceFor = async files => (await importCodexFolder(selection(files), { retainEvidence: true })).evidence;
+
+async function flaggedCodexCase() {
+  const workflow = await savedCodexWorkflow();
+  const missing = nextCapture();
+  missing['grants.jsonl'] = missing['grants.jsonl'].split('\n')[0] + '\n';
+  const evidence = await evidenceFor(missing);
+  const id = await saveCodexCandidate(workflow.getStorage, workflow.pin, evidence);
+  const read = () => restoreReviews(workflow.getStorage).items.find(item => item.id === id);
+  return { ...workflow, read, evidence, corrected: await evidenceFor(nextCapture()) };
+}
+
+test('matching Codex correction needs a decision and explicit closure, then rechecks both sets of receipts after reload', async () => {
+  const { getStorage, read, evidence, baseline, corrected, pin } = await flaggedCodexCase();
+  await assert.rejects(attachCodexFollowUp(getStorage, read(), corrected), /Save a Codex review decision/);
+  saveReviewDecision(getStorage, read(), 'evidence-needed', 'Supply the missing editor grant.');
+  await assert.rejects(attachReviewFollowUp(getStorage, read(), '{}'), /Codex folder cases/);
+  await assert.rejects(attachInvoiceFollowUp(getStorage, read(), {}), /invoice review/);
+  await assert.rejects(attachCodexFollowUp(getStorage, read(), evidence), /own candidate run ID/);
+  await assert.rejects(attachCodexFollowUp(getStorage, read(), baseline.evidence), /different run ID/);
+
+  const assess = async () => assessFollowUp(read(), await assessReview(read()), getStorage);
+  // A successfully verified second capture can still be missing its authority.
+  const stillMissing = nextCapture();
+  stillMissing['grants.jsonl'] = stillMissing['grants.jsonl'].split('\n')[0] + '\n';
+  stillMissing['codex-events.jsonl'] += '{"type":"turn.started"}\n';
+  await attachCodexFollowUp(getStorage, read(), await evidenceFor(stillMissing));
+  assert.equal((await assess()).assessment.verdict.status, 'review');
+  await assert.rejects(resolveReviewCase(getStorage, read()), /passing follow-up/);
+
+  const stale = read();
+  await attachCodexFollowUp(getStorage, read(), corrected);
+  assert.equal((await assess()).canResolve, true);
+  assert.equal((await assess()).resolved, false);
+  await assert.rejects(attachCodexFollowUp(getStorage, stale, corrected), /changed. Reopen/);
+  await resolveReviewCase(getStorage, read());
+  const original = await assessReview(read());
+  const reloaded = await assessFollowUp(read(), original, getStorage);
+  assert.equal(reloaded.resolved, true);
+  assert.equal(original.codex.verifiedFileCount, 5);
+  assert.equal(reloaded.assessment.codex.verifiedFileCount, 5);
+  assert.equal(reloaded.assessment.verdict.status, 'pass');
+  assert.equal(read().followUp.report.baselineFingerprint, pin.fingerprint);
+
+  const exported = JSON.parse(await createReviewCase(read(), undefined, { includeInvoiceReceipts: true }));
+  assert.deepEqual(exported.decision, read().decision);
+  for (const key of ['codex', 'followUp', 'resolution']) assert.equal(exported[key], undefined);
+  saveReviewDecision(getStorage, read(), 'fix-required', 'Record a new decision.');
+  assert.equal((await assess()).resolved, false);
+});
+
+test('changed Codex inputs cannot replace a correction; changed pins or saved receipts block closure after reload', async () => {
+  const { getStorage, storage, baseline, pin, read, corrected } = await flaggedCodexCase();
+  saveReviewDecision(getStorage, read(), 'evidence-needed', 'Attach a matching grant.');
+  await attachCodexFollowUp(getStorage, read(), corrected);
+  await resolveReviewCase(getStorage, read());
+  const resolved = storage.getItem(REVIEW_STORAGE_KEY);
+  const originalPin = storage.getItem(WORKFLOW_BASELINE_KEY);
+
+  const changed = nextCapture();
+  const before = sha(changed['before.md']);
+  changed['before.md'] = 'A different starting document.\n';
+  changed['actions.jsonl'] = changed['actions.jsonl'].replaceAll(before, sha(changed['before.md']));
+  const otherWork = await evidenceFor(changed);
+  await assert.rejects(attachCodexFollowUp(getStorage, read(), otherWork), /same preflight actor, resource and starting document/);
+  const invalid = structuredClone(corrected);
+  invalid.files['after.md'] = btoa('Changed bytes.');
+  await assert.rejects(attachCodexFollowUp(getStorage, read(), invalid), /after\.md hash mismatch/);
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), resolved);
+  // The other starting document has a passing baseline comparison on its own.
+  const unrelated = await saveCodexCandidate(getStorage, pin, otherWork);
+  const passing = restoreReviews(getStorage).items.find(item => item.id === unrelated);
+  assert.equal((await assessReview(passing)).verdict.status, 'pass');
+  const swapped = { ...read(), followUp: {
+    id: passing.id, report: passing.report, candidate: passing.candidate, codex: passing.codex,
+  } };
+  const swappedCheck = await assessFollowUp(swapped, await assessReview(swapped), getStorage);
+  assert.equal(swappedCheck.incompatible, 'candidate');
+  assert.equal(swappedCheck.canResolve, false);
+  assert.equal(swappedCheck.resolved, false);
+
+  const replacement = { ...baseline.chain, title: 'Altered baseline snapshot' };
+  saveInvestigation(getStorage, replacement);
+  saveWorkflowBaseline(getStorage, pin.name, replacement, await runFingerprint(replacement), pin);
+  const conflict = storage.getItem(WORKFLOW_BASELINE_KEY);
+  for (const [pinState, value] of [['conflict', conflict], ['missing', JSON.stringify({ schemaVersion: 1, baselines: [] })]]) {
+    storage.setItem(WORKFLOW_BASELINE_KEY, value);
+    const beforeFailure = storage.getItem(REVIEW_STORAGE_KEY);
+    const checked = await assessFollowUp(read(), await assessReview(read()), getStorage);
+    assert.equal(checked.pinState.status, pinState);
+    assert.equal(checked.canResolve, false);
+    assert.equal(checked.resolved, false);
+    await assert.rejects(attachCodexFollowUp(getStorage, read(), corrected), /different baseline or is unavailable/);
+    await assert.rejects(resolveReviewCase(getStorage, read()), /different baseline or is unavailable/);
+    assert.equal(storage.getItem(REVIEW_STORAGE_KEY), beforeFailure);
+    assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), value);
+  }
+
+  saveInvestigation(getStorage, baseline.chain);
+  storage.setItem(WORKFLOW_BASELINE_KEY, originalPin);
+  const raw = JSON.parse(resolved);
+  raw.items[0].followUp.codex.evidence = invalid;
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(raw));
+  const badFollowUp = await assessFollowUp(read(), await assessReview(read()), getStorage);
+  assert.equal(badFollowUp.canResolve, false);
+  assert.equal(badFollowUp.resolved, false);
+  assert.match(badFollowUp.error, /after\.md hash mismatch/);
+
+  raw.items[0].followUp.codex.evidence = corrected;
+  raw.items[0].codex.evidence.files['after.md'] = invalid.files['after.md'];
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(raw));
+  await assert.rejects(assessReview(read()), /after\.md hash mismatch/);
+  await assert.rejects(resolveReviewCase(getStorage, read()), /after\.md hash mismatch/);
 });
