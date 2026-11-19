@@ -2,11 +2,11 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.10](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.10) · [Roadmap](ROADMAP.md)
 
 ![Trace the action back to its grant. In a fictional coding run, the repository owner grants authority to the coordinator, who delegates a single-file edit to the coding agent.](docs/images/delegation-hero.svg)
 
-[Try the three-case Codex demo](#try-the-codex-run-folder-demo)
+[Try the four-folder Codex inbox demo](#try-the-codex-run-folder-demo)
 
 ## Run locally
 
@@ -20,22 +20,18 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 
 ## Try the Codex run-folder demo
 
-1. Extract **Source code (zip)** from [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9) and start the dashboard as described above.
-2. Extract the [three-case Codex run-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.9/adcp-codex-run-folder-demo-v0.1.0-alpha.9.zip) separately.
-3. Select **Import a Codex run folder**, then choose each case folder in the order below.
+Extract **Source code (zip)** from [v0.1.0-alpha.10](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.10) and start the dashboard as described above. Open it in a fresh browser profile and separately extract the [four-folder Codex inbox demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.10/adcp-codex-inbox-demo-v0.1.0-alpha.10.zip).
 
-| Folder | What to expect |
-| --- | --- |
-| `complete-capture` | **Within scope**. All seven manifest files match, and the final hop shows the completed write and its grant. |
-| `missing-grant` | **Unverifiable**. The manifest checks pass, and both editor hops identify the missing delegated grant. |
-| `altered-receipt` | The importer reports an `after.md` hash mismatch. The two saved runs remain available. |
+1. **Pin the baseline.** Select **Import a Codex run folder** and choose `complete-capture`. Open **Compare runs**, select the imported run under **Baseline run**, and expand **Save or replace a workflow baseline**. Enter **Demo Codex** as the workflow name and select **Save baseline**.
+2. **Save the clean case.** Import `clean-candidate`. Choose **Demo Codex** under **Compare against pinned baseline** and select **Compare and save to inbox**. The verdict is **No regression found**.
+3. **Save the missing-grant case.** Import `missing-grant` and repeat the comparison against **Demo Codex**. The verdict is **Needs review**. Inspect the editor’s read and write, choose **Evidence needed**, enter a reason, and select **Save decision**.
+4. **Try the altered receipt.** Import `altered-receipt`. An `after.md` hash mismatch stops the import before it creates a third case.
 
-Reload and reopen both accepted runs to verify their findings return.
-[Codex run-folder walkthrough](docs/ALPHA_REVIEW.md#try-the-codex-run-folder-demo)
+Reload at the same dashboard address. In **Regression inbox**, reopen both cases and confirm their verdicts, the missing-grant decision and its reason. Under **Inspect files and digests**, open `after.md` to see the saved evidence. [Full walkthrough](docs/ALPHA_REVIEW.md#try-the-codex-run-folder-demo)
 
 ## Try the coding-agent review demo
 
-1. Use the alpha.9 dashboard and extract the [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip).
+1. Use the alpha.10 dashboard and extract the [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip).
 2. Import `baseline.investigation.json` and pin it in **Compare runs** as **Demo coding agent**.
 3. In **Regression inbox**, import the out-of-scope and missing-grant packages,
    then record a decision for each. Attach the corrected package as a follow-up,
@@ -44,7 +40,7 @@ Reload and reopen both accepted runs to verify their findings return.
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.9 dashboard and extract the
+1. Use the alpha.10 dashboard and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. In a fresh browser profile, open **Regression inbox → Import review package
    or case**. Import the two resolved JSON files below, one at a time.
