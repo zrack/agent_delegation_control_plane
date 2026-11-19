@@ -112,6 +112,12 @@ is preserved. Without a verified closure record, even a passing follow-up stays
 open until a reviewer closes it. An altered receipt is identified on the
 affected side and prevents closure. The package uses the existing 2 MiB limit.
 
+The Codex closure checklist uses the current evidence and pin checks each time
+an open case is displayed. A failed receipt names its capture and file when
+available. Checklist navigation opens evidence or moves focus to an existing
+control. Pin adoption, attaching a corrected folder, and closing the case each
+require their own reviewer action.
+
 ## Optional actual-agent workflow
 
 ![Actual agent workflow sequence](docs/architecture/diagrams/agent-workflow.svg)

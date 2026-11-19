@@ -35,6 +35,19 @@ Start each row below in its own fresh profile or on a separate port. In **Invest
 
 [Portable case browser validation](CODEX_PORTABLE_CASE_VALIDATION.md)
 
+### Use the closure checklist in the development checkout
+
+Start the dashboard from a checkout that includes the Codex closure checklist.
+Open an **Open** case in **Regression inbox** and read its **Closure checklist**.
+Inspecting a checklist item or reloading the case preserves the workflow pin,
+saved decision, and review note.
+
+- **Missing or conflicting pin.** Inspect the included baseline before deciding whether to pin it. If a local pin already conflicts, compare its run ID and fingerprint with the case baseline. You can review the case with its original baseline in a fresh profile while keeping your current pin.
+- **Receipt mismatch.** Check which capture and file failed. For an altered original receipt, ask for a clean export of the original case and inspect it in a fresh profile. For an altered follow-up receipt, use **Attach corrected Codex folder** to supply the matching follow-up once the original evidence and pin verify.
+- **Passing follow-up left open.** Inspect the corrected evidence, then select **Close as resolved** when you decide to close the case. Reload to verify the result.
+
+[Checklist verification with the six alpha.12 scenarios](CODEX_CLOSURE_CHECKLIST_VALIDATION.md)
+
 ## Try the Codex run-folder demo
 
 To create a case yourself, keep using the alpha.12 dashboard and extract the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) separately. Start this exercise with fresh browser storage. Each folder picker takes the directory containing `manifest.json`.
