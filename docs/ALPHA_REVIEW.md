@@ -5,49 +5,32 @@ API key, account, Docker, or model calls.
 
 ## Try the Codex run-folder demo
 
-1. Extract **Source code (zip)** from [v0.1.0-alpha.9](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.9).
-   In the extracted source directory, run `python3 scripts/serve.py` with
-   Python 3.11 or newer. Open the printed address in a fresh browser profile.
-2. Extract the [three-case Codex run-folder demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.9/adcp-codex-run-folder-demo-v0.1.0-alpha.9.zip) separately.
-3. Select **Import a Codex run folder** and choose `complete-capture`.
-   Select **Import a Codex run folder** again for each of the other two cases.
-   Choose the individual folder containing `manifest.json`.
+Start with the [alpha.10 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.10). Extract **Source code (zip)**, then extract the [four-folder Codex inbox demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.10/adcp-codex-inbox-demo-v0.1.0-alpha.10.zip) separately. In the source directory, run `python3 scripts/serve.py` with Python 3.11 or newer. Open the printed address in a fresh browser profile that supports folder selection.
 
-| Folder | What to expect |
-| --- | --- |
-| `complete-capture` | **Within scope**. All seven manifest files and the action receipts verify. Open the final hop to inspect the write, the editor's grant, and its parent grant. |
-| `missing-grant` | **Unverifiable**. The supplied files pass the manifest checks. Hops 2 and 3 both identify the missing editor grant. |
-| `altered-receipt` | The import stops with an `after.md` hash mismatch. Both accepted runs are still available in **Completed chains**. |
+### Pin the baseline
 
-Reload at the same address and reopen both accepted runs. Check that **Within
-scope** and **Unverifiable** return with their supporting action and grant
-records. The [pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
-describes the seven files and what ADCP keeps in browser storage.
+Select **Import a Codex run folder** and choose `complete-capture`, the individual folder containing `manifest.json`. All seven files should verify, and the investigation should show **Within scope**. In **Compare runs**, select this run under **Baseline run**. Expand **Save or replace a workflow baseline**, enter **Demo Codex** under **Workflow name**, and select **Save baseline**. Note the run ID so you can recognize the pin after reload.
 
 ### Compare a folder and save its evidence in the inbox
 
-Use the development checkout for this exercise and the alpha.9 demo ZIP for the
-folders. Import `complete-capture`, open **Compare runs**, select that run as
-the baseline, and save it under a workflow name.
+1. **Clean candidate.** Use **Import a Codex run folder** to open `clean-candidate`. Choose **Demo Codex** under **Compare against pinned baseline** and select **Compare and save to inbox**. The inbox should show **No regression found**. This fictional variant changes the final write’s call ID and has its own run ID.
+2. **Missing grant.** Import `missing-grant`. The files pass their manifest checks, but the investigation shows **Unverifiable**. Choose **Demo Codex** and **Compare and save to inbox** again. The inbox verdict should be **Needs review**. Expand both editor actions under **Actions with missing grants**. Choose **Evidence needed**, enter a reason such as “The editor read and write reference a missing grant,” and select **Save decision**.
+3. **Altered receipt.** Import `altered-receipt`. The `after.md` hash mismatch should stop the import. The inbox should still contain the two cases you saved.
 
-1. Import `missing-grant`, choose the saved workflow under **Compare against
-   pinned baseline**, and select **Compare and save to inbox**.
-2. Open each editor action under **Actions with missing grants**. The verdict
-   should be **Needs review**. Save an **Evidence needed** decision and reason.
-3. Reload the dashboard and reopen the case. Under **Inspect files and digests**,
-   open a ledger or Markdown receipt. Five files are rechecked from saved bytes.
-   The diff and event stream show their import-time digests.
-4. Select `altered-receipt` in the folder picker. The `after.md` mismatch stops
-   the import. Reopen the existing case to verify the decision and pin.
+### Verify both cases after reload
 
-A passing comparison requires a second, distinct clean run from the same
-workflow. Selecting the baseline folder again produces the same run ID. The
-[Codex candidate validation](CODEX_CANDIDATE_VALIDATION.md) describes the clean
-candidate fixture and the measured review paths.
+Reload in the same browser profile at the same dashboard address and port. Open **Regression inbox** and inspect each entry.
+
+| Saved case | What to verify |
+| --- | --- |
+| Clean candidate | The current evidence check shows **No regression found**. Under **Inspect files and digests**, expand `after.md` and read the saved text. |
+| Missing grant | The current evidence check shows **Needs review**. The editor read and write identify the missing grant. The **Evidence needed** decision and your reason are still present. |
+
+Each case rechecks the three saved ledgers and the before/after Markdown receipts. The diff and Codex event stream show **Verified at import only**. In **Compare runs**, select **Demo Codex** under **Saved workflow** and confirm the **Baseline run** still matches the run you pinned. [Browser validation results](CODEX_CANDIDATE_VALIDATION.md) · [Pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
 
 ## Try the coding-agent review demo
 
-Use the alpha.9 dashboard from the first exercise. Extract the
+Use the alpha.10 dashboard from the first exercise. Extract the
 [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) separately.
 
 These fictional records describe a repository owner authorizing a coordinator to
@@ -92,7 +75,7 @@ Use `--output NEW_DIRECTORY` to generate another copy.
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.9 dashboard from the first exercise and extract the
+1. Use the alpha.10 dashboard from the first exercise and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. Open the printed loopback address in a fresh browser profile. In **Regression
    inbox**, choose **Import review package or case** and select
@@ -144,7 +127,7 @@ closure. Reload to verify the saved result.
 
 ## Compare and save an invoice candidate
 
-Keep using the alpha.9 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
+Keep using the alpha.10 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -188,7 +171,7 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-In the alpha.9 dashboard, open a resolved invoice case and expand
+In the alpha.10 dashboard, open a resolved invoice case and expand
 **Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
@@ -209,7 +192,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.9 dashboard started above for this exercise. The
+Use the alpha.10 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 
