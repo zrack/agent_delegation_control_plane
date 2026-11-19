@@ -74,6 +74,20 @@ The normal saved-run store keeps the normalized action, grant and receipt
 references. The browser hashes the diff and Codex event stream at import time.
 Keep the original capture for inspection of the file bytes.
 
+After import, **Compare and save to inbox** checks the candidate against a named
+workflow's pinned baseline. It verifies the baseline fingerprint and rejects a
+candidate with the same run ID. The inbox stores both normalized runs, the
+report, all seven manifest digests and exact bytes for the three ledgers and
+the before/after Markdown files. The capture diff and Codex event stream are
+represented by their import-time digests.
+
+Reopening the entry rehashes the five retained files, verifies the tool
+receipts, reconstructs the candidate and compares both runs with the saved
+report fingerprints. The reviewer can inspect a missing grant at each affected
+action, record a decision, or mark the run reviewed. Receipt bytes count toward
+the existing 2 MiB inbox limit. Package and case downloads contain normalized
+run evidence. The local receipt snapshot is specific to the inbox entry.
+
 ## Optional actual-agent workflow
 
 ![Actual agent workflow sequence](docs/architecture/diagrams/agent-workflow.svg)

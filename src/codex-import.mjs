@@ -12,6 +12,10 @@ const fileLimits = {
   'codex-events.jsonl': 512 * KiB,
 };
 
+const captureNames = Object.keys(fileLimits);
+const ledgerNames = ['actions.jsonl', 'grants.jsonl', 'attempts.jsonl'];
+const receiptNames = [...ledgerNames, 'before.md', 'after.md'];
+
 const evidenceTools = {
   preflight_read: { action: 'file:read', receipt: 'before.md' },
   read_quickstart: { action: 'file:read', receipt: 'before.md', recordsAttempt: true },
@@ -49,12 +53,21 @@ async function readFile(files, name, limit) {
 }
 
 async function digest(bytes) {
+  if (!globalThis.crypto?.subtle) throw new Error('Open the dashboard on localhost to verify file digests.');
   const hash = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
   return Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function hasExactKeys(value, keys) {
+  return object(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+}
+
+function validHashes(hashes) {
+  return hasExactKeys(hashes, captureNames)
+    && captureNames.every(name => typeof hashes[name] === 'string' && digestPattern.test(hashes[name]));
+}
+
 function readManifest(bytes) {
-  const names = Object.keys(fileLimits);
   let raw;
   let manifest;
   try {
@@ -65,9 +78,7 @@ function readManifest(bytes) {
   }
   // Values must be digests. Counting key tokens also rejects duplicate JSON
   // keys that JSON.parse would otherwise silently discard.
-  if (!object(manifest) || Object.keys(manifest).length !== names.length
-    || [...raw.matchAll(/"(?:[^"\\]|\\.)*"\s*:/g)].length !== names.length
-    || !names.every(name => Object.hasOwn(manifest, name) && typeof manifest[name] === 'string' && digestPattern.test(manifest[name]))) {
+  if (!validHashes(manifest) || [...raw.matchAll(/"(?:[^"\\]|\\.)*"\s*:/g)].length !== captureNames.length) {
     throw new Error('manifest.json must list exactly the seven Codex capture files with one SHA-256 digest each.');
   }
   return manifest;
@@ -118,18 +129,32 @@ function checkReceipts(actions, attempts, manifest) {
   if (completed.size) throw new Error('attempts.jsonl contains a completed call without an action record.');
 }
 
-export async function importCodexFolder(files) {
-  if (!globalThis.crypto?.subtle) throw new Error('Open the dashboard on localhost to verify file digests.');
-  const selected = selectFiles(files);
-  const manifest = readManifest(await readFile(selected, 'manifest.json', 8 * KiB));
-  const names = Object.keys(fileLimits);
-  const verified = new Map();
-  for (const name of names) {
-    const bytes = await readFile(selected, name, fileLimits[name]);
-    if (await digest(bytes) !== manifest[name]) throw new Error(`${name} hash mismatch against manifest.json.`);
-    if (name === 'actions.jsonl' || name === 'grants.jsonl' || name === 'attempts.jsonl') verified.set(name, bytes);
-  }
+async function verifyFile(name, bytes, hashes) {
+  if (await digest(bytes) !== hashes[name]) throw new Error(`${name} hash mismatch against manifest.json.`);
+}
 
+function encodeFile(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 8192));
+  }
+  return btoa(binary);
+}
+
+function decodeFile(contents, name) {
+  const limit = fileLimits[name];
+  if (typeof contents === 'string' && contents.length <= 4 * Math.ceil(limit / 3)) {
+    let binary;
+    try { binary = atob(contents); } catch { /* Invalid base64. */ }
+    if (binary !== undefined && binary.length <= limit && btoa(binary) === contents) {
+      return Uint8Array.from(binary, char => char.charCodeAt(0));
+    }
+  }
+  throw new Error(`Invalid or oversized saved Codex receipt for ${name}.`);
+}
+
+async function deriveChain(verified, manifest) {
   const actions = readRecords(verified.get('actions.jsonl'), 'actions.jsonl');
   const grants = readRecords(verified.get('grants.jsonl'), 'grants.jsonl');
   const attempts = readRecords(verified.get('attempts.jsonl'), 'attempts.jsonl');
@@ -144,12 +169,43 @@ export async function importCodexFolder(files) {
     ? { id: 'unverified-principal', name: 'Principal unavailable' } : { id: supportedPrincipal };
   // Use the verified digest set to keep changed captures separate, even when
   // the original action and grant IDs are reused in a comparison.
-  const fingerprint = await digest(new TextEncoder().encode(names.map(name => manifest[name]).join('\n')));
-  const chain = parseInvestigation(JSON.stringify({ schemaVersion: 1, chain: {
+  const fingerprint = await digest(new TextEncoder().encode(captureNames.map(name => manifest[name]).join('\n')));
+  return parseInvestigation(JSON.stringify({ schemaVersion: 1, chain: {
     id: `CODEX-${fingerprint}`,
     title: `Codex run · ${root.id.replace(/-inspect$/, '')}`,
     source: 'Codex pilot capture folder',
     principal, rootGrantId: root.authorityId, events: actions, grants,
   } }));
-  return { chain, verifiedFileCount: names.length };
+}
+
+export async function importCodexFolder(files, { retainEvidence = false } = {}) {
+  const selected = selectFiles(files);
+  const hashes = readManifest(await readFile(selected, 'manifest.json', 8 * KiB));
+  const verified = new Map();
+  const snapshotFiles = {};
+  for (const name of captureNames) {
+    const bytes = await readFile(selected, name, fileLimits[name]);
+    await verifyFile(name, bytes, hashes);
+    if (ledgerNames.includes(name)) verified.set(name, bytes);
+    if (retainEvidence && receiptNames.includes(name)) snapshotFiles[name] = encodeFile(bytes);
+  }
+  const result = { chain: await deriveChain(verified, hashes), verifiedFileCount: captureNames.length };
+  if (retainEvidence) result.evidence = { hashes, files: snapshotFiles };
+  return result;
+}
+
+// Rehash the retained ledgers and document receipts. The diff and Codex event
+// stream were checked at import; their digests still contribute to the run ID.
+export async function assessCodexEvidence(evidence) {
+  if (!hasExactKeys(evidence, ['hashes', 'files']) || !validHashes(evidence.hashes)
+    || !hasExactKeys(evidence.files, receiptNames)) throw new Error('The saved Codex receipt snapshot is invalid.');
+  const hashes = Object.fromEntries(captureNames.map(name => [name, evidence.hashes[name]]));
+  const files = Object.fromEntries(receiptNames.map(name => [name, evidence.files[name]]));
+  const verified = new Map();
+  for (const name of receiptNames) {
+    const bytes = decodeFile(files[name], name);
+    await verifyFile(name, bytes, hashes);
+    if (ledgerNames.includes(name)) verified.set(name, bytes);
+  }
+  return { chain: await deriveChain(verified, hashes), verifiedFileCount: receiptNames.length, evidence: { hashes, files } };
 }

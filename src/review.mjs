@@ -1,5 +1,6 @@
 // Reports are recorded claims. Only matching evidence can reproduce a verdict.
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
+import { assessCodexEvidence } from './codex-import.mjs';
 import { evaluateChain } from './evaluator.mjs';
 import { parseInvestigation } from './import.mjs';
 import { assessInvoiceFolder, portableInvoiceEvidence } from './invoice-import.mjs';
@@ -19,7 +20,7 @@ const caseKind = 'adcp-review-case';
 const invoiceCaseKind = 'adcp-invoice-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
-const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'suppliedBaseline'];
+const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'codex', 'suppliedBaseline'];
 const bytes = value => new TextEncoder().encode(value).length;
 const isId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(value);
 const isFingerprint = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -102,6 +103,11 @@ export async function createReviewCase(item, note, { includeInvoiceReceipts = fa
   const withReceipts = Boolean(item.invoice && includeInvoiceReceipts === true);
   const bundle = await reviewBundle(withReceipts ? invoiceCaseKind : caseKind, item.report, item, note);
   if (item.decision) bundle.decision = validateDecision(item.decision.kind, item.decision.reason);
+  if (item.codex) {
+    // The portable format carries normalized runs and a decision only.
+    await assessReview(item);
+    return serializeBundle(bundle);
+  }
   if (item.invoice && !withReceipts) return serializeBundle(bundle);
   const original = await assessReview(item);
   const { assessment, invoice, originalInvoice, resolved } = await assessFollowUp(item, original);
@@ -185,6 +191,10 @@ function readReviews(storage) {
       if (!isFingerprint(item.resolution)) throw new Error('The saved resolution is invalid.');
       restored.resolution = item.resolution;
     }
+    if (item.codex !== undefined) {
+      if (!item.codex || item.invoice !== undefined) throw new Error('The saved Codex snapshot is invalid.');
+      restored.codex = item.codex;
+    }
     if (item.invoice !== undefined) {
       restored.invoice = item.invoice;
       if (isId(item.suppliedBaseline?.runId) && isFingerprint(item.suppliedBaseline?.fingerprint)) {
@@ -209,7 +219,8 @@ function writeReviews(storage, items) {
   return items;
 }
 
-function reviewId(report, invoice) {
+function reviewId(report, invoice, codex) {
+  if (codex) return runFingerprint({ report, workflow: codex.workflow, codexEvidenceFingerprint: codex.fingerprint });
   return runFingerprint(invoice ? { report, workflow: invoice.workflow, outputAtImport: invoice.outputAtImport, receiptFingerprint: invoice.fingerprint } : report);
 }
 
@@ -225,13 +236,13 @@ export async function assessSavedInvoice(item) {
   return checked;
 }
 
-async function invoiceComparison(baseline, fingerprint, workflow, evidence, { candidate, output }) {
+async function comparisonReport(baseline, fingerprint, candidate) {
   if (baseline.id === candidate.id) throw new Error('Choose a candidate with a different run ID from the baseline.');
   const original = evaluateChain(baseline);
   if (!canPinBaseline(baseline, original)) throw new Error('The pinned baseline no longer qualifies for comparison.');
   const next = evaluateChain(candidate);
   const { status, reasons } = checkRegression(compareRuns(baseline, candidate, original, next), next);
-  const report = parseRegressionReport(JSON.stringify({
+  return parseRegressionReport(JSON.stringify({
     schemaVersion: 1, status,
     reasons: reasons.map(({ impact, message, eventId, row }) => ({
       impact, message, baselineEventId: row?.eventLinks?.[0], candidateEventId: eventId ?? row?.eventLinks?.[1],
@@ -239,13 +250,26 @@ async function invoiceComparison(baseline, fingerprint, workflow, evidence, { ca
     baselineId: baseline.id, baselineFingerprint: fingerprint,
     candidateId: candidate.id, candidateFingerprint: await runFingerprint(candidate),
   }));
-  const invoice = { workflow, outputAtImport: output.label, evidence, fingerprint: await runFingerprint(evidence) };
-  return { id: await reviewId(report, invoice), report, candidate, invoice };
+}
+
+async function invoiceSnapshot(workflow, evidence, output) {
+  return { workflow, outputAtImport: output.label, evidence, fingerprint: await runFingerprint(evidence) };
 }
 
 export async function saveInvoiceCandidate(getStorage, pin, evidence) {
   const { candidate, output } = await assessInvoiceFolder(evidence);
   if (!candidate) throw new Error('The candidate needs an investigation that matches the invoice manifest.');
+  const invoice = await invoiceSnapshot(pin.name, evidence, output);
+  return saveFolderCandidate(getStorage, pin, candidate, { invoice });
+}
+
+export async function saveCodexCandidate(getStorage, pin, evidence) {
+  const checked = await assessCodexEvidence(evidence);
+  const codex = { workflow: pin.name, evidence: checked.evidence, fingerprint: await runFingerprint(checked.evidence) };
+  return saveFolderCandidate(getStorage, pin, checked.chain, { codex });
+}
+
+async function saveFolderCandidate(getStorage, pin, candidate, snapshot) {
   const readPin = () => restoreWorkflowBaselines(getStorage).baselines.find(item => workflowKey(item.name) === workflowKey(pin.name));
   const readBaseline = () => restoreInvestigations(getStorage).chains.find(chain => chain.id === pin.runId);
   const pinChanged = () => {
@@ -256,7 +280,8 @@ export async function saveInvoiceCandidate(getStorage, pin, evidence) {
   if (!baseline || await runFingerprint(baseline) !== pin.fingerprint) {
     throw new Error('Reimport the original investigation for this pinned baseline.');
   }
-  const { id, report, invoice } = await invoiceComparison(baseline, pin.fingerprint, pin.name, evidence, { candidate, output });
+  const report = await comparisonReport(baseline, pin.fingerprint, candidate);
+  const id = await reviewId(report, snapshot.invoice, snapshot.codex);
   // Check again after hashing so a concurrent pin or baseline change cannot
   // save a comparison against a run the reviewer did not select.
   const storage = getStorage();
@@ -266,7 +291,7 @@ export async function saveInvoiceCandidate(getStorage, pin, evidence) {
     throw new Error('The saved baseline investigation changed. Reimport the original run before trying again.');
   }
   const current = items.find(item => item.id === id);
-  const item = { note: '', reviewed: false, ...current, id, report, baseline, candidate, invoice };
+  const item = { note: '', reviewed: false, ...current, id, report, baseline, candidate, ...snapshot };
   writeReviews(storage, [item, ...items.filter(record => record.id !== id)]);
   return id;
 }
@@ -428,6 +453,7 @@ function distinctCandidate(original, followUp) {
 }
 
 export async function attachReviewFollowUp(getStorage, expected, contents) {
+  if (expected.codex) throw new Error('Codex folder cases support decisions and notes. Folder follow-up is unavailable.');
   if (expected.invoice) throw new Error('Attach an invoice folder to recheck its receipts.');
   if (!expected.decision) throw new Error('Save a review decision first.');
   const { reportText, evidence } = readReviewPackage(contents);
@@ -494,8 +520,9 @@ export async function attachInvoiceFollowUp(getStorage, expected, evidence) {
   const corrected = await assessInvoiceFolder(evidence);
   if (original.caseId !== corrected.caseId) throw new Error('Choose a follow-up folder for the same invoice case.');
   if (!corrected.candidate) throw new Error('The follow-up needs an investigation that matches its manifest.');
-  const followUp = await invoiceComparison(expected.baseline, expected.report.baselineFingerprint,
-    expected.invoice.workflow, evidence, corrected);
+  const report = await comparisonReport(expected.baseline, expected.report.baselineFingerprint, corrected.candidate);
+  const invoice = await invoiceSnapshot(expected.invoice.workflow, evidence, corrected.output);
+  const followUp = { id: await reviewId(report, invoice), report, candidate: corrected.candidate, invoice };
   if (!sameInvoiceCandidate(expected.report, followUp.report)) {
     throw new Error('The follow-up changed the investigation under the original run ID. Use the original investigation or a new run ID.');
   }
@@ -517,7 +544,7 @@ export async function assessFollowUp(item, original, getStorage) {
   const pinState = item.invoice && getStorage ? invoicePinState(getStorage, item) : undefined;
   const pinChanged = Boolean(pinState && pinState.status !== 'matched');
   const open = { originalInvoice, flagged, pinState, pinChanged, canResolve: false, resolved: false };
-  if (!followUp) return open;
+  if (!followUp || item.codex) return open;
   if (!sameBaseline(item.report, followUp.report)) return { ...open, incompatible: 'baseline' };
   const compatible = item.invoice ? followUp.invoice && sameInvoiceCandidate(item.report, followUp.report)
     : !followUp.invoice && distinctCandidate(item.report, followUp.report);
@@ -607,7 +634,16 @@ export async function resolveReviewCase(getStorage, expected) {
 
 export async function assessReview(item) {
   const { report, baseline, candidate } = item;
-  if (await reviewId(report, item.invoice) !== item.id) throw new Error('The saved report no longer matches this inbox item.');
+  if (await reviewId(report, item.invoice, item.codex) !== item.id) throw new Error('The saved report no longer matches this inbox item.');
+  let codex;
+  if (item.codex) {
+    const checked = await assessCodexEvidence(item.codex.evidence);
+    if (await runFingerprint(checked.evidence) !== item.codex.fingerprint
+      || await evidenceState(report, 'candidate', checked.chain) !== 'matched') {
+      throw new Error('Saved Codex evidence no longer matches the candidate snapshot. Reimport the original folder.');
+    }
+    codex = checked;
+  }
   const states = {
     baseline: await evidenceState(report, 'baseline', baseline),
     candidate: await evidenceState(report, 'candidate', candidate),
@@ -617,5 +653,7 @@ export async function assessReview(item) {
   if (baseline.id === candidate.id || !canPinBaseline(baseline, baselineResult)) return { states };
   const candidateResult = evaluateChain(candidate);
   const groups = compareRuns(baseline, candidate, baselineResult, candidateResult);
-  return { states, groups, candidateResult, verdict: checkRegression(groups, candidateResult) };
+  const assessment = { states, groups, candidateResult, verdict: checkRegression(groups, candidateResult) };
+  if (codex) assessment.codex = codex;
+  return assessment;
 }
