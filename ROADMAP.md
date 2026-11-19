@@ -1,24 +1,20 @@
 # Roadmap
 
-The public alpha now lets a reviewer close a flagged Codex run with a corrected folder. The inbox retains the original finding and decision alongside the follow-up grant ledger. [v0.1.0-alpha.11 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.11)
+Alpha.12 lets a second reviewer verify a Codex case in their own browser. The sender can include the original and corrected receipts in one case file. The recipient checks those receipts, the recorded closure, and the local workflow pin. [v0.1.0-alpha.12 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.12)
 
 ## Coding-agent review
 
-Start with the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) and the [first-use walkthrough](docs/ALPHA_REVIEW.md#try-the-codex-run-folder-demo). Pin `complete-capture` and save the `missing-grant` case against it. The demo exercises three outcomes on that case.
+Start with the [portable Codex demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.12/adcp-portable-codex-review-demo-v0.1.0-alpha.12.zip). In a fresh profile, import `cases/resolved.json` without a workflow pin and reload. The case stays **Open** until you inspect and pin the included baseline. Reload again to verify **Resolved**. [First-use walkthrough](docs/ALPHA_REVIEW.md#try-the-portable-codex-review-demo)
 
-| Evidence or pin change | Case after reload |
-| --- | --- |
-| Attach `altered-receipt`. Its `after.md` digest differs from the manifest. | **Open**. Attachment fails and the saved decision remains. |
-| Attach `clean-candidate` and inspect the restored editor grant. | **Open** until the reviewer selects **Close as resolved**. After closure, **Resolved** with both ledgers available. |
-| Replace the same workflow’s pin with the corrected run after closing the case. | **Open**. Closure is disabled and the replacement pin is preserved. |
+The same file restores **Resolved** with a matching **Follow-up review** pin. A conflicting pin keeps it **Open** and preserves the recipient’s pin. Altering either the original or corrected `after.md` keeps the case **Open** and disables closure. A passing follow-up the sender left open also stays **Open** after reload, with **Close as resolved** available to the recipient. [Portable case validation](docs/CODEX_PORTABLE_CASE_VALIDATION.md)
 
-The [Codex follow-up validation](docs/CODEX_FOLLOWUP_VALIDATION.md) records the browser checks. The [sandbox validation report](docs/SANDBOX_VALIDATION.md) covers the invoice pilot.
+The [sandbox validation report](docs/SANDBOX_VALIDATION.md) covers the invoice pilot.
 
 ## Next evidence gates
 
 1. **Observe first use.** Ask a small group of engineers to start with the
-   alpha.11 corrected-folder demo. Record setup time, where they need help, and
-   whether they can explain why a passing follow-up permits closure and a changed pin reopens the case.
+   alpha.12 portable Codex demo. Record where recipients need help inspecting or adopting
+   the baseline, how long those steps take, and whether they can explain why each case stayed open or resolved.
 2. **Compare one permissioned workflow.** Freeze a completed record set and
    compare the dashboard with the investigator's existing method. Record accuracy,
    time to prepare and review the records, missed issues, and results that stayed
