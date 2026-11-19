@@ -28,6 +28,20 @@ Reload in the same browser profile at the same dashboard address and port. Open 
 
 Each case rechecks the three saved ledgers and the before/after Markdown receipts. The diff and Codex event stream show **Verified at import only**. In **Compare runs**, select **Demo Codex** under **Saved workflow** and confirm the **Baseline run** still matches the run you pinned. [Browser validation results](CODEX_CANDIDATE_VALIDATION.md) · [Pilot folder format](../ARCHITECTURE.md#offline-codex-run-folder)
 
+### Close the missing-grant case in the development checkout
+
+Run the dashboard from a checkout that includes corrected Codex follow-ups. Use
+the same four folders from the alpha.10 ZIP and the **Demo Codex** baseline you
+pinned above.
+
+1. Open the **Needs review** case in **Regression inbox**. Save the **Evidence needed** decision and its reason if you haven't already.
+2. Under **Attach corrected Codex folder**, first choose `altered-receipt`. The dashboard identifies the `after.md` mismatch. The case stays **Open**.
+3. Use the same picker to choose `clean-candidate`. Expand **Inspect follow-up evidence** and open its `grants.jsonl`. Compare the restored editor grant with the missing grant on the original editor read and write. The original result is **Needs review** and the follow-up is **No regression found**.
+4. Select **Close as resolved**, then reload the page. Check that the badge still reads **Resolved** and that you can inspect both grant ledgers. The original finding stays in the case.
+5. To test the pin guard after closure, replace the **Demo Codex** baseline with the clean candidate in **Compare runs**. Reopen the same inbox case and reload. It should read **Open**, with **Close as resolved** disabled. The replacement pin remains selected for that workflow.
+
+See the [browser validation results for corrected folders](CODEX_FOLLOWUP_VALIDATION.md) for the saved-receipt and cross-tab checks.
+
 ## Try the coding-agent review demo
 
 Use the alpha.10 dashboard from the first exercise. Extract the

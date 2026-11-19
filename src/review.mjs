@@ -186,6 +186,7 @@ function readReviews(storage) {
       restored.followUp = { id: item.followUp.id, report: parseRegressionReport(JSON.stringify(item.followUp.report)),
         candidate: normalizeEvidence(item.followUp.candidate) };
       if (item.followUp.invoice !== undefined) restored.followUp.invoice = item.followUp.invoice;
+      if (item.followUp.codex !== undefined) restored.followUp.codex = item.followUp.codex;
     }
     if (item.resolution !== undefined) {
       if (!isFingerprint(item.resolution)) throw new Error('The saved resolution is invalid.');
@@ -263,10 +264,15 @@ export async function saveInvoiceCandidate(getStorage, pin, evidence) {
   return saveFolderCandidate(getStorage, pin, candidate, { invoice });
 }
 
-export async function saveCodexCandidate(getStorage, pin, evidence) {
+async function codexSnapshot(workflow, evidence) {
   const checked = await assessCodexEvidence(evidence);
-  const codex = { workflow: pin.name, evidence: checked.evidence, fingerprint: await runFingerprint(checked.evidence) };
-  return saveFolderCandidate(getStorage, pin, checked.chain, { codex });
+  const codex = { workflow, evidence: checked.evidence, fingerprint: await runFingerprint(checked.evidence) };
+  return { candidate: checked.chain, codex };
+}
+
+export async function saveCodexCandidate(getStorage, pin, evidence) {
+  const { candidate, codex } = await codexSnapshot(pin.name, evidence);
+  return saveFolderCandidate(getStorage, pin, candidate, { codex });
 }
 
 async function saveFolderCandidate(getStorage, pin, candidate, snapshot) {
@@ -332,7 +338,7 @@ async function importInvoiceCase(getStorage, incoming, bundle, warnings) {
     // A conflicting local pin takes precedence and leaves the imported case open.
     const { baselines, warning } = restoreWorkflowBaselines(getStorage);
     const pin = baselines.find(pin => workflowKey(pin.name) === workflowKey(incoming.invoice.workflow));
-    if (warning || (pin && !invoicePinMatches(getStorage, incoming))) {
+    if (warning || (pin && !folderPinMatches(getStorage, incoming))) {
       warnings.push('The saved workflow uses a different baseline or could not be read. Closure was not restored.');
     } else if (resolution && bundle.resolution === resolution) incoming.resolution = resolution;
     else warnings.push('Invoice closure could not be verified.');
@@ -453,7 +459,7 @@ function distinctCandidate(original, followUp) {
 }
 
 export async function attachReviewFollowUp(getStorage, expected, contents) {
-  if (expected.codex) throw new Error('Codex folder cases support decisions and notes. Folder follow-up is unavailable.');
+  if (expected.codex) throw new Error('Codex folder cases require a follow-up folder with its receipts.');
   if (expected.invoice) throw new Error('Attach an invoice folder to recheck its receipts.');
   if (!expected.decision) throw new Error('Save a review decision first.');
   const { reportText, evidence } = readReviewPackage(contents);
@@ -493,28 +499,28 @@ function sameInvoiceCandidate(original, followUp) {
     ? followUp.candidateFingerprint === original.candidateFingerprint : distinctCandidate(original, followUp);
 }
 
-function invoicePinState(getStorage, item) {
+function folderPinState(getStorage, item) {
   const { baselines, warning } = restoreWorkflowBaselines(getStorage);
   if (warning) return { status: 'unreadable' };
-  const pin = baselines.find(pin => workflowKey(pin.name) === workflowKey(item.invoice.workflow));
+  const pin = baselines.find(pin => workflowKey(pin.name) === workflowKey((item.codex ?? item.invoice).workflow));
   if (!pin) return { status: 'missing' };
   const matching = pin.runId === item.report.baselineId && pin.fingerprint === item.report.baselineFingerprint;
   return { status: matching ? 'matched' : 'conflict', pin };
 }
 
-function invoicePinMatches(getStorage, item) {
-  return invoicePinState(getStorage, item).status === 'matched';
+function folderPinMatches(getStorage, item) {
+  return folderPinState(getStorage, item).status === 'matched';
 }
 
-function requireInvoicePin(getStorage, item) {
-  if (!invoicePinMatches(getStorage, item)) {
+function requireFolderPin(getStorage, item) {
+  if (!folderPinMatches(getStorage, item)) {
     throw new Error('The workflow uses a different baseline or is unavailable. Restore the original pin before continuing.');
   }
 }
 
 export async function attachInvoiceFollowUp(getStorage, expected, evidence) {
   if (!expected.invoice || !expected.decision) throw new Error('Save an invoice review decision first.');
-  requireInvoicePin(getStorage, expected);
+  requireFolderPin(getStorage, expected);
   if (!(await assessReview(expected)).verdict) throw new Error('Restore the original baseline and candidate evidence.');
   const original = await assessSavedInvoice(expected);
   const corrected = await assessInvoiceFolder(evidence);
@@ -527,12 +533,42 @@ export async function attachInvoiceFollowUp(getStorage, expected, evidence) {
     throw new Error('The follow-up changed the investigation under the original run ID. Use the original investigation or a new run ID.');
   }
 
-  requireInvoicePin(getStorage, expected);
+  requireFolderPin(getStorage, expected);
   const resolution = expected.followUp?.id === followUp.id ? expected.resolution : undefined;
   return updateCase(getStorage, expected, { followUp, resolution });
 }
 
-const resolutionFor = item => item.invoice
+function sameCodexWork(original, candidate) {
+  // The importer verifies a single preflight action against before.md. Event
+  // and tool-call identifiers can change between runs of the same task.
+  const preflight = chain => chain.events.find(event => event.parentEventId === null && event.evidence.tool === 'preflight_read');
+  const before = preflight(original);
+  const after = preflight(candidate);
+  return before && after && before.actor === after.actor && before.action.resource === after.action.resource
+    && before.evidence.artifactSha256 === after.evidence.artifactSha256;
+}
+
+export async function attachCodexFollowUp(getStorage, expected, evidence) {
+  if (!expected.codex || !expected.decision) throw new Error('Save a Codex review decision before attaching a follow-up folder.');
+  requireFolderPin(getStorage, expected);
+  const original = await assessReview(expected);
+  if (!original.codex || !original.verdict || original.verdict.status === 'pass') {
+    throw new Error('The original Codex comparison must reproduce a flagged result before attaching a follow-up.');
+  }
+
+  const { candidate, codex } = await codexSnapshot(expected.codex.workflow, evidence);
+  if (!sameCodexWork(original.codex.chain, candidate)) {
+    throw new Error('Choose a Codex follow-up for the same preflight actor, resource and starting document.');
+  }
+  const report = await comparisonReport(expected.baseline, expected.report.baselineFingerprint, candidate);
+  if (!distinctCandidate(expected.report, report)) throw new Error('Choose a follow-up with its own candidate run ID.');
+  const followUp = { id: await reviewId(report, undefined, codex), report, candidate, codex };
+  requireFolderPin(getStorage, expected);
+  const resolution = expected.followUp?.id === followUp.id ? expected.resolution : undefined;
+  return updateCase(getStorage, expected, { followUp, resolution });
+}
+
+const resolutionFor = item => item.invoice || item.codex
   ? runFingerprint({ original: item.id, decision: item.decision, followUp: item.followUp.id })
   : item.followUp.id;
 
@@ -541,23 +577,37 @@ export async function assessFollowUp(item, original, getStorage) {
   const originalInvoice = item.invoice ? await inspectInvoice(item) : undefined;
   const flagged = Boolean((original.verdict && original.verdict.status !== 'pass')
     || (originalInvoice && !invoicePasses(originalInvoice.checked)));
-  const pinState = item.invoice && getStorage ? invoicePinState(getStorage, item) : undefined;
+  const pinState = item.codex || (item.invoice && getStorage) ? folderPinState(getStorage, item) : undefined;
   const pinChanged = Boolean(pinState && pinState.status !== 'matched');
   const open = { originalInvoice, flagged, pinState, pinChanged, canResolve: false, resolved: false };
-  if (!followUp || item.codex) return open;
+  if (!followUp) return open;
   if (!sameBaseline(item.report, followUp.report)) return { ...open, incompatible: 'baseline' };
-  const compatible = item.invoice ? followUp.invoice && sameInvoiceCandidate(item.report, followUp.report)
-    : !followUp.invoice && distinctCandidate(item.report, followUp.report);
+  if (Boolean(item.codex) !== Boolean(followUp.codex) || Boolean(item.invoice) !== Boolean(followUp.invoice)
+    || (item.codex && item.codex.workflow !== followUp.codex.workflow)) return { ...open, incompatible: 'candidate' };
+  const compatible = item.invoice ? sameInvoiceCandidate(item.report, followUp.report) : distinctCandidate(item.report, followUp.report);
   if (!compatible) return { ...open, incompatible: 'candidate' };
 
   const record = { ...followUp, baseline: item.baseline };
-  const assessment = await assessReview(record).catch(() => undefined);
+  let assessment;
+  try { assessment = await assessReview(record); }
+  catch (error) {
+    if (item.codex) return { ...open, error: error.message };
+  }
+  if (item.codex && (!original.codex || !assessment?.codex
+    || !sameCodexWork(original.codex.chain, assessment.codex.chain))) return { ...open, assessment, incompatible: 'candidate' };
   const invoice = followUp.invoice ? await inspectInvoice(record) : undefined;
   const passingFollowUp = item.invoice ? invoiceFollowUpPasses(item, { assessment, invoice, originalInvoice })
     : followUp.report.status === 'pass' && assessment?.verdict?.status === 'pass';
   const passes = Boolean(item.decision && original.verdict && flagged && passingFollowUp);
-  return { ...open, assessment, invoice, passes, canResolve: passes && !pinChanged,
-    resolved: passes && item.resolution === await resolutionFor(item) };
+  const resolved = passes && item.resolution === await resolutionFor(item);
+  if (item.codex) {
+    // Reload and explicit closure both require the original pin. Read it after
+    // receipt verification so a change during hashing cannot restore closure.
+    const pinState = folderPinState(getStorage, item);
+    const pinChanged = pinState.status !== 'matched';
+    return { ...open, assessment, pinState, pinChanged, passes, canResolve: passes && !pinChanged, resolved: resolved && !pinChanged };
+  }
+  return { ...open, assessment, invoice, passes, canResolve: passes && !pinChanged, resolved };
 }
 
 function invoiceFollowUpPasses(item, checked) {
@@ -614,7 +664,7 @@ export async function previewInvoiceEvidenceRestore(getStorage, item, contents) 
   if (!restored.length) throw new Error('The saved case already has matching evidence.');
   if (!checks.passes) throw new Error('The restored evidence does not reproduce an open case with a passing follow-up.');
 
-  return { restored, changes, pinState: invoicePinState(getStorage, item) };
+  return { restored, changes, pinState: folderPinState(getStorage, item) };
 }
 
 export async function restoreInvoiceEvidence(getStorage, expected, contents) {
@@ -623,12 +673,13 @@ export async function restoreInvoiceEvidence(getStorage, expected, contents) {
 }
 
 export async function resolveReviewCase(getStorage, expected) {
-  const { canResolve } = await assessFollowUp(expected, await assessReview(expected));
+  if (expected.codex) requireFolderPin(getStorage, expected);
+  const { canResolve } = await assessFollowUp(expected, await assessReview(expected), expected.codex ? getStorage : undefined);
   if (!canResolve) throw new Error(expected.invoice
     ? 'Closure requires matching baseline evidence and a passing invoice follow-up with verified receipts.'
     : 'Resolution requires a passing follow-up with matching evidence against the original pinned baseline.');
   const resolution = await resolutionFor(expected);
-  if (expected.invoice) requireInvoicePin(getStorage, expected);
+  if (expected.codex || expected.invoice) requireFolderPin(getStorage, expected);
   return updateCase(getStorage, expected, { resolution });
 }
 

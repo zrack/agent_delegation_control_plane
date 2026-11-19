@@ -1,9 +1,10 @@
 import { regressionLabels } from './comparison.mjs';
+import { importCodexFolder } from './codex-import.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
-import { restoreWorkflowBaselines } from './storage.mjs';
+import { restoreWorkflowBaselines, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
-  assessFollowUp, assessReview, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
+  assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
   previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from './review.mjs';
@@ -184,7 +185,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       </form>`;
   }
 
-  function codexFolderEvidence({ codex, candidateResult }) {
+  function codexFolderEvidence({ codex, candidateResult }, side = 'original') {
+    const heading = side === 'original' ? 'codex-evidence-title' : 'codex-follow-up-title';
     const { hashes, files } = codex.evidence;
     const grants = candidateResult.findings.filter(finding => finding.code === 'GRANT_MISSING');
     const missing = grants.map(({ eventId, grantId }) => {
@@ -196,12 +198,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const rows = Object.entries(hashes).map(([name, hash]) => {
       const retained = Object.hasOwn(files, name);
       const summary = `<code>${escape(name)}</code> · ${retained ? 'Rechecked from saved bytes' : 'Verified at import only'}`;
-      return retained ? `<details class="run-difference" data-codex-file="${escape(name)}">
+      return retained ? `<details class="run-difference" data-codex-file="${escape(name)}" data-codex-side="${side}" data-file-index="${records.push(files[name]) - 1}">
         <summary>${summary}</summary><code class="receipt-digest">SHA-256 ${escape(hash)}</code><pre tabindex="0"></pre></details>`
         : `<div class="codex-digest-only">${summary}<code class="receipt-digest">SHA-256 ${escape(hash)}</code></div>`;
     });
-    return `<section class="invoice-results" aria-labelledby="codex-evidence-title">
-      <h4 id="codex-evidence-title">Codex folder evidence</h4>
+    return `<section class="invoice-results" aria-labelledby="${heading}">
+      <h4 id="${heading}">${side === 'original' ? 'Codex folder evidence' : 'Corrected Codex folder evidence'}</h4>
       <p>${Object.keys(hashes).length} files matched the supplied manifest at import.
         ${codex.verifiedFileCount} saved files passed the current receipt check.</p>
       ${missing.length ? '<h4>Actions with missing grants</h4>' + missing.join('') : ''}
@@ -210,8 +212,6 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
 
   function renderCase(item, original, followUp) {
     if (item.report.status === 'pass' && !followUp.flagged && !item.decision) return '';
-    if (item.codex) return `<section class="review-case" aria-labelledby="review-case-title">
-      <h3 id="review-case-title">Review decision</h3>${decisionForm(item)}</section>`;
     const { assessment, canResolve, pinChanged, resolved } = followUp;
     const comparison = (label, record, check) => `<div class="compare-run"><h3>${label}</h3>
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
@@ -220,6 +220,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const nextStep = item.invoice && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
         : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
+        : item.codex ? 'Save a decision and attach a corrected folder for the same Codex task. A passing comparison against the original pin lets you close the case.'
         : item.invoice ? 'Save a decision and attach a folder for this invoice case. The original baseline comparison, authority, output, and execution checks must pass for the follow-up.'
           : 'To close this case, save a decision and attach a passing follow-up with matching evidence against the original baseline.';
     const followUpRecords = assessment?.states.candidate === 'matched'
@@ -231,21 +232,25 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const receiptDetails = receiptCheck?.checked ? invoiceMarkup(receiptCheck.checked)
       : receiptCheck?.error ? `<p class="import-error">${escape(receiptCheck.error)}</p>
         ${receiptCheck.receiptStates ? receiptFileChecks(receiptCheck.receiptStates) : ''}` : '';
-    const label = item.invoice ? 'Attach follow-up invoice folder' : 'Attach follow-up package';
-    const picker = item.invoice ? 'webkitdirectory' : 'accept=".json,application/json"';
-    const folderUnsupported = item.invoice && !('webkitdirectory' in invoiceInput);
+    const label = item.codex ? 'Attach corrected Codex folder' : item.invoice ? 'Attach follow-up invoice folder' : 'Attach follow-up package';
+    const folder = item.codex || item.invoice;
+    const picker = folder ? 'webkitdirectory' : 'accept=".json,application/json"';
+    const folderUnsupported = folder && !('webkitdirectory' in invoiceInput);
+    const codexError = item.codex && (followUp.error || (followUp.incompatible && 'The saved follow-up does not match this case and its original baseline.'));
     return `<section class="review-case" aria-labelledby="review-case-title">
       <div class="panel-heading"><h3 id="review-case-title">Review decision and follow-up</h3>
         <span class="badge ${resolved ? 'valid' : 'unknown'}">${resolved ? 'Resolved' : 'Open'}</span></div>
       ${item.invoice && !resolved ? invoiceClosureChecklist(item, original, followUp) : ''}
       ${decisionForm(item)}
       <label for="review-follow-up-file">${label}</label>
-      <input id="review-follow-up-file" type="file" ${picker} aria-describedby="review-case-help" ${item.decision && !folderUnsupported ? '' : 'disabled'}>
+      <input id="review-follow-up-file" type="file" ${picker} aria-describedby="review-case-help" ${item.decision && !folderUnsupported && !(item.codex && pinChanged) ? '' : 'disabled'}>
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original)}
         ${comparison('Follow-up run', item.followUp, assessment)}</div>
         ${receiptSummary}
-        ${assessment || receiptDetails ? `<details class="review-differences" id="invoice-follow-up-evidence"><summary>Inspect follow-up evidence</summary>
-          ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}</details>` : ''}` : ''}
+        ${codexError ? `<p class="import-error">${escape(codexError)}</p>` : ''}
+        ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
+          ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}
+          ${assessment?.codex ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
       ${item.invoice && !resolved && item.decision ? `<details class="review-differences" id="invoice-evidence-restore">
         <summary>Restore matching evidence</summary>
         <p class="panel-description">Choose a portable copy of this case exported with receipts to preview matching replacements.</p>
@@ -264,13 +269,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const matching = evidence.length ? ` and matching ${evidence.join(' and ')} evidence` : '';
     const contents = [];
     if (item.decision) contents.push('saved decision and reason');
-    if (!item.invoice && item.decision && followUp.assessment?.states.baseline === 'matched'
+    if (!item.invoice && !item.codex && item.decision && followUp.assessment?.states.baseline === 'matched'
       && followUp.assessment.states.candidate === 'matched') contents.push('follow-up report and evidence');
-    if (!item.invoice && followUp.resolved) contents.push('verified closure');
+    if (!item.invoice && !item.codex && followUp.resolved) contents.push('verified closure');
     const receiptOption = item.invoice && item.decision && original.verdict && followUp.originalInvoice?.checked;
     return `<details class="review-differences"><summary>Export review package or case</summary>
       <p class="panel-description">The download includes the original report${matching}.</p>
-      ${item.codex ? '<p class="panel-description">Codex folder receipt bytes stay in this browser. Downloads contain the normalized run evidence.</p>' : ''}
+      ${item.codex ? '<p class="panel-description">Downloads contain the original normalized run evidence. Codex receipt files, corrected-folder evidence, and closure stay in this browser.</p>' : ''}
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
       ${receiptOption ? `<p class="panel-description" id="invoice-export-help">Including invoice receipts adds the available original
         and follow-up receipt files and any verified closure to the case download. Execution receipts may contain logs.</p>` : ''}
@@ -332,10 +337,15 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
         </form>
         ${renderExport(item, assessment, followUp)}`;
     } catch (error) {
-      if (currentRevision === revision) detail.innerHTML = `<p class="import-error">${escape(error.message)}</p>
+      if (currentRevision === revision) detail.innerHTML = `${item.codex ? '<p class="review-case"><span class="badge unknown">Open</span> · Original Codex evidence could not be verified.</p>' : ''}
+        <p class="import-error">${escape(error.message)}</p>
         <button type="button" id="remove-review">Remove from inbox</button>`;
     }
   }
+
+  window.addEventListener('storage', event => {
+    if ((event.key === WORKFLOW_BASELINE_KEY || event.key === null) && selected?.codex && location.hash.startsWith(reviewRoute)) render();
+  });
 
   function receiptFileChecks(states) {
     return `<details class="review-differences receipt-file-checks"><summary>File checks against manifest</summary><dl>
@@ -495,7 +505,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     if (element.matches('details[data-codex-file]')) {
       const pre = element.querySelector('pre');
       if (!pre.hasChildNodes()) {
-        const encoded = selected.codex.evidence.files[element.dataset.codexFile];
+        const encoded = records[Number(element.dataset.fileIndex)];
+        if (typeof encoded !== 'string') return;
         const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
         try { pre.textContent = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
         catch { pre.textContent = 'Binary content. Inspect the original file to read these bytes.'; }
@@ -572,9 +583,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
     const file = input.files[0];
     const item = selected;
     input.disabled = true;
-    announce('Checking the follow-up package…');
+    announce(item.codex || item.invoice ? 'Checking the follow-up folder…' : 'Checking the follow-up package…');
     try {
-      if (item.invoice) {
+      if (item.codex) {
+        const { evidence } = await importCodexFolder(input.files, { retainEvidence: true });
+        await attachCodexFollowUp(getStorage, item, evidence);
+      } else if (item.invoice) {
         const { evidence } = await importInvoiceFolder(input.files);
         await attachInvoiceFollowUp(getStorage, item, evidence);
       } else {
@@ -583,7 +597,10 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail }) {
       }
       announce('Follow-up saved.');
       if (location.hash === itemRoute(item.id)) await render();
-    } catch (error) { announce(`Could not attach the follow-up. ${error.message}`, true); }
+    } catch (error) {
+      announce(`Could not attach the follow-up. ${error.message}`, true);
+      if (item.codex && location.hash === itemRoute(item.id)) await render();
+    }
     finally { input.disabled = false; input.value = ''; }
   });
 

@@ -84,9 +84,21 @@ represented by their import-time digests.
 Reopening the entry rehashes the five retained files, verifies the tool
 receipts, reconstructs the candidate and compares both runs with the saved
 report fingerprints. The reviewer can inspect a missing grant at each affected
-action, record a decision, or mark the run reviewed. Receipt bytes count toward
-the existing 2 MiB inbox limit. Package and case downloads contain normalized
-run evidence. The local receipt snapshot is specific to the inbox entry.
+action and save a decision about the gap.
+
+A reviewer can attach a corrected folder directly to the flagged inbox entry.
+It must have a distinct run ID and match the original preflight actor,
+repository resource, and starting document digest. The importer verifies all
+seven files again and keeps the same five receipt files for the follow-up.
+Both snapshots count toward the 2 MiB inbox limit.
+
+**Close as resolved** requires the original flagged result to reproduce, the
+follow-up to pass against the saved baseline, and the workflow's current pin to
+match the original run ID and fingerprint. Closure records the case, decision,
+and follow-up together. Reopening the case rechecks both snapshots and the
+current pin. A conflicting pin leaves the case open and preserves that pin.
+Codex case downloads carry the original normalized evidence and saved decision.
+Both receipt snapshots and the closure record stay in the local inbox.
 
 ## Optional actual-agent workflow
 
