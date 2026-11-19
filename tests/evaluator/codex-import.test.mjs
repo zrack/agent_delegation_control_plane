@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { assessCodexEvidence, importCodexFolder } from '../../src/codex-import.mjs';
 import { evaluateChain } from '../../src/evaluator.mjs';
+import { codexClosureSteps } from '../../src/review-view.mjs';
 import { adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, importReviewPackage,
   resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveCodexCandidate, saveReview, saveReviewDecision } from '../../src/review.mjs';
 import { restoreInvestigations, restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline, STORAGE_KEY, WORKFLOW_BASELINE_KEY } from '../../src/storage.mjs';
@@ -540,4 +541,71 @@ test('Codex case intake rejects extra receipt files and oversized packages witho
   await assert.rejects(importReviewPackage(full, closed), /quota exceeded/);
   assert.equal(storage.getItem(REVIEW_STORAGE_KEY), null);
   assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+});
+
+test('Codex checklist shows both a conflicting pin and a damaged correction without changing the review', async () => {
+  const { getStorage, read, storage, pin, baseline } = await portableCodexFixture();
+  const different = { ...baseline.chain, title: 'Different baseline under the same ID' };
+  saveInvestigation(getStorage, different);
+  saveWorkflowBaseline(getStorage, pin.name, different, await runFingerprint(different), pin);
+  const stored = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+  stored.items[0].followUp.codex.evidence.files['after.md'] = btoa('Incorrect output.');
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(stored));
+
+  const item = read();
+  const prior = structuredClone(item);
+  const pinned = storage.getItem(WORKFLOW_BASELINE_KEY);
+  const original = await assessReview(item);
+  const followUp = await assessFollowUp(item, original, getStorage);
+  const steps = codexClosureSteps(item, original, followUp);
+  assert(steps.some(step => step.target === 'codex-included-baseline' && step.action));
+  const damaged = steps.find(step => /after\.md/.test(step.reason));
+  assert(damaged?.action);
+  assert.match(damaged.label + ' ' + damaged.reason, /follow.up|corrected/i);
+  assert(!steps.some(step => ['adopt-codex-baseline', 'review-follow-up-file', 'resolve-review-case'].includes(step.target)));
+  assert.deepEqual(item, prior);
+  assert.deepEqual(read(), prior);
+  assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pinned);
+});
+
+test('Codex checklist identifies missing decision and folder, linking to the folder only when available', async () => {
+  const { getStorage, read } = await flaggedCodexCase();
+  const original = await assessReview(read());
+  const missing = codexClosureSteps(read(), original, await assessFollowUp(read(), original, getStorage));
+  assert(missing.some(step => step.target === 'review-decision'));
+  assert(missing.some(step => /follow.up|corrected/i.test(step.label + ' ' + step.reason) && step.action));
+  assert(!missing.some(step => ['resolve-review-case', 'review-follow-up-file'].includes(step.target)));
+
+  saveReviewDecision(getStorage, read(), 'evidence-needed', 'Supply the editor grant.');
+  const item = read();
+  const followUp = await assessFollowUp(item, original, getStorage);
+  assert(codexClosureSteps(item, original, followUp).some(step => step.target === 'review-follow-up-file'));
+  assert(!codexClosureSteps(item, original, followUp, false).some(step => step.target === 'review-follow-up-file'));
+});
+
+test('Codex checklist distinguishes unverifiable original receipts, explicit closure, and a passing open follow-up', async () => {
+  const { getStorage, read, storage } = await portableCodexFixture();
+  const resolved = read();
+  const original = await assessReview(resolved);
+  assert.deepEqual(codexClosureSteps(resolved, original, await assessFollowUp(resolved, original, getStorage)), []);
+
+  const item = { ...resolved };
+  delete item.resolution;
+  const prior = structuredClone(item);
+  const open = codexClosureSteps(item, original, await assessFollowUp(item, original, getStorage));
+  assert(open.some(step => step.target === 'resolve-review-case' && step.action));
+  assert.deepEqual(item, prior);
+
+  const inbox = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+  inbox.items[0].codex.evidence.files['after.md'] = btoa('Incorrect original receipt.');
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(inbox));
+  const altered = read();
+  const damaged = await assessReview(altered).catch(error => ({ error: error.message }));
+  assert.match(damaged.error, /after\.md/);
+  const blocked = codexClosureSteps(altered, damaged, await assessFollowUp(altered, damaged, getStorage));
+  const receipt = blocked.find(step => /after\.md/.test(step.reason));
+  assert(receipt?.action);
+  assert.match(receipt.label + ' ' + receipt.reason, /original/i);
+  assert(!blocked.some(step => ['resolve-review-case', 'adopt-codex-baseline', 'review-follow-up-file'].includes(step.target)));
+  assert.deepEqual(read(), altered);
 });

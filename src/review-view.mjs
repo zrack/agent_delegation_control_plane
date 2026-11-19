@@ -24,6 +24,68 @@ const evidenceLabels = {
 export const reviewRoute = '#review?';
 const itemRoute = id => reviewRoute + new URLSearchParams({ item: id });
 
+// Describe the current recheck. These targets only open evidence or move focus.
+export function codexClosureSteps(item, original, followUp, supportsFolders = true) {
+  if (followUp.resolved || (item.report.status === 'pass' && !followUp.flagged && !item.decision && !original.error)) return [];
+  if (followUp.canResolve) return [{
+    label: 'Ready to close', reason: 'The original finding and passing follow-up verified against the matching pin.',
+    action: 'Review the evidence, then select Close as resolved when you are ready.', target: 'resolve-review-case',
+  }];
+
+  const steps = [];
+  const add = (label, reason, action, target) => steps.push({ label, reason, action, target });
+  const followUpError = followUp.error?.replace(/^Follow-up Codex evidence: /, '');
+  const freshCopy = 'Ask the sender for a clean case export with receipts. Import it in a fresh browser profile to keep this review.';
+  if (original.error) {
+    add('Original evidence', original.error, freshCopy);
+  } else if (!original.verdict) {
+    const unmatched = ['baseline', 'candidate'].filter(side => original.states[side] !== 'matched');
+    const reason = unmatched.length ? `The ${unmatched.join(' and ')} evidence does not match the original report.`
+      : 'The original baseline comparison could not be reproduced.';
+    add('Original comparison', reason, freshCopy);
+  } else if (!followUp.flagged) {
+    add('Original comparison', 'The current comparison shows no flagged result to close.', 'Check the original report and its evidence.');
+  }
+
+  const { status } = followUp.pinState;
+  if (status === 'missing') {
+    const canAdopt = original.codex && original.verdict;
+    const action = canAdopt ? 'Inspect the included baseline and pin it if you accept it.'
+      : 'Verify the original case evidence before pinning its baseline.';
+    add('Baseline needed', `There is no local pin for “${item.codex.workflow}”.`, action, 'codex-included-baseline');
+  } else if (status === 'conflict') {
+    add('Conflicting baseline', `The current pin for “${item.codex.workflow}” differs from the case baseline.`,
+      'Compare the run IDs and fingerprints. To review under the case baseline while keeping this pin, use a separate profile.',
+      'codex-included-baseline');
+  } else if (status === 'unreadable') {
+    add('Workflow pin', 'Saved workflow pins could not be read.', 'Check this browser’s site storage and reopen the case.');
+  }
+
+  if (original.error) {
+    // The original check failed. A separately detected follow-up error can still be reported.
+    if (followUpError) add('Follow-up evidence', followUpError, freshCopy);
+    return steps;
+  }
+  if (!item.decision) add('Decision needed', 'No review decision has been saved.', 'Choose a decision and save its reason.', 'review-decision');
+
+  let correction;
+  if (!item.followUp) correction = 'No corrected folder is attached.';
+  else if (followUpError) correction = followUpError;
+  else if (followUp.incompatible === 'baseline') correction = 'The follow-up references a different baseline.';
+  else if (followUp.incompatible) correction = 'The corrected run could not be matched to this case.';
+  else if (followUp.assessment?.verdict?.status !== 'pass' || item.followUp.report.status !== 'pass') {
+    correction = 'The follow-up comparison does not reproduce a passing result.';
+  }
+  if (correction) {
+    const canAttach = supportsFolders && item.decision && original.codex && followUp.flagged && status === 'matched';
+    let action = 'Attach a verified corrected folder for the same task.';
+    if (!supportsFolders) action = 'Use a browser with folder selection support to attach a verified corrected folder.';
+    else if (!canAttach) action = 'Address the checks above, then attach a verified corrected folder for the same task.';
+    add('Follow-up evidence', correction, action, canAttach ? 'review-follow-up-file' : undefined);
+  }
+  return steps;
+}
+
 export function createReviewInbox({ getStorage, escape, comparisonDetail, onBaselineAdopted }) {
   const form = document.querySelector('#review-import');
   const packageInput = document.querySelector('#review-package-file');
@@ -210,18 +272,35 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <details class="review-differences"><summary>Inspect files and digests</summary>${rows.join('')}</details></section>`;
   }
 
+  function codexChecklist(item, original, followUp) {
+    const steps = codexClosureSteps(item, original, followUp, 'webkitdirectory' in invoiceInput);
+    if (!steps.length) return '';
+    const links = {
+      'resolve-review-case': 'Go to close button', 'review-decision': 'Go to decision',
+      'review-follow-up-file': 'Go to corrected folder picker', 'codex-included-baseline': 'Inspect baseline details',
+    };
+    const rows = steps.map(step => `<li><strong>${escape(step.label)}</strong> · ${escape(step.reason)}
+      <p>${escape(step.action)} ${step.target ? `<button type="button" data-closure-target="${step.target}">${links[step.target]}</button>` : ''}</p></li>`);
+    return `<section class="closure-checklist" aria-labelledby="codex-closure-title">
+      <h4 id="codex-closure-title">Closure checklist</h4><ul id="codex-closure-reasons">${rows.join('')}</ul></section>
+      ${codexPinDetails(item, original, followUp.pinState)}`;
+  }
+
   function codexPinDetails(item, original, pinState) {
-    if (pinState.status === 'matched') return '';
-    if (pinState.status === 'unreadable') return '<p class="import-error">The browser could not read its saved workflow pins.</p>';
+    if (pinState.status === 'matched' || pinState.status === 'unreadable') return '';
     const pin = pinState.pin;
     const pinLabel = pin ? 'Inspect case baseline and conflicting pin' : 'Inspect included baseline';
     const canAdopt = !pin && original.codex && original.verdict;
+    const identity = (label, id, fingerprint) => `<div class="compare-run"><strong>${escape(label)}</strong>
+      <p><code>${escape(id)}</code></p><p class="receipt-digest">SHA-256 ${escape(fingerprint)}</p></div>`;
     return `<details id="codex-included-baseline" class="review-differences">
       <summary>${pinLabel}</summary>
-      <p>Case baseline for <strong>${escape(item.codex.workflow)}</strong> · <code>${escape(item.report.baselineId)}</code></p>
-      <p class="receipt-digest">SHA-256 ${escape(item.report.baselineFingerprint)}</p>
-      ${original.states.baseline === 'matched' ? evidenceDetails('Baseline actions and grants', { snapshot: item.baseline }, item.baseline.title) : ''}
-      ${pin ? `<p>Current local pin · <code>${escape(pin.runId)}</code></p><p class="receipt-digest">SHA-256 ${escape(pin.fingerprint)}</p>` : ''}
+      <p>Workflow · <strong>${escape(item.codex.workflow)}</strong></p>
+      <div class="compare-sides">
+        ${identity('Case baseline', item.report.baselineId, item.report.baselineFingerprint)}
+        ${pin ? identity('Current local pin', pin.runId, pin.fingerprint) : ''}
+      </div>
+      ${original.states?.baseline === 'matched' ? evidenceDetails('Baseline actions and grants', { snapshot: item.baseline }, item.baseline.title) : ''}
       ${canAdopt ? '<p>Pinning saves this baseline in this browser and rechecks the case against it.</p><button type="button" id="adopt-codex-baseline">Pin included baseline</button>' : ''}
     </details>`;
   }
@@ -233,12 +312,9 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
       <p class="panel-description">Reported · ${regressionLabels[record.report.status]}</p>
       <p class="panel-description">${check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p></div>`;
-    const nextStep = item.invoice && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
-      : item.codex && pinChanged ? (followUp.pinState.status === 'missing' ? 'This workflow has no local pin. Inspect the included baseline to decide whether to pin it.'
-        : 'Closure requires the original workflow pin. Inspect the case baseline and the current local pin.')
+    const nextStep = (item.invoice || item.codex) && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
         : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
-        : item.codex ? 'Save a decision and attach a corrected folder for the same Codex task. A passing comparison against the original pin lets you close the case.'
         : item.invoice ? 'Save a decision and attach a folder for this invoice case. The original baseline comparison, authority, output, and execution checks must pass for the follow-up.'
           : 'To close this case, save a decision and attach a passing follow-up with matching evidence against the original baseline.';
     const followUpRecords = assessment?.states.candidate === 'matched'
@@ -254,19 +330,17 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const folder = item.codex || item.invoice;
     const picker = folder ? 'webkitdirectory' : 'accept=".json,application/json"';
     const folderUnsupported = folder && !('webkitdirectory' in invoiceInput);
-    const codexError = item.codex && (followUp.error || (followUp.incompatible && 'The saved follow-up does not match this case and its original baseline.'));
+    const canAttach = item.decision && !folderUnsupported && (!item.codex || (!pinChanged && original.codex && followUp.flagged));
     return `<section class="review-case" aria-labelledby="review-case-title">
       <div class="panel-heading"><h3 id="review-case-title">Review decision and follow-up</h3>
         <span class="badge ${resolved ? 'valid' : 'unknown'}">${resolved ? 'Resolved' : 'Open'}</span></div>
-      ${item.codex ? codexPinDetails(item, original, followUp.pinState) : ''}
       ${item.invoice && !resolved ? invoiceClosureChecklist(item, original, followUp) : ''}
       ${decisionForm(item)}
       <label for="review-follow-up-file">${label}</label>
-      <input id="review-follow-up-file" type="file" ${picker} aria-describedby="review-case-help" ${item.decision && !folderUnsupported && !(item.codex && pinChanged) ? '' : 'disabled'}>
+      <input id="review-follow-up-file" type="file" ${picker} aria-describedby="${item.codex && !resolved ? 'codex-closure-reasons' : 'review-case-help'}" ${canAttach ? '' : 'disabled'}>
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original)}
         ${comparison('Follow-up run', item.followUp, assessment)}</div>
         ${receiptSummary}
-        ${codexError ? `<p class="import-error">${escape(codexError)}</p>` : ''}
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}
           ${assessment?.codex ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
@@ -306,6 +380,15 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       ${item.decision ? '<button type="button" id="download-review-case">Download review case</button>' : ''}</div></details>`;
   }
 
+  function blockedCodexView(item, message, explanation) {
+    return `<section class="review-case"><h3><span class="badge unknown">Open</span> · ${escape(message)}</h3>
+      ${explanation}
+      ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
+      ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
+      <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>
+      <button type="button" id="remove-review">Remove from inbox</button>`;
+  }
+
   async function render({ focus = false } = {}) {
     const currentRevision = ++revision;
     const { items, warning } = restoreReviews(getStorage);
@@ -333,16 +416,25 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     detail.innerHTML = '<p class="muted">Checking the saved evidence…</p>';
     if (focus) detail.focus();
     try {
-      const assessment = await assessReview(item);
+      const assessment = await assessReview(item).catch(error => {
+        if (item.codex) return { error: error.message };
+        throw error;
+      });
       const followUp = await assessFollowUp(item, assessment, getStorage);
       const invoice = followUp.originalInvoice;
       const receiptResults = invoice?.checked ? invoiceMarkup(invoice.checked)
         : invoice?.error ? `<p class="import-error">${escape(invoice.error)}</p>` : '';
       if (currentRevision !== revision) return;
+      const checklist = item.codex ? codexChecklist(item, assessment, followUp) : '';
+      if (assessment.error) {
+        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist);
+        return;
+      }
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
         ${item.invoice || item.codex ? `<p class="panel-description">${item.codex ? 'Case workflow' : 'Pinned workflow'} · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
+        ${checklist}
         ${renderEvidence(item, assessment)}
         ${receiptResults}
         ${assessment.codex ? codexFolderEvidence(assessment) : ''}
@@ -358,14 +450,11 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         </form>
         ${renderExport(item, assessment, followUp)}`;
     } catch (error) {
-      if (currentRevision === revision) detail.innerHTML = `${item.codex ? `<section class="review-case">
-        <h3><span class="badge unknown">Open</span> · Original Codex evidence could not be verified</h3>
-        ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
-        ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
-        <p>Inspect the receipt named below. To compare a fresh export from the sender, open it in a separate browser profile.</p>
-        <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>` : ''}
-        <p class="import-error">${escape(error.message)}</p>
-        <button type="button" id="remove-review">Remove from inbox</button>`;
+      if (currentRevision !== revision) return;
+      const message = `<p class="import-error">${escape(error.message)}</p>`;
+      detail.innerHTML = item.codex ? blockedCodexView(item, 'Case verification could not finish',
+        message + '<p>Check the case export and reopen it in a fresh profile.</p>')
+        : message + '<button type="button" id="remove-review">Remove from inbox</button>';
     }
   }
 
