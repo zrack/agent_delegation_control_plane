@@ -5,7 +5,9 @@ API key, account, Docker, or model calls.
 
 ## Try the portable Codex review demo
 
-A reviewer closed a missing-grant case after a corrected run supplied the editor’s grant. As the recipient, you can check that decision against your own workflow baseline. Extract the [alpha.12 portable Codex demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.12/adcp-portable-codex-review-demo-v0.1.0-alpha.12.zip) and **Source code (zip)** from the [alpha.12 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.12) into separate directories.
+A fictional coding agent edited a quickstart. A reviewer closed a missing-grant case after a corrected run supplied the editor’s grant. Start with a copy of that case in which the original run’s `after.md` has been altered. Can you tell why the saved closure no longer verifies?
+
+Extract the **Source code (zip)** and demo ZIP into separate directories. The demo contains the importable files under `pins/` and `cases/`. [Alpha.13 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.13) · [Codex closure checklist demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.13/adcp-codex-closure-checklist-demo-v0.1.0-alpha.13.zip)
 
 From the source directory, start the dashboard with Python 3.11 or newer.
 
@@ -13,44 +15,34 @@ From the source directory, start the dashboard with Python 3.11 or newer.
 python3 scripts/serve.py
 ```
 
-Open the printed address in a fresh browser profile with folder selection support. Use a fresh profile or a different loopback port for each scenario, since reimport preserves an existing local review. Keep the same profile, address and port when reloading within a scenario.
+Open the printed loopback address in a fresh browser profile with folder selection support. Keep the same profile and address for each reload within an exercise.
 
-### Start with no local pin
+### Inspect the altered original receipt
 
-1. Open **Regression inbox → Import review package or case** and select `cases/resolved.json`. Reload. The badge reads **Open** and the sender’s **Evidence needed** decision and reason are visible.
-2. Expand **Inspect included baseline**. Check the workflow name **Follow-up review**, the run ID beginning with `CODEX-3e20f2ce5add`, the fingerprint, and the baseline actions and grants. Inspection alone leaves the case **Open**.
-3. Select **Pin included baseline** and reload again. The case now reads **Resolved**. Under **Inspect files and digests**, open the original `grants.jsonl`. Then open the corrected ledger under **Inspect follow-up evidence**. The corrected ledger contains the editor grant linked to its parent.
+1. In **Investigate a run → Import a Codex run folder**, choose the demo’s `pins/complete-capture` folder. In **Compare runs**, select the imported run beginning with `CODEX-3e20f2ce5add` under **Baseline run**.
+2. Expand **Save or replace a workflow baseline**, enter `Follow-up review` under **Workflow name**, and select **Save baseline**.
+3. In **Regression inbox → Import review package or case**, choose `cases/altered-original-receipt.json`. Reload. The badge reads **Open** and the sender’s **Evidence needed** decision and reason are still visible.
+4. Under **Closure checklist → Original evidence**, find the `after.md` hash mismatch against `manifest.json`. The baseline matches. The original file’s bytes differ from the recorded digest. **Close as resolved** is disabled.
 
-### Compare recipients with a saved pin
+The checklist asks for a clean case export with receipts. The demo supplies one in `cases/resolved.json`. Use the first row below to review that copy in a fresh profile. The profile containing the failed receipt keeps its review.
 
-Start each row below in its own fresh profile or on a separate port. In **Investigate a run → Import a Codex run folder**, choose the pin folder shown. In **Compare runs**, select that run under **Baseline run**, expand **Save or replace a workflow baseline**, enter **Follow-up review** under **Workflow name**, and select **Save baseline**. Import the case file through **Regression inbox → Import review package or case** and reload.
+### Compare the other five scenarios
 
-| Pin folder | Case file | What to check after reload |
+Use a fresh profile for each row because the exports share a case ID. Where a pin is listed, import that folder, select its run under **Baseline run**, and save it under the same workflow name, `Follow-up review`. Import the listed case in **Regression inbox**, reload, and inspect the result before trying the next action.
+
+| Workflow pin | Case file | What to check after reload |
 | --- | --- | --- |
-| `pins/complete-capture` | `cases/resolved.json` | **Resolved**. The original result is **Needs review**, the correction shows **No regression found**, and you can inspect both grant ledgers. |
-| `pins/clean-candidate` | `cases/resolved.json` | **Open**. Expand **Inspect case baseline and conflicting pin**. The required run starts with `CODEX-3e20f2ce5add`. The local pin still starts with `CODEX-f559c2afd796`, and closure is disabled. |
-| `pins/complete-capture` | `cases/altered-original-receipt.json` | **Open**. The original `after.md` fails its digest check. The saved decision remains visible and closure is disabled. |
-| `pins/complete-capture` | `cases/altered-follow-up-receipt.json` | **Open**. The corrected `after.md` fails its digest check. The original evidence remains available and closure is disabled. |
-| `pins/complete-capture` | `cases/follow-up-open.json` | **Open**. The follow-up passes, but its reviewer left the case open. **Close as resolved** is available if you decide to close it. |
+| `pins/complete-capture` | `cases/resolved.json` | **Resolved**. Open the original `grants.jsonl` under **Inspect files and digests**. Under **Inspect follow-up evidence**, the corrected ledger includes the editor grant and its parent. |
+| No pin | `cases/resolved.json` | **Open · Baseline needed**. Select **Inspect baseline details** to view the run ID and fingerprint. If you accept the baseline, select **Pin included baseline** and reload. The saved closure now verifies as **Resolved**. |
+| `pins/clean-candidate` | `cases/resolved.json` | **Open · Conflicting baseline**. Select **Inspect baseline details** to compare the run IDs and fingerprints. Your pin stays in place and closure stays disabled. |
+| `pins/complete-capture` | `cases/altered-follow-up-receipt.json` | **Open · Follow-up evidence** identifies the corrected run’s `after.md` hash mismatch. Select **Go to corrected folder picker**, choose `pins/clean-candidate` as the follow-up, and reload. The case stays **Open** and now shows **Ready to close**. |
+| `pins/complete-capture` | `cases/follow-up-open.json` | **Open · Ready to close**. **Go to close button** focuses the control. Select **Close as resolved**, then reload to verify **Resolved**. |
 
-[Portable case browser validation](CODEX_PORTABLE_CASE_VALIDATION.md)
-
-### Use the closure checklist in the development checkout
-
-Start the dashboard from a checkout that includes the Codex closure checklist.
-Open an **Open** case in **Regression inbox** and read its **Closure checklist**.
-Inspecting a checklist item or reloading the case preserves the workflow pin,
-saved decision, and review note.
-
-- **Missing or conflicting pin.** Inspect the included baseline before deciding whether to pin it. If a local pin already conflicts, compare its run ID and fingerprint with the case baseline. You can review the case with its original baseline in a fresh profile while keeping your current pin.
-- **Receipt mismatch.** Check which capture and file failed. For an altered original receipt, ask for a clean export of the original case and inspect it in a fresh profile. For an altered follow-up receipt, use **Attach corrected Codex folder** to supply the matching follow-up once the original evidence and pin verify.
-- **Passing follow-up left open.** Inspect the corrected evidence, then select **Close as resolved** when you decide to close the case. Reload to verify the result.
-
-[Checklist verification with the six alpha.12 scenarios](CODEX_CLOSURE_CHECKLIST_VALIDATION.md)
+To check note persistence, enter a note in a case with **Save review**, save it and reload. Inspecting the checklist preserves the saved decision, note and workflow pin. [Checklist validation](CODEX_CLOSURE_CHECKLIST_VALIDATION.md) · [Portable case validation](CODEX_PORTABLE_CASE_VALIDATION.md)
 
 ## Try the Codex run-folder demo
 
-To create a case yourself, keep using the alpha.12 dashboard and extract the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) separately. Start this exercise with fresh browser storage. Each folder picker takes the directory containing `manifest.json`.
+To create a case yourself, keep using the alpha.13 dashboard and extract the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) separately. Start this exercise with fresh browser storage. Each folder picker takes the directory containing `manifest.json`.
 
 ### Pin the baseline and open the missing-grant case
 
@@ -82,7 +74,7 @@ On reload, the inbox rechecks the three saved ledgers and both Markdown receipts
 
 ## Try the coding-agent review demo
 
-Use the alpha.12 dashboard from the first exercise. Extract the
+Use the alpha.13 dashboard from the first exercise. Extract the
 [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) separately.
 
 These fictional records describe a repository owner authorizing a coordinator to
@@ -127,7 +119,7 @@ Use `--output NEW_DIRECTORY` to generate another copy.
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.12 dashboard from the first exercise and extract the
+1. Use the alpha.13 dashboard from the first exercise and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. Open the printed loopback address in a fresh browser profile. In **Regression
    inbox**, choose **Import review package or case** and select
@@ -179,7 +171,7 @@ closure. Reload to verify the saved result.
 
 ## Compare and save an invoice candidate
 
-Keep using the alpha.12 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
+Keep using the alpha.13 dashboard and extract the [invoice folder demo ZIP from alpha.5](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.5/adcp-invoice-follow-up-demo-v0.1.0-alpha.5.zip) for the next two exercises.
 
 1. Use **Import a completed run** to open `invoice-a-baseline/investigation.json`
    from the demo ZIP. Under **Compare runs**, select the imported invoice A as
@@ -223,7 +215,7 @@ Receipt snapshots count toward the inbox's 2 MiB limit.
 
 ## Share an invoice review case
 
-In the alpha.12 dashboard, open a resolved invoice case and expand
+In the alpha.13 dashboard, open a resolved invoice case and expand
 **Export review package or case**.
 
 1. Select **Include invoice receipts in case download**, then **Download review
@@ -244,7 +236,7 @@ the original delegation evidence and decision. [Privacy and sharing guidance](PR
 
 ## Import a resolved case
 
-Use the alpha.12 dashboard started above for this exercise. The
+Use the alpha.13 dashboard started above for this exercise. The
 [complete review case demo ZIP from alpha.3](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.3/adcp-review-case-demo-v0.1.0-alpha.3.zip)
 contains the saved case and follow-up files for this exercise and the next one.
 
