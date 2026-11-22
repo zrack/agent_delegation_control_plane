@@ -6,7 +6,7 @@ import { restoreWorkflowBaselines, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
   adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
-  previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
+  applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from './review.mjs';
 
 const tones = { pass: 'valid', regression: 'violation', review: 'unknown' };
@@ -37,7 +37,7 @@ export function codexClosureSteps(item, original, followUp, supportsFolders = tr
   const followUpError = followUp.error?.replace(/^Follow-up Codex evidence: /, '');
   const freshCopy = 'Ask the sender for a clean case export with receipts. Import it in a fresh browser profile to keep this review.';
   if (original.error) {
-    add('Original evidence', original.error, freshCopy);
+    add('Original evidence', original.error, 'Choose a clean export of this case to preview matching original receipts.', 'codex-evidence-restore');
   } else if (!original.verdict) {
     const unmatched = ['baseline', 'candidate'].filter(side => original.states[side] !== 'matched');
     const reason = unmatched.length ? `The ${unmatched.join(' and ')} evidence does not match the original report.`
@@ -63,7 +63,7 @@ export function codexClosureSteps(item, original, followUp, supportsFolders = tr
 
   if (original.error) {
     // The original check failed. A separately detected follow-up error can still be reported.
-    if (followUpError) add('Follow-up evidence', followUpError, freshCopy);
+    if (followUpError) add('Follow-up evidence', followUpError, 'After repairing the original receipts, attach a verified corrected folder.');
     return steps;
   }
   if (!item.decision) add('Decision needed', 'No review decision has been saved.', 'Choose a decision and save its reason.', 'review-decision');
@@ -103,7 +103,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   const detail = document.querySelector('#review-detail');
   const status = document.querySelector('#review-status');
   let selected;
-  let invoiceRestoreDraft;
+  let restoreDraft;
   let revision = 0;
   let records = [];
 
@@ -278,6 +278,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const links = {
       'resolve-review-case': 'Go to close button', 'review-decision': 'Go to decision',
       'review-follow-up-file': 'Go to corrected folder picker', 'codex-included-baseline': 'Inspect baseline details',
+      'codex-evidence-restore': 'Preview original receipt repair',
     };
     const rows = steps.map(step => `<li><strong>${escape(step.label)}</strong> · ${escape(step.reason)}
       <p>${escape(step.action)} ${step.target ? `<button type="button" data-closure-target="${step.target}">${links[step.target]}</button>` : ''}</p></li>`);
@@ -302,6 +303,20 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       </div>
       ${original.states?.baseline === 'matched' ? evidenceDetails('Baseline actions and grants', { snapshot: item.baseline }, item.baseline.title) : ''}
       ${canAdopt ? '<p>Pinning saves this baseline in this browser and rechecks the case against it.</p><button type="button" id="adopt-codex-baseline">Pin included baseline</button>' : ''}
+    </details>`;
+  }
+
+  function evidenceRestorePanel(item) {
+    const kind = item.codex ? 'codex' : 'invoice';
+    const summary = item.codex ? 'Restore original Codex receipts' : 'Restore matching evidence';
+    return `<details class="review-differences" id="${kind}-evidence-restore">
+      <summary>${summary}</summary>
+      <p class="panel-description">Choose a portable copy of this case exported with receipts to preview matching replacements.</p>
+      ${item.codex ? `<p>Workflow · ${escape(item.codex.workflow)}</p><p>Original run · <code>${escape(item.report.candidateId)}</code></p>` : ''}
+      <label for="${kind}-restore-file">Matching ${item.codex ? 'Codex' : 'invoice'} review case</label>
+      <input id="${kind}-restore-file" data-preview-restore="${kind}" type="file" accept=".json,application/json" aria-describedby="${kind}-restore-status">
+      <p class="panel-description" id="${kind}-restore-status" role="status"></p>
+      <button id="apply-${kind}-restore" data-apply-restore="${kind}" type="button" disabled>${item.codex ? 'Apply receipt repair' : 'Apply evidence repair'}</button>
     </details>`;
   }
 
@@ -344,14 +359,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}
           ${assessment?.codex ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
-      ${item.invoice && !resolved && item.decision ? `<details class="review-differences" id="invoice-evidence-restore">
-        <summary>Restore matching evidence</summary>
-        <p class="panel-description">Choose a portable copy of this case exported with receipts to preview matching replacements.</p>
-        <label for="invoice-restore-file">Matching invoice review case</label>
-        <input id="invoice-restore-file" type="file" accept=".json,application/json" aria-describedby="invoice-restore-status">
-        <p class="panel-description" id="invoice-restore-status" role="status"></p>
-        <button id="apply-invoice-restore" type="button" disabled>Apply evidence repair</button>
-      </details>` : ''}
+      ${item.invoice && !resolved && item.decision ? evidenceRestorePanel(item) : ''}
       <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
       <button type="button" id="resolve-review-case" ${canResolve && !resolved ? '' : 'disabled'}>Close as resolved</button>
     </section>`;
@@ -394,7 +402,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const { items, warning } = restoreReviews(getStorage);
     const id = new URLSearchParams(location.hash.slice(reviewRoute.length)).get('item');
     selected = items.find(item => item.id === id);
-    invoiceRestoreDraft = undefined;
+    restoreDraft = undefined;
     records = [];
     if (warning) announce(warning, true);
     if (!savingInvoice) updateInvoiceWorkflows();
@@ -427,7 +435,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       if (currentRevision !== revision) return;
       const checklist = item.codex ? codexChecklist(item, assessment, followUp) : '';
       if (assessment.error) {
-        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist);
+        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + evidenceRestorePanel(item));
         return;
       }
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
@@ -665,33 +673,45 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
 
   detail.addEventListener('change', async event => {
     const input = event.target;
-    if (input.id === 'invoice-restore-file' && selected) {
+    const kind = input.dataset.previewRestore;
+    if (kind && selected) {
       const item = selected;
       const file = input.files[0];
-      const button = detail.querySelector('#apply-invoice-restore');
-      const message = detail.querySelector('#invoice-restore-status');
-      invoiceRestoreDraft = undefined;
+      const route = location.hash;
+      const button = detail.querySelector(`#apply-${kind}-restore`);
+      const message = detail.querySelector(`#${kind}-restore-status`);
+      restoreDraft = undefined;
       button.disabled = true;
+      message.classList.remove('import-error');
       message.textContent = '';
       if (!file) return;
-      input.disabled = true;
+      const current = () => input.isConnected && item === selected && route === location.hash && input.files[0] === file;
       message.textContent = 'Checking replacement evidence…';
       try {
         if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review case no larger than 2 MiB.');
         const contents = await file.text();
-        const { restored, pinState } = await previewInvoiceEvidenceRestore(getStorage, item, contents);
-        if (!input.isConnected || item !== selected) return;
-        invoiceRestoreDraft = { item, contents };
+        const preview = kind === 'codex' ? previewCodexOriginalRepair : previewInvoiceEvidenceRestore;
+        const { restored, pinState } = await preview(getStorage, item, contents);
+        if (!current()) return;
+        restoreDraft = { item, contents, route, kind };
         const next = {
-          matched: 'After applying, review the evidence and close explicitly.',
+          matched: kind === 'codex' ? 'Closing requires a saved decision and a verified passing follow-up.'
+            : 'After applying, review the evidence and close explicitly.',
           conflict: 'The conflicting workflow pin stays in place and still blocks closure.',
           missing: 'Pin the original baseline before closing.',
           unreadable: 'Restore access to your workflow pins before closing.',
         };
-        message.textContent = `Ready to restore: ${restored.join('; ')}. Your decision and notes are kept. ${next[pinState.status]}`;
+        const result = kind === 'codex'
+          ? `Matching original receipts in ${file.name}: ${restored.join(', ')}. Applying will keep this case open.`
+          : `Ready to restore: ${restored.join('; ')}.`;
+        message.textContent = `${result} Your decision and notes are kept. ${next[pinState.status]}`;
         button.disabled = false;
-      } catch (error) { message.textContent = error.message; }
-      finally { input.disabled = false; input.value = ''; }
+      } catch (error) {
+        if (current()) {
+          message.classList.add('import-error');
+          message.textContent = error.message;
+        }
+      } finally { if (current()) input.value = ''; }
       return;
     }
     if (input.id !== 'review-follow-up-file' || !input.files[0] || !selected) return;
@@ -734,21 +754,29 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       else target.focus();
       return;
     }
-    if (event.target.id === 'apply-invoice-restore') {
-      const draft = invoiceRestoreDraft;
-      if (!draft || draft.item !== selected) return;
-      invoiceRestoreDraft = undefined;
-      const input = detail.querySelector('#invoice-restore-file');
-      const message = detail.querySelector('#invoice-restore-status');
+    const kind = event.target.dataset.applyRestore;
+    if (kind) {
+      const draft = restoreDraft;
+      if (!draft || draft.item !== selected || draft.kind !== kind || draft.route !== location.hash) return;
+      restoreDraft = undefined;
+      const input = detail.querySelector(`#${kind}-restore-file`);
+      const message = detail.querySelector(`#${kind}-restore-status`);
       input.disabled = event.target.disabled = true;
       message.textContent = 'Rechecking replacement evidence…';
       try {
-        await restoreInvoiceEvidence(getStorage, draft.item, draft.contents);
-        announce('Matching evidence restored. Review the case before closing.');
-        if (location.hash === itemRoute(draft.item.id)) await render({ focus: true });
+        const apply = kind === 'codex' ? applyCodexOriginalRepair : restoreInvoiceEvidence;
+        await apply(getStorage, draft.item, draft.contents);
+        if (draft.route === location.hash) {
+          announce(kind === 'codex' ? 'Original receipts repaired. The case is open for review.'
+            : 'Matching evidence restored. Review the case before closing.');
+          await render({ focus: true });
+        }
       } catch (error) {
-        message.textContent = error.message;
-        if (input.isConnected) input.disabled = false;
+        if (input.isConnected) {
+          message.textContent = error.message;
+          message.classList.add('import-error');
+          input.disabled = false;
+        }
       }
       return;
     }

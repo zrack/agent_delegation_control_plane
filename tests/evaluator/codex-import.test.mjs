@@ -4,8 +4,8 @@ import test from 'node:test';
 import { assessCodexEvidence, importCodexFolder } from '../../src/codex-import.mjs';
 import { evaluateChain } from '../../src/evaluator.mjs';
 import { codexClosureSteps } from '../../src/review-view.mjs';
-import { adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, importReviewPackage,
-  resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveCodexCandidate, saveReview, saveReviewDecision } from '../../src/review.mjs';
+import { adoptCodexBaseline, applyCodexOriginalRepair, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, importReviewPackage,
+  previewCodexOriginalRepair, resolveReviewCase, restoreReviews, REVIEW_STORAGE_KEY, saveCodexCandidate, saveReview, saveReviewDecision } from '../../src/review.mjs';
 import { restoreInvestigations, restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline, STORAGE_KEY, WORKFLOW_BASELINE_KEY } from '../../src/storage.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -608,4 +608,126 @@ test('Codex checklist distinguishes unverifiable original receipts, explicit clo
   assert.match(receipt.label + ' ' + receipt.reason, /original/i);
   assert(!blocked.some(step => ['resolve-review-case', 'adopt-codex-baseline', 'review-follow-up-file'].includes(step.target)));
   assert.deepEqual(read(), altered);
+});
+
+async function damagedOriginalCase() {
+  const { closed } = await portableCodexFixture();
+  const receiver = await savedCodexWorkflow();
+  const broken = JSON.parse(closed);
+  broken.codex.evidence.files['after.md'] = btoa('Altered original output.');
+  broken.note = 'Keep the recipient’s observations.';
+  broken.decision = { kind: 'fix-required', reason: 'Verify the original output.' };
+  await importReviewPackage(receiver.getStorage, JSON.stringify(broken));
+  return { ...receiver, closed };
+}
+
+test('original receipt repair previews only changed files and keeps the local review open until explicitly closed', async () => {
+  const { getStorage, storage, closed } = await damagedOriginalCase();
+  const item = reloadCase(getStorage);
+  const saved = storage.getItem(REVIEW_STORAGE_KEY);
+  const pin = storage.getItem(WORKFLOW_BASELINE_KEY);
+  const investigations = storage.getItem(STORAGE_KEY);
+  const preview = await previewCodexOriginalRepair(getStorage, item, closed);
+  assert.deepEqual(preview.restored, ['after.md']);
+  assert.equal(preview.pinState.status, 'matched');
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), saved);
+  assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+
+  await applyCodexOriginalRepair(getStorage, item, closed);
+  const repaired = reloadCase(getStorage);
+  const donor = JSON.parse(closed);
+  const expected = structuredClone(item);
+  expected.codex.evidence.files['after.md'] = donor.codex.evidence.files['after.md'];
+  assert.deepEqual(repaired, expected);
+  assert.equal((await assessReview(repaired)).codex.verifiedFileCount, 5);
+  assert.equal((await recheckCase(getStorage)).resolved, false);
+  assert.equal((await recheckCase(getStorage)).canResolve, true);
+  await assert.rejects(previewCodexOriginalRepair(getStorage, repaired, closed));
+  await resolveReviewCase(getStorage, repaired);
+  assert.equal((await recheckCase(getStorage)).resolved, true);
+  assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+  assert.equal(storage.getItem(STORAGE_KEY), investigations);
+});
+
+test('mismatched Codex donors, stale previews and failed writes preserve stored evidence', async () => {
+  const { getStorage, storage, closed } = await damagedOriginalCase();
+  const item = reloadCase(getStorage);
+  const saved = storage.getItem(REVIEW_STORAGE_KEY);
+  const pin = storage.getItem(WORKFLOW_BASELINE_KEY);
+  const changes = [
+    donor => { donor.kind = 'adcp-review-case'; },
+    donor => { donor.codex.workflow = 'Different workflow'; },
+    donor => { donor.report.baselineFingerprint = '0'.repeat(64); },
+    donor => { donor.baseline.chain.title += ' (different)'; },
+    donor => { donor.candidate.chain.title += ' (different)'; },
+    donor => { donor.codex.evidence.files['after.md'] = btoa('A different output.'); },
+    donor => { donor.codex.evidence.hashes['quickstart.diff'] = '0'.repeat(64); },
+  ];
+  for (const change of changes) {
+    const donor = JSON.parse(closed);
+    change(donor);
+    const file = JSON.stringify(donor);
+    await assert.rejects(previewCodexOriginalRepair(getStorage, item, file));
+    await assert.rejects(applyCodexOriginalRepair(getStorage, item, file));
+    assert.equal(storage.getItem(REVIEW_STORAGE_KEY), saved);
+    assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+  }
+  const full = () => ({ ...storage, setItem() { throw new Error('Storage quota exceeded.'); } });
+  await assert.rejects(applyCodexOriginalRepair(full, item, closed), /quota/i);
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), saved);
+  await previewCodexOriginalRepair(getStorage, item, closed);
+  saveReview(getStorage, item, 'Edited in a second tab.', true);
+  const newer = storage.getItem(REVIEW_STORAGE_KEY);
+  await assert.rejects(applyCodexOriginalRepair(getStorage, item, closed), /changed|reopen/i);
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), newer);
+});
+
+test('original receipt repair preserves missing or conflicting pins and cannot repair a failing local follow-up', async () => {
+  for (const pinStatus of ['missing', 'conflict', 'matched']) {
+    const { getStorage, storage, closed, baseline, pin } = await damagedOriginalCase();
+    if (pinStatus === 'missing') storage.removeItem(WORKFLOW_BASELINE_KEY);
+    if (pinStatus === 'conflict') {
+      const other = { ...baseline.chain, title: 'Another baseline' };
+      saveInvestigation(getStorage, other);
+      saveWorkflowBaseline(getStorage, pin.name, other, await runFingerprint(other), pin);
+    }
+    const raw = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+    // A previously closed case must lose its old closure when repairing the original.
+    raw.items[0].resolution = JSON.parse(closed).resolution;
+    if (pinStatus === 'matched') raw.items[0].followUp.codex.evidence.files['after.md'] = btoa('Bad correction.');
+    storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(raw));
+    const savedPin = storage.getItem(WORKFLOW_BASELINE_KEY);
+    const item = reloadCase(getStorage);
+    assert.equal((await previewCodexOriginalRepair(getStorage, item, closed)).pinState.status, pinStatus);
+    await applyCodexOriginalRepair(getStorage, item, closed);
+    const repaired = reloadCase(getStorage);
+    assert.deepEqual(repaired.followUp, item.followUp);
+    assert.equal(repaired.resolution, undefined);
+    const checked = await recheckCase(getStorage);
+    assert.equal(checked.pinState.status, pinStatus);
+    assert.equal(checked.resolved, false);
+    assert.equal(checked.canResolve, false);
+    await assert.rejects(resolveReviewCase(getStorage, repaired));
+    assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), savedPin);
+  }
+});
+
+test('repair can recover a missing receipt but cannot discard extra files or change recorded digests', async () => {
+  const { getStorage, storage, closed } = await damagedOriginalCase();
+  const inbox = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+  const evidence = inbox.items[0].codex.evidence;
+  const save = () => storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(inbox));
+  delete evidence.files['before.md'];
+  save();
+  const { restored } = await previewCodexOriginalRepair(getStorage, reloadCase(getStorage), closed);
+  assert.deepEqual(restored.sort(), ['after.md', 'before.md']);
+  evidence.files['unrecognized.md'] = btoa('Other material');
+  save();
+  await assert.rejects(applyCodexOriginalRepair(getStorage, reloadCase(getStorage), closed));
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), JSON.stringify(inbox));
+  delete evidence.files['unrecognized.md'];
+  evidence.hashes['before.md'] = '0'.repeat(64);
+  save();
+  await assert.rejects(applyCodexOriginalRepair(getStorage, reloadCase(getStorage), closed));
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), JSON.stringify(inbox));
 });

@@ -118,6 +118,15 @@ available. Checklist navigation opens evidence or moves focus to an existing
 control. Pin adoption, attaching a corrected folder, and closing the case each
 require their own reviewer action.
 
+For an original Codex receipt that fails verification, a reviewer can select a
+receipt-inclusive export of the same case. Preview checks the original report,
+workflow, baseline and candidate investigations, and receipt snapshot against
+the saved case. It lists the original files whose bytes would be restored.
+Applying the preview rechecks the match before writing to the existing inbox
+entry. The local pin, decision, notes and attached follow-up are preserved.
+Repair clears any recorded closure. Closing again requires a verified follow-up,
+the matching local pin and an explicit reviewer action.
+
 ## Optional actual-agent workflow
 
 ![Actual agent workflow sequence](docs/architecture/diagrams/agent-workflow.svg)

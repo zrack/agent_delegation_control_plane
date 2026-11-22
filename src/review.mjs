@@ -721,6 +721,54 @@ function invoiceFollowUpPasses(item, checked) {
     && item.invoice.workflow === item.followUp.invoice.workflow;
 }
 
+async function matchingCodexOriginalRepair(item, contents) {
+  if (!item.codex) throw new Error('Choose a saved Codex case to repair its original receipts.');
+  const { bundle, reportText, evidence } = readReviewPackage(contents, true);
+  if (bundle.kind !== codexCaseKind) throw new Error('Choose a Codex review case exported with receipts.');
+  const report = parseRegressionReport(reportText);
+  const donor = portableCodex(bundle.codex);
+  // The case ID binds the complete report, workflow and original snapshot fingerprint.
+  if (await reviewId(report, undefined, donor) !== item.id
+    || await reviewId(item.report, undefined, item.codex) !== item.id) {
+    throw new Error('This export does not match the saved Codex case. Check its original baseline, run, workflow and receipt snapshot.');
+  }
+  for (const side of sides) {
+    if (await evidenceState(report, side, evidence[side]) !== 'matched') {
+      throw new Error(`The export needs the matching original ${side} investigation.`);
+    }
+  }
+
+  const saved = item.codex.evidence;
+  const { hashes, files } = donor.evidence;
+  if (saved?.hashes !== undefined && (!saved.hashes || Object.keys(saved.hashes).length !== Object.keys(hashes).length
+    || Object.keys(hashes).some(name => hashes[name] !== saved.hashes[name]))) {
+    throw new Error('The export does not match the original Codex manifest digests recorded in this case.');
+  }
+  // Rehash the donor bytes and reproduce the original comparison using the local
+  // investigations. The donor's decision, notes, follow-up and closure are never copied.
+  const codex = { ...item.codex, evidence: {
+    ...saved, hashes: saved?.hashes ?? hashes, files: { ...saved?.files, ...files },
+  } };
+  const original = await assessReview({ ...item, codex });
+  if (!original.codex || original.verdict.status !== item.report.status) {
+    throw new Error('The verified receipts must reproduce the original result against the saved baseline and candidate.');
+  }
+  const restored = Object.keys(files).filter(name => files[name] !== saved?.files?.[name]);
+  if (!restored.length) throw new Error('No original Codex receipt files need repair.');
+  return { codex, restored };
+}
+
+export async function previewCodexOriginalRepair(getStorage, expected, contents) {
+  const { restored } = await matchingCodexOriginalRepair(expected, contents);
+  requireCurrentReview(readReviews(getStorage()), expected);
+  return { restored, pinState: folderPinState(getStorage, expected) };
+}
+
+export async function applyCodexOriginalRepair(getStorage, expected, contents) {
+  const { codex } = await matchingCodexOriginalRepair(expected, contents);
+  return updateCase(getStorage, expected, { codex, resolution: undefined });
+}
+
 export async function previewInvoiceEvidenceRestore(getStorage, item, contents) {
   if (!item.invoice || !item.decision) throw new Error('Save an invoice review decision before restoring evidence.');
   const { bundle, reportText, evidence } = readReviewPackage(contents, true);

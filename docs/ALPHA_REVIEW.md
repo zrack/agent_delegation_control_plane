@@ -40,6 +40,24 @@ Use a fresh profile for each row because the exports share a case ID. Where a pi
 
 To check note persistence, enter a note in a case with **Save review**, save it and reload. Inspecting the checklist preserves the saved decision, note and workflow pin. [Checklist validation](CODEX_CLOSURE_CHECKLIST_VALIDATION.md) · [Portable case validation](CODEX_PORTABLE_CASE_VALIDATION.md)
 
+### Repair the original receipt in a development checkout
+
+Use the dashboard from a checkout that includes original Codex receipt repair.
+Follow the [altered original receipt exercise](#inspect-the-altered-original-receipt)
+with the alpha.13 demo files. Stay in the profile where the case is **Open**.
+
+1. In the case, expand **Restore original Codex receipts**. Choose the clean
+   `cases/resolved.json` export. The preview should list `after.md` for the
+   original run. You can select a different export or leave the preview without
+   changing the saved case.
+2. Select **Apply receipt repair**, then reload. The original output now
+   verifies. The **Evidence needed** decision, any saved note, and the
+   **Follow-up review** pin remain. The demo's passing follow-up makes this
+   case **Ready to close**.
+3. Select **Close as resolved** and reload to verify **Resolved**. With a
+   conflicting local pin, the original receipt can be repaired but the case
+   stays **Open** and the pin is preserved.
+
 ## Try the Codex run-folder demo
 
 To create a case yourself, keep using the alpha.13 dashboard and extract the [alpha.11 four-folder follow-up demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.11/adcp-codex-followup-demo-v0.1.0-alpha.11.zip) separately. Start this exercise with fresh browser storage. Each folder picker takes the directory containing `manifest.json`.
