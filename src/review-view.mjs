@@ -317,7 +317,36 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <input id="${kind}-restore-file" data-preview-restore="${kind}" type="file" accept=".json,application/json" aria-describedby="${kind}-restore-status">
       <p class="panel-description" id="${kind}-restore-status" role="status"></p>
       <button id="apply-${kind}-restore" data-apply-restore="${kind}" type="button" disabled>${item.codex ? 'Apply receipt repair' : 'Apply evidence repair'}</button>
+      ${item.codex ? '<button id="cancel-codex-restore" type="button" hidden>Cancel preview</button>' : ''}
     </details>`;
+  }
+
+  function codexLocalHistory(item) {
+    if (!item.codex) return '';
+    const entries = (item.localHistory ?? []).map(entry => {
+      const time = new Date(entry.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' });
+      let label, details;
+      if (entry.kind === 'repair') {
+        label = 'Original receipts repaired';
+        details = entry.files.map(file => {
+          const before = file.before === 'missing' ? 'File was missing'
+            : file.before === 'unreadable' ? 'Previous bytes were unreadable' : `<code>${escape(file.before)}</code>`;
+          return `<p><strong>${escape(file.name)}</strong></p><dl>
+            <dt>Before SHA-256</dt><dd>${before}</dd>
+            <dt>After SHA-256</dt><dd><code>${escape(file.after)}</code></dd></dl>`;
+        }).join('');
+      } else {
+        label = 'Case explicitly closed';
+        details = `<dl><dt>Pinned baseline</dt><dd><code>${escape(entry.baselineId)}</code></dd>
+          <dt>Baseline SHA-256</dt><dd><code>${escape(entry.baselineFingerprint)}</code></dd>
+          <dt>Passing follow-up</dt><dd><code>${escape(entry.followUpId)}</code></dd>
+          <dt>Follow-up SHA-256</dt><dd><code>${escape(entry.followUpFingerprint)}</code></dd></dl>`;
+      }
+      return `<li class="codex-history-entry"><strong>${label}</strong>
+        <time datetime="${escape(entry.at)}">${escape(time)}</time>${details}</li>`;
+    });
+    return `<section id="codex-local-history" aria-labelledby="codex-history-title"><h3 id="codex-history-title">Local repair history</h3>
+      ${entries.length ? `<ol>${entries.join('')}</ol>` : '<p class="muted">No local repairs or closures recorded.</p>'}</section>`;
   }
 
   function renderCase(item, original, followUp) {
@@ -394,6 +423,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
       ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
       <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>
+      ${codexLocalHistory(item)}
       <button type="button" id="remove-review">Remove from inbox</button>`;
   }
 
@@ -450,6 +480,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
           <ul>${item.report.reasons.slice(0, 12).map(reason => `<li>${escape(reason.message)}</li>`).join('')}</ul>
           ${item.report.reasons.length > 12 ? `<p>Showing 12 of ${item.report.reasons.length} recorded reasons.</p>` : ''}</details>` : ''}
         ${renderCase(item, assessment, followUp)}
+        ${codexLocalHistory(item)}
         <form id="review-note-form">
           <label for="review-note">Review note</label>
           <textarea id="review-note" rows="3" maxlength="${MAX_REVIEW_NOTE}">${escape(item.note)}</textarea>
@@ -682,6 +713,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const message = detail.querySelector(`#${kind}-restore-status`);
       restoreDraft = undefined;
       button.disabled = true;
+      const cancel = detail.querySelector('#cancel-codex-restore');
+      if (cancel) cancel.hidden = true;
       message.classList.remove('import-error');
       message.textContent = '';
       if (!file) return;
@@ -706,6 +739,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
           : `Ready to restore: ${restored.join('; ')}.`;
         message.textContent = `${result} Your decision and notes are kept. ${next[pinState.status]}`;
         button.disabled = false;
+        if (cancel) cancel.hidden = false;
       } catch (error) {
         if (current()) {
           message.classList.add('import-error');
@@ -739,8 +773,26 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     finally { input.disabled = false; input.value = ''; }
   });
 
+  function cancelCodexPreview() {
+    restoreDraft = undefined;
+    const input = detail.querySelector('#codex-restore-file');
+    input.value = '';
+    detail.querySelector('#apply-codex-restore').disabled = true;
+    detail.querySelector('#cancel-codex-restore').hidden = true;
+    detail.querySelector('#codex-restore-status').textContent = 'Preview canceled.';
+    input.focus();
+  }
+
+  detail.addEventListener('cancel', event => {
+    if (event.target.id === 'codex-restore-file' && restoreDraft?.kind === 'codex') cancelCodexPreview();
+  });
+
   detail.addEventListener('click', async event => {
     if (!selected) return;
+    if (event.target.id === 'cancel-codex-restore') {
+      cancelCodexPreview();
+      return;
+    }
     const targetId = event.target.dataset.closureTarget;
     if (targetId) {
       const target = document.getElementById(targetId);
@@ -762,6 +814,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const input = detail.querySelector(`#${kind}-restore-file`);
       const message = detail.querySelector(`#${kind}-restore-status`);
       input.disabled = event.target.disabled = true;
+      if (kind === 'codex') detail.querySelector('#cancel-codex-restore').hidden = true;
       message.textContent = 'Rechecking replacement evidence…';
       try {
         const apply = kind === 'codex' ? applyCodexOriginalRepair : restoreInvoiceEvidence;
