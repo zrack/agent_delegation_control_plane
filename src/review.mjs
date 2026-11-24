@@ -1,6 +1,6 @@
 // Reports are recorded claims. Only matching evidence can reproduce a verdict.
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
-import { assessCodexEvidence, portableCodexEvidence } from './codex-import.mjs';
+import { assessCodexEvidence, codexReceiptNames, portableCodexEvidence, previousCodexReceiptDigest } from './codex-import.mjs';
 import { evaluateChain } from './evaluator.mjs';
 import { parseInvestigation } from './import.mjs';
 import { assessInvoiceFolder, portableInvoiceEvidence } from './invoice-import.mjs';
@@ -24,7 +24,7 @@ const invoiceCaseKind = 'adcp-invoice-review-case';
 const codexCaseKind = 'adcp-codex-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
-const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'codex', 'suppliedBaseline'];
+const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'codex', 'suppliedBaseline', 'localHistory'];
 const bytes = value => new TextEncoder().encode(value).length;
 const isId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(value);
 const isFingerprint = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -182,6 +182,32 @@ function validateDecision(kind, reason) {
   return { kind, reason: reason.trim() };
 }
 
+// Local history is display metadata. A damaged entry cannot prevent the
+// evidence from being rechecked or turn an imported closure into a local one.
+function readCodexHistory(history) {
+  if (!Array.isArray(history)) return [];
+  const entries = [];
+  for (const entry of history) {
+    if (typeof entry?.at !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(entry.at)
+      || !Number.isFinite(Date.parse(entry.at))) continue;
+    const { kind, at } = entry;
+    if (kind === 'repair') {
+      const { files } = entry;
+      if (!Array.isArray(files) || !files.length || files.length > codexReceiptNames.length
+        || !files.every(file => codexReceiptNames.includes(file?.name) && isFingerprint(file.after)
+          && (file.before === 'missing' || file.before === 'unreadable' || isFingerprint(file.before)))
+        || new Set(files.map(file => file.name)).size !== files.length) continue;
+      entries.push({ kind, at, files: files.map(({ name, before, after }) => ({ name, before, after })) });
+    } else if (kind === 'closure') {
+      const { baselineId, baselineFingerprint, followUpId, followUpFingerprint } = entry;
+      if (isId(baselineId) && isFingerprint(baselineFingerprint) && isId(followUpId) && isFingerprint(followUpFingerprint)) {
+        entries.push({ kind, at, baselineId, baselineFingerprint, followUpId, followUpFingerprint });
+      }
+    }
+  }
+  return entries;
+}
+
 function readReviews(storage) {
   const raw = storage.getItem(REVIEW_STORAGE_KEY);
   if (raw === null) return [];
@@ -215,6 +241,8 @@ function readReviews(storage) {
     if (item.codex !== undefined) {
       if (!item.codex || item.invoice !== undefined) throw new Error('The saved Codex snapshot is invalid.');
       restored.codex = item.codex;
+      const history = readCodexHistory(item.localHistory);
+      if (history.length) restored.localHistory = history;
     }
     if (item.invoice !== undefined) {
       restored.invoice = item.invoice;
@@ -765,8 +793,14 @@ export async function previewCodexOriginalRepair(getStorage, expected, contents)
 }
 
 export async function applyCodexOriginalRepair(getStorage, expected, contents) {
-  const { codex } = await matchingCodexOriginalRepair(expected, contents);
-  return updateCase(getStorage, expected, { codex, resolution: undefined });
+  const { codex, restored } = await matchingCodexOriginalRepair(expected, contents);
+  const files = await Promise.all(restored.map(async name => ({
+    name,
+    before: await previousCodexReceiptDigest(expected.codex.evidence?.files, name),
+    after: codex.evidence.hashes[name],
+  })));
+  const entry = { kind: 'repair', at: new Date().toISOString(), files };
+  return updateCase(getStorage, expected, { codex, resolution: undefined, localHistory: [...(expected.localHistory ?? []), entry] });
 }
 
 export async function previewInvoiceEvidenceRestore(getStorage, item, contents) {
@@ -826,12 +860,19 @@ export async function restoreInvoiceEvidence(getStorage, expected, contents) {
 
 export async function resolveReviewCase(getStorage, expected) {
   if (expected.codex) requireFolderPin(getStorage, expected);
-  const { canResolve } = await assessFollowUp(expected, await assessReview(expected), expected.codex ? getStorage : undefined);
+  const { canResolve, resolved } = await assessFollowUp(expected, await assessReview(expected), expected.codex ? getStorage : undefined);
   if (!canResolve) throw new Error(expected.invoice
     ? 'Closure requires matching baseline evidence and a passing invoice follow-up with verified receipts.'
     : 'Resolution requires a passing follow-up with matching evidence against the original pinned baseline.');
   const resolution = await resolutionFor(expected);
   if (expected.codex || expected.invoice) requireFolderPin(getStorage, expected);
+  if (expected.codex) {
+    if (resolved) throw new Error('This Codex case is already resolved.');
+    const { baselineId, baselineFingerprint, candidateId, candidateFingerprint } = expected.followUp.report;
+    const entry = { kind: 'closure', at: new Date().toISOString(), baselineId, baselineFingerprint,
+      followUpId: candidateId, followUpFingerprint: candidateFingerprint };
+    return updateCase(getStorage, expected, { resolution, localHistory: [...(expected.localHistory ?? []), entry] });
+  }
   return updateCase(getStorage, expected, { resolution });
 }
 

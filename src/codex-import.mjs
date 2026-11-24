@@ -14,7 +14,7 @@ const fileLimits = {
 
 const captureNames = Object.keys(fileLimits);
 const ledgerNames = ['actions.jsonl', 'grants.jsonl', 'attempts.jsonl'];
-const receiptNames = [...ledgerNames, 'before.md', 'after.md'];
+export const codexReceiptNames = Object.freeze([...ledgerNames, 'before.md', 'after.md']);
 
 const evidenceTools = {
   preflight_read: { action: 'file:read', receipt: 'before.md' },
@@ -154,6 +154,16 @@ function decodeFile(contents, name) {
   throw new Error(`Invalid or oversized saved Codex receipt for ${name}.`);
 }
 
+// The old manifest contains the expected digest, which can differ from the
+// bytes that were actually in the inbox immediately before a repair.
+export async function previousCodexReceiptDigest(files, name) {
+  if (!files || !Object.hasOwn(files, name)) return 'missing';
+  let bytes;
+  try { bytes = decodeFile(files[name], name); }
+  catch { return 'unreadable'; }
+  return digest(bytes);
+}
+
 async function deriveChain(verified, manifest) {
   const actions = readRecords(verified.get('actions.jsonl'), 'actions.jsonl');
   const grants = readRecords(verified.get('grants.jsonl'), 'grants.jsonl');
@@ -187,7 +197,7 @@ export async function importCodexFolder(files, { retainEvidence = false } = {}) 
     const bytes = await readFile(selected, name, fileLimits[name]);
     await verifyFile(name, bytes, hashes);
     if (ledgerNames.includes(name)) verified.set(name, bytes);
-    if (retainEvidence && receiptNames.includes(name)) snapshotFiles[name] = encodeFile(bytes);
+    if (retainEvidence && codexReceiptNames.includes(name)) snapshotFiles[name] = encodeFile(bytes);
   }
   const result = { chain: await deriveChain(verified, hashes), verifiedFileCount: captureNames.length };
   if (retainEvidence) result.evidence = { hashes, files: snapshotFiles };
@@ -198,10 +208,10 @@ export async function importCodexFolder(files, { retainEvidence = false } = {}) 
 // Copy them in capture order so imported object key order cannot alter the snapshot.
 export function portableCodexEvidence(evidence) {
   if (!hasExactKeys(evidence, ['hashes', 'files']) || !validHashes(evidence.hashes)
-    || !hasExactKeys(evidence.files, receiptNames)) throw new Error('The saved Codex receipt snapshot is invalid.');
+    || !hasExactKeys(evidence.files, codexReceiptNames)) throw new Error('The saved Codex receipt snapshot is invalid.');
   const hashes = Object.fromEntries(captureNames.map(name => [name, evidence.hashes[name]]));
   const files = {};
-  for (const name of receiptNames) {
+  for (const name of codexReceiptNames) {
     const contents = evidence.files[name];
     if (typeof contents !== 'string' || contents.length > 4 * Math.ceil(fileLimits[name] / 3)) {
       throw new Error(`Invalid or oversized saved Codex receipt for ${name}.`);
@@ -216,10 +226,10 @@ export function portableCodexEvidence(evidence) {
 export async function assessCodexEvidence(evidence) {
   const { hashes, files } = portableCodexEvidence(evidence);
   const verified = new Map();
-  for (const name of receiptNames) {
+  for (const name of codexReceiptNames) {
     const bytes = decodeFile(files[name], name);
     await verifyFile(name, bytes, hashes);
     if (ledgerNames.includes(name)) verified.set(name, bytes);
   }
-  return { chain: await deriveChain(verified, hashes), verifiedFileCount: receiptNames.length, evidence: { hashes, files } };
+  return { chain: await deriveChain(verified, hashes), verifiedFileCount: codexReceiptNames.length, evidence: { hashes, files } };
 }

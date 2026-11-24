@@ -27,7 +27,11 @@ receipt export. Both options start unchecked and reset after download.
 Importing a receipt case stores the included evidence in the recipient’s inbox.
 Selecting **Pin included baseline** also saves the baseline in that browser’s
 investigation list and creates the missing workflow pin.
-**Remove from inbox** deletes the case and both local receipt snapshots.
+Local repair history stays in the browser profile that performed the action.
+It records timestamps, repaired filenames and digests, and the runs used when
+the reviewer explicitly closed the case. Case and package downloads omit this
+history. **Remove from inbox** deletes the case, its local history and both
+receipt snapshots.
 
 The invoice-folder preview reads the manifest and up to six named files. **Compare and save to inbox** stores the baseline and candidate, the relevant manifest digests, and exact bytes of the selected allowlisted files within the existing 20-report / 2 MiB inbox limit. These files can include execution logs inside the execution receipt. The browser rechecks saved bytes against the supplied manifest, which provides no independent source authentication. An invoice follow-up adds a second receipt snapshot within the same limit. **Remove from inbox** clears both saved receipt snapshots and the local closure record. Ordinary invoice case downloads carry the original delegation evidence and case decision. Selecting **Include invoice receipts in case download** also includes the receipt bytes, matching follow-up, and verified closure. Review the contents before sharing, especially the execution receipt, which can contain logs. The receipt and note options are independent and reset after download.
 

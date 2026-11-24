@@ -288,6 +288,7 @@ test('matching Codex correction needs a decision and explicit closure, then rech
   const original = await assessReview(read());
   const reloaded = await assessFollowUp(read(), original, getStorage);
   assert.equal(reloaded.resolved, true);
+  assert.deepEqual(read().localHistory.map(entry => entry.kind), ['closure']);
   assert.equal(original.codex.verifiedFileCount, 5);
   assert.equal(reloaded.assessment.codex.verifiedFileCount, 5);
   assert.equal(reloaded.assessment.verdict.status, 'pass');
@@ -298,6 +299,7 @@ test('matching Codex correction needs a decision and explicit closure, then rech
   for (const key of ['codex', 'followUp', 'resolution']) assert.equal(exported[key], undefined);
   saveReviewDecision(getStorage, read(), 'fix-required', 'Record a new decision.');
   assert.equal((await assess()).resolved, false);
+  assert.deepEqual(read().localHistory.map(entry => entry.kind), ['closure']);
 });
 
 test('changed Codex inputs cannot replace a correction; changed pins or saved receipts block closure after reload', async () => {
@@ -614,39 +616,100 @@ async function damagedOriginalCase() {
   const { closed } = await portableCodexFixture();
   const receiver = await savedCodexWorkflow();
   const broken = JSON.parse(closed);
-  broken.codex.evidence.files['after.md'] = btoa('Altered original output.');
+  broken.codex.evidence.files['after.md'] = Buffer.from('Altered résumé.\r\n').toString('base64');
   broken.note = 'Keep the recipient’s observations.';
   broken.decision = { kind: 'fix-required', reason: 'Verify the original output.' };
   await importReviewPackage(receiver.getStorage, JSON.stringify(broken));
   return { ...receiver, closed };
 }
 
-test('original receipt repair previews only changed files and keeps the local review open until explicitly closed', async () => {
+test('Codex repair and explicit closure persist separate local events with the receipt and run fingerprints', async () => {
   const { getStorage, storage, closed } = await damagedOriginalCase();
   const item = reloadCase(getStorage);
   const saved = storage.getItem(REVIEW_STORAGE_KEY);
   const pin = storage.getItem(WORKFLOW_BASELINE_KEY);
   const investigations = storage.getItem(STORAGE_KEY);
+  assert.equal(item.localHistory, undefined);
   const preview = await previewCodexOriginalRepair(getStorage, item, closed);
   assert.deepEqual(preview.restored, ['after.md']);
   assert.equal(preview.pinState.status, 'matched');
   assert.equal(storage.getItem(REVIEW_STORAGE_KEY), saved);
   assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
+  // A preview can be discarded by leaving the case. It must not survive a reload as a repair.
+  assert.equal(reloadCase(getStorage).localHistory, undefined);
 
   await applyCodexOriginalRepair(getStorage, item, closed);
   const repaired = reloadCase(getStorage);
   const donor = JSON.parse(closed);
   const expected = structuredClone(item);
   expected.codex.evidence.files['after.md'] = donor.codex.evidence.files['after.md'];
-  assert.deepEqual(repaired, expected);
+  const { localHistory, ...savedCase } = repaired;
+  assert.deepEqual(savedCase, expected);
+  assert.equal(localHistory.length, 1);
+  const repair = localHistory[0];
+  assert.equal(new Date(repair.at).toISOString(), repair.at);
+  assert.deepEqual(repair, { kind: 'repair', at: repair.at, files: [{
+    name: 'after.md', before: sha(Buffer.from('Altered résumé.\r\n')),
+    after: sha(Buffer.from(donor.codex.evidence.files['after.md'], 'base64')),
+  }] });
   assert.equal((await assessReview(repaired)).codex.verifiedFileCount, 5);
   assert.equal((await recheckCase(getStorage)).resolved, false);
   assert.equal((await recheckCase(getStorage)).canResolve, true);
   await assert.rejects(previewCodexOriginalRepair(getStorage, repaired, closed));
+  const beforeClose = storage.getItem(REVIEW_STORAGE_KEY);
+  const full = () => ({ ...storage, setItem() { throw new Error('Storage quota exceeded.'); } });
+  await assert.rejects(resolveReviewCase(full, repaired), /quota/i);
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), beforeClose);
   await resolveReviewCase(getStorage, repaired);
+  const savedHistory = reloadCase(getStorage).localHistory;
+  assert.equal(savedHistory.length, 2);
+  const [savedRepair, closure] = savedHistory;
+  assert.deepEqual(savedRepair, repair);
+  assert.equal(new Date(closure.at).toISOString(), closure.at);
+  assert.deepEqual(closure, {
+    kind: 'closure', at: closure.at,
+    baselineId: repaired.report.baselineId, baselineFingerprint: repaired.report.baselineFingerprint,
+    followUpId: repaired.followUp.report.candidateId, followUpFingerprint: repaired.followUp.report.candidateFingerprint,
+  });
   assert.equal((await recheckCase(getStorage)).resolved, true);
+  const afterClose = storage.getItem(REVIEW_STORAGE_KEY);
+  await assert.rejects(resolveReviewCase(getStorage, repaired));
+  await assert.rejects(resolveReviewCase(getStorage, reloadCase(getStorage)));
+  assert.equal(storage.getItem(REVIEW_STORAGE_KEY), afterClose);
   assert.equal(storage.getItem(WORKFLOW_BASELINE_KEY), pin);
   assert.equal(storage.getItem(STORAGE_KEY), investigations);
+});
+
+test('portable Codex cases carry the verified outcome while history stays with its local case', async () => {
+  const { getStorage, closed } = await damagedOriginalCase();
+  await applyCodexOriginalRepair(getStorage, reloadCase(getStorage), closed);
+  const repaired = reloadCase(getStorage);
+  await importReviewPackage(getStorage, closed);
+  assert.deepEqual(reloadCase(getStorage).localHistory, repaired.localHistory);
+  assert.equal((await recheckCase(getStorage)).resolved, false);
+  await resolveReviewCase(getStorage, reloadCase(getStorage));
+  const sender = reloadCase(getStorage);
+  const ordinary = await createReviewCase(sender);
+  const withReceipts = await createReviewCase(sender, sender.note, { getStorage, includeCodexReceipts: true });
+  for (const contents of [ordinary, withReceipts]) {
+    assert(!contents.includes('"localHistory"'));
+    assert(!contents.includes(sender.localHistory[0].files[0].before));
+  }
+  const bundle = JSON.parse(withReceipts);
+  bundle.localHistory = sender.localHistory;
+  const fresh = await savedCodexWorkflow();
+  await importReviewPackage(fresh.getStorage, JSON.stringify(bundle));
+  assert.equal((await recheckCase(fresh.getStorage)).resolved, true);
+  assert.equal(reloadCase(fresh.getStorage).localHistory, undefined);
+
+  bundle.codex.evidence.files['after.md'] = btoa('Another altered file.');
+  const other = await savedCodexWorkflow();
+  await importReviewPackage(other.getStorage, JSON.stringify(bundle));
+  assert.equal(reloadCase(other.getStorage).resolution, undefined);
+  assert.equal(reloadCase(other.getStorage).localHistory, undefined);
+  await importReviewPackage(getStorage, JSON.stringify(bundle));
+  assert.deepEqual(reloadCase(getStorage).localHistory, sender.localHistory);
+  assert.equal((await recheckCase(getStorage)).resolved, true);
 });
 
 test('mismatched Codex donors, stale previews and failed writes preserve stored evidence', async () => {
@@ -680,6 +743,7 @@ test('mismatched Codex donors, stale previews and failed writes preserve stored 
   const newer = storage.getItem(REVIEW_STORAGE_KEY);
   await assert.rejects(applyCodexOriginalRepair(getStorage, item, closed), /changed|reopen/i);
   assert.equal(storage.getItem(REVIEW_STORAGE_KEY), newer);
+  assert.equal(reloadCase(getStorage).localHistory, undefined);
 });
 
 test('original receipt repair preserves missing or conflicting pins and cannot repair a failing local follow-up', async () => {
@@ -730,4 +794,20 @@ test('repair can recover a missing receipt but cannot discard extra files or cha
   save();
   await assert.rejects(applyCodexOriginalRepair(getStorage, reloadCase(getStorage), closed));
   assert.equal(storage.getItem(REVIEW_STORAGE_KEY), JSON.stringify(inbox));
+});
+
+test('repair history records missing and unreadable prior bytes without inventing their hashes', async () => {
+  const { getStorage, storage, closed } = await damagedOriginalCase();
+  const inbox = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+  const evidence = inbox.items[0].codex.evidence;
+  delete evidence.files['before.md'];
+  evidence.files['after.md'] = '%%invalid base64%%';
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(inbox));
+  await applyCodexOriginalRepair(getStorage, reloadCase(getStorage), closed);
+  const [entry] = reloadCase(getStorage).localHistory;
+  const changes = Object.fromEntries(entry.files.map(({ name, before, after }) => [name, { before, after }]));
+  assert.deepEqual(changes, {
+    'before.md': { before: 'missing', after: evidence.hashes['before.md'] },
+    'after.md': { before: 'unreadable', after: evidence.hashes['after.md'] },
+  });
 });

@@ -127,6 +127,14 @@ entry. The local pin, decision, notes and attached follow-up are preserved.
 Repair clears any recorded closure. Closing again requires a verified follow-up,
 the matching local pin and an explicit reviewer action.
 
+**Local repair history** is stored with each Codex inbox case. Applying a repair
+records the time, each changed file, the SHA-256 of its previous bytes and the
+verified replacement digest. A missing or unreadable previous file is labeled
+accordingly. Explicit closure records its own time and the run IDs and
+fingerprints of the pinned baseline and passing follow-up. Each action and its
+history entry share one inbox write. When the case reopens, the dashboard
+verifies its current evidence and pin independently of this history.
+
 ## Optional actual-agent workflow
 
 ![Actual agent workflow sequence](docs/architecture/diagrams/agent-workflow.svg)
