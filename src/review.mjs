@@ -13,6 +13,7 @@ export const REVIEW_STORAGE_KEY = 'adcp.regression-reviews.v1';
 export const MAX_REPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_REVIEW_PACKAGE_BYTES = MAX_REPORT_BYTES;
 export const MAX_REVIEW_NOTE = 1200;
+export const MAX_SENDER_HISTORY_ENTRIES = 100;
 export const reviewDecisions = Object.freeze({
   'fix-required': 'Fix required',
   'evidence-needed': 'Evidence needed',
@@ -24,7 +25,8 @@ const invoiceCaseKind = 'adcp-invoice-review-case';
 const codexCaseKind = 'adcp-codex-review-case';
 const MAX_REVIEWS = 20;
 const sides = ['baseline', 'candidate'];
-const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution', 'invoice', 'codex', 'suppliedBaseline', 'localHistory'];
+const reviewFields = ['report', 'note', 'reviewed', ...sides, 'decision', 'followUp', 'resolution',
+  'invoice', 'codex', 'suppliedBaseline', 'localHistory', 'senderHistory'];
 const bytes = value => new TextEncoder().encode(value).length;
 const isId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(value);
 const isFingerprint = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -103,7 +105,9 @@ const caseResolutionFingerprint = async item => runFingerprint({
   original: await runFingerprint(item.report), decision: item.decision, followUp: item.followUp.id,
 });
 
-export async function createReviewCase(item, note, { includeInvoiceReceipts = false, includeCodexReceipts = false, getStorage } = {}) {
+export async function createReviewCase(item, note, {
+  includeInvoiceReceipts = false, includeCodexReceipts = false, includeSenderHistory = false, getStorage,
+} = {}) {
   const withReceipts = Boolean(item.invoice && includeInvoiceReceipts === true);
   const bundle = await reviewBundle(withReceipts ? invoiceCaseKind : caseKind, item.report, item, note);
   if (item.decision) bundle.decision = validateDecision(item.decision.kind, item.decision.reason);
@@ -123,6 +127,10 @@ export async function createReviewCase(item, note, { includeInvoiceReceipts = fa
         bundle.followUp = { report: item.followUp.report, candidate: { schemaVersion: 1, chain: item.followUp.candidate },
           codex: portableCodex(item.followUp.codex) };
         if (checked.resolved) bundle.resolution = item.resolution;
+      }
+      if (includeSenderHistory === true) {
+        const entries = senderHistoryEntries(item);
+        if (entries.length) bundle.senderHistory = { caseId: item.id, entries };
       }
       if (getStorage) requireCurrentReview(readReviews(getStorage()), item);
     }
@@ -208,6 +216,30 @@ function readCodexHistory(history) {
   return entries;
 }
 
+function historyEntryMatchesCase(entry, item) {
+  if (entry.kind === 'repair') {
+    return entry.files.every(file => file.after === item.codex?.evidence?.hashes?.[file.name]);
+  }
+  const followUp = item.followUp?.report;
+  return entry.baselineId === item.report.baselineId && entry.baselineFingerprint === item.report.baselineFingerprint
+    && entry.followUpId === followUp?.candidateId && entry.followUpFingerprint === followUp?.candidateFingerprint;
+}
+
+// Export only actions performed in this profile, scoped to the original
+// receipts and the follow-up that the recipient will actually receive.
+export function senderHistoryEntries(item) {
+  const entries = readCodexHistory(item.localHistory).filter(entry => historyEntryMatchesCase(entry, item));
+  return entries.slice(-MAX_SENDER_HISTORY_ENTRIES);
+}
+
+function readSenderHistory(history, item) {
+  if (history?.caseId !== item.id || !Array.isArray(history.entries) || !history.entries.length
+    || history.entries.length > MAX_SENDER_HISTORY_ENTRIES) return undefined;
+  const entries = readCodexHistory(history.entries);
+  if (entries.length !== history.entries.length || !entries.every(entry => historyEntryMatchesCase(entry, item))) return undefined;
+  return { caseId: item.id, entries };
+}
+
 function readReviews(storage) {
   const raw = storage.getItem(REVIEW_STORAGE_KEY);
   if (raw === null) return [];
@@ -243,6 +275,8 @@ function readReviews(storage) {
       restored.codex = item.codex;
       const history = readCodexHistory(item.localHistory);
       if (history.length) restored.localHistory = history;
+      const senderHistory = readSenderHistory(item.senderHistory, restored);
+      if (senderHistory) restored.senderHistory = senderHistory;
     }
     if (item.invoice !== undefined) {
       restored.invoice = item.invoice;
@@ -500,6 +534,13 @@ export async function importReview(getStorage, reportText, evidence, initialNote
       next.resolution = incoming.resolution;
     }
   }
+  if (codex && portableCase.senderHistory !== undefined) {
+    // The case ID binds the workflow, original receipts and complete report.
+    // Reimport can retain a different local follow-up, so check both cases.
+    const history = readSenderHistory(portableCase.senderHistory, incoming);
+    if (history && history.entries.every(entry => historyEntryMatchesCase(entry, next))) next.senderHistory = history;
+    else caseWarnings.push('Sender-reported history was omitted because it was invalid or did not match the case evidence.');
+  }
   for (const side of mismatches) next[side] ??= null;
   return { id, mismatches, caseWarnings, items: writeReviews(storage, [next, ...items.filter(item => item.id !== id)]) };
 }
@@ -697,7 +738,15 @@ export async function attachCodexFollowUp(getStorage, expected, evidence) {
   const followUp = { id: await reviewId(report, undefined, codex), report, candidate, codex };
   requireFolderPin(getStorage, expected);
   const resolution = expected.followUp?.id === followUp.id ? expected.resolution : undefined;
-  return updateCase(getStorage, expected, { followUp, resolution });
+  const changes = { followUp, resolution };
+  if (expected.senderHistory && expected.followUp?.id !== followUp.id) {
+    // Keep the original receipt repairs when a new follow-up replaces the
+    // one named by the sender's closure.
+    const item = { ...expected, followUp };
+    const entries = expected.senderHistory.entries.filter(entry => historyEntryMatchesCase(entry, item));
+    changes.senderHistory = entries.length ? { caseId: item.id, entries } : undefined;
+  }
+  return updateCase(getStorage, expected, changes);
 }
 
 const resolutionFor = item => item.invoice || item.codex

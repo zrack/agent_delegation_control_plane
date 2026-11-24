@@ -5,8 +5,8 @@ import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
 import { restoreWorkflowBaselines, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
   adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
-  MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, removeReview, resolveReviewCase,
-  applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision,
+  MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, MAX_SENDER_HISTORY_ENTRIES, removeReview, resolveReviewCase,
+  applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision, senderHistoryEntries,
 } from './review.mjs';
 
 const tones = { pass: 'valid', regression: 'violation', review: 'unknown' };
@@ -321,9 +321,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     </details>`;
   }
 
-  function codexLocalHistory(item) {
-    if (!item.codex) return '';
-    const entries = (item.localHistory ?? []).map(entry => {
+  function codexHistoryEntries(entries) {
+    return entries.map(entry => {
       const time = new Date(entry.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' });
       let label, details;
       if (entry.kind === 'repair') {
@@ -344,9 +343,19 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       }
       return `<li class="codex-history-entry"><strong>${label}</strong>
         <time datetime="${escape(entry.at)}">${escape(time)}</time>${details}</li>`;
-    });
-    return `<section id="codex-local-history" aria-labelledby="codex-history-title"><h3 id="codex-history-title">Local repair history</h3>
-      ${entries.length ? `<ol>${entries.join('')}</ol>` : '<p class="muted">No local repairs or closures recorded.</p>'}</section>`;
+    }).join('');
+  }
+
+  function codexHistory(item) {
+    if (!item.codex) return '';
+    const sender = item.senderHistory?.entries;
+    return `<section class="codex-history" id="codex-local-history" aria-labelledby="codex-history-title">
+      <h3 id="codex-history-title">Local repair history</h3>
+      ${item.localHistory?.length ? `<ol>${codexHistoryEntries(item.localHistory)}</ol>` : '<p class="muted">No local repairs or closures recorded.</p>'}</section>
+      ${sender?.length ? `<section class="codex-history" id="codex-sender-history" aria-labelledby="codex-sender-history-title">
+        <h3 id="codex-sender-history-title">Sender-reported history</h3>
+        <p class="panel-description">These events and prior receipt digests come from the sender. This browser checks the case evidence and your workflow pin to determine the current status.</p>
+        <ol>${codexHistoryEntries(sender)}</ol></section>` : ''}`;
   }
 
   function renderCase(item, original, followUp) {
@@ -404,14 +413,17 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     if (!item.invoice && !item.codex && followUp.resolved) contents.push('verified closure');
     const receiptOption = item.invoice && item.decision && original.verdict && followUp.originalInvoice?.checked;
     const codexReceiptOption = Boolean(item.codex && item.decision && original.codex && original.verdict);
+    const historyOption = codexReceiptOption && senderHistoryEntries(item).length > 0;
     return `<details class="review-differences"><summary>Export review package or case</summary>
       <p class="panel-description">The download includes the original report${matching}.</p>
       ${codexReceiptOption ? '<p class="panel-description" id="codex-export-help">Including receipts adds the saved Codex ledgers and before/after files for the original and any verified follow-up. They can contain source text and tool-call details. A resolved case also includes its verifiable closure.</p>' : ''}
+      ${historyOption ? `<p class="panel-description" id="sender-history-export-help">Select Codex receipts to enable sender history. It shares this profile’s repairs to original receipts and explicit closures for the attached follow-up, up to the ${MAX_SENDER_HISTORY_ENTRIES} most recent events. Entries include times, filenames, digests and run IDs.</p>` : ''}
       ${contents.length ? `<p class="panel-description">The case download also includes the ${contents.join(', ')}.</p>` : ''}
       ${receiptOption ? `<p class="panel-description" id="invoice-export-help">Including invoice receipts adds the available original
         and follow-up receipt files and any verified closure to the case download. Execution receipts may contain logs.</p>` : ''}
       <div class="review-note-actions"><label><input type="checkbox" id="include-review-note" ${item.note ? '' : 'disabled'}> Include saved review note</label>
       ${codexReceiptOption ? '<label><input type="checkbox" id="include-codex-receipts" aria-describedby="codex-export-help"> Include Codex receipts in case download</label>' : ''}
+      ${historyOption ? '<label><input type="checkbox" id="include-sender-history" aria-describedby="sender-history-export-help" disabled> Include sender repair history</label>' : ''}
       ${receiptOption ? '<label><input type="checkbox" id="include-invoice-receipts" aria-describedby="invoice-export-help"> Include invoice receipts in case download</label>' : ''}
       <button type="button" id="download-review-package">Download review package</button>
       ${item.decision ? '<button type="button" id="download-review-case">Download review case</button>' : ''}</div></details>`;
@@ -423,7 +435,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
       ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
       <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>
-      ${codexLocalHistory(item)}
+      ${codexHistory(item)}
       <button type="button" id="remove-review">Remove from inbox</button>`;
   }
 
@@ -480,7 +492,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
           <ul>${item.report.reasons.slice(0, 12).map(reason => `<li>${escape(reason.message)}</li>`).join('')}</ul>
           ${item.report.reasons.length > 12 ? `<p>Showing 12 of ${item.report.reasons.length} recorded reasons.</p>` : ''}</details>` : ''}
         ${renderCase(item, assessment, followUp)}
-        ${codexLocalHistory(item)}
+        ${codexHistory(item)}
         <form id="review-note-form">
           <label for="review-note">Review note</label>
           <textarea id="review-note" rows="3" maxlength="${MAX_REVIEW_NOTE}">${escape(item.note)}</textarea>
@@ -704,6 +716,14 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
 
   detail.addEventListener('change', async event => {
     const input = event.target;
+    if (input.id === 'include-codex-receipts') {
+      const history = detail.querySelector('#include-sender-history');
+      if (history) {
+        history.disabled = !input.checked;
+        if (!input.checked) history.checked = false;
+      }
+      return;
+    }
     const kind = input.dataset.previewRestore;
     if (kind && selected) {
       const item = selected;
@@ -868,10 +888,16 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const includeReceipts = completeCase && receiptCheckbox?.checked === true;
       const includeInvoiceReceipts = includeReceipts && Boolean(item.invoice);
       const includeCodexReceipts = includeReceipts && Boolean(item.codex);
+      const historyCheckbox = detail.querySelector('#include-sender-history');
+      const includeSenderHistory = includeCodexReceipts && historyCheckbox?.checked === true;
       if (receiptCheckbox) receiptCheckbox.checked = false;
+      if (historyCheckbox) {
+        historyCheckbox.checked = false;
+        historyCheckbox.disabled = true;
+      }
       event.target.disabled = true;
       try {
-        const contents = completeCase ? await createReviewCase(item, note, { includeInvoiceReceipts, includeCodexReceipts, getStorage })
+        const contents = completeCase ? await createReviewCase(item, note, { includeInvoiceReceipts, includeCodexReceipts, includeSenderHistory, getStorage })
           : await createReviewPackage(item.report, item, note);
         const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
         const link = document.createElement('a');
@@ -881,7 +907,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        const included = [note && 'saved note', includeInvoiceReceipts && 'invoice receipts', includeCodexReceipts && 'Codex receipts'].filter(Boolean);
+        const included = [note && 'saved note', includeInvoiceReceipts && 'invoice receipts', includeCodexReceipts && 'Codex receipts',
+          includeSenderHistory && 'sender repair history'].filter(Boolean);
         announce(`${label} downloaded${included.length ? ' with ' + included.join(' and ') : ''}.`);
       } catch (error) { announce(`Could not download the ${label.toLowerCase()}. ${error.message}`, true); }
       finally { event.target.disabled = false; }

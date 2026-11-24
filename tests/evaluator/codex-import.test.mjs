@@ -712,6 +712,141 @@ test('portable Codex cases carry the verified outcome while history stays with i
   assert.equal((await recheckCase(getStorage)).resolved, true);
 });
 
+async function exportedRepairHistory() {
+  const { getStorage, closed } = await damagedOriginalCase();
+  await applyCodexOriginalRepair(getStorage, reloadCase(getStorage), closed);
+  await resolveReviewCase(getStorage, reloadCase(getStorage));
+  const sender = reloadCase(getStorage);
+  const options = { getStorage, includeCodexReceipts: true, includeSenderHistory: true };
+  const json = await createReviewCase(sender, undefined, options);
+  return { sender, options, json };
+}
+
+test('sender history requires both opt-ins and survives reload separately from local actions', async () => {
+  const { sender, options, json } = await exportedRepairHistory();
+  const ordinary = await createReviewCase(sender, undefined, { ...options, includeCodexReceipts: false });
+  const receiptsOnly = await createReviewCase(sender, undefined, { ...options, includeSenderHistory: false });
+  for (const contents of [ordinary, receiptsOnly]) {
+    assert.equal(JSON.parse(contents).senderHistory, undefined);
+    assert(!contents.includes(sender.localHistory[0].files[0].before));
+  }
+  const bundle = JSON.parse(json);
+  assert.equal(bundle.note, undefined);
+  assert.equal(bundle.localHistory, undefined);
+  assert.deepEqual(bundle.senderHistory, { caseId: sender.id, entries: sender.localHistory });
+
+  for (const contents of [receiptsOnly, json]) {
+    const receiver = freshStorage();
+    await importReviewPackage(receiver, contents);
+    assert.equal((await recheckCase(receiver)).resolved, false);
+    await adoptCodexBaseline(receiver, reloadCase(receiver));
+    await importReviewPackage(receiver, contents);
+    const item = reloadCase(receiver);
+    assert.equal((await recheckCase(receiver)).resolved, true);
+    assert.deepEqual(item.senderHistory, JSON.parse(contents).senderHistory);
+    assert.equal(item.localHistory, undefined);
+    const forwarded = JSON.parse(await createReviewCase(item, undefined, { ...options, getStorage: receiver }));
+    assert.equal(forwarded.senderHistory, undefined);
+    assert.equal(forwarded.resolution, bundle.resolution);
+  }
+});
+
+test('sender closure entries cannot resolve altered receipts, a conflicting pin or a case left open', async () => {
+  const { json, sender } = await exportedRepairHistory();
+  for (const side of ['original', 'follow-up']) {
+    const bundle = JSON.parse(json);
+    const snapshot = side === 'original' ? bundle.codex : bundle.followUp.codex;
+    snapshot.evidence.files['after.md'] = btoa('Different output');
+    const { getStorage } = await savedCodexWorkflow();
+    await importReviewPackage(getStorage, JSON.stringify(bundle));
+    const item = reloadCase(getStorage);
+    assert.equal(item.localHistory, undefined);
+    assert.equal(item.resolution, undefined);
+    await assert.rejects(resolveReviewCase(getStorage, item));
+  }
+
+  const receiver = freshStorage();
+  const conflicting = { ...sender.baseline, title: 'Another revision of the baseline' };
+  saveInvestigation(receiver, conflicting);
+  saveWorkflowBaseline(receiver, sender.codex.workflow, conflicting, await runFingerprint(conflicting));
+  const pin = receiver().getItem(WORKFLOW_BASELINE_KEY);
+  await importReviewPackage(receiver, json);
+  const conflict = await recheckCase(receiver);
+  assert.equal(conflict.pinState.status, 'conflict');
+  assert.equal(conflict.resolved, false);
+  assert.equal(reloadCase(receiver).localHistory, undefined);
+  assert.equal(receiver().getItem(WORKFLOW_BASELINE_KEY), pin);
+
+  const open = JSON.parse(json);
+  delete open.resolution;
+  const matching = await savedCodexWorkflow();
+  await importReviewPackage(matching.getStorage, JSON.stringify(open));
+  assert.equal((await recheckCase(matching.getStorage)).resolved, false);
+  const item = reloadCase(matching.getStorage);
+  assert.equal(item.localHistory, undefined);
+  await resolveReviewCase(matching.getStorage, item);
+  const locallyClosed = reloadCase(matching.getStorage);
+  assert.deepEqual(locallyClosed.localHistory.map(event => event.kind), ['closure']);
+  const onward = JSON.parse(await createReviewCase(locallyClosed, undefined, {
+    getStorage: matching.getStorage, includeCodexReceipts: true, includeSenderHistory: true,
+  }));
+  assert.deepEqual(onward.senderHistory.entries, locallyClosed.localHistory);
+});
+
+test('mismatched or malformed sender history warns and leaves a valid closure independently reviewable', async () => {
+  const { json } = await exportedRepairHistory();
+  for (const change of [
+    history => { history.caseId = '0'.repeat(64); },
+    history => { history.entries[0].files[0].after = '0'.repeat(64); },
+    history => { history.entries[1].followUpFingerprint = '0'.repeat(64); },
+    history => { history.entries = [null]; },
+    history => { history.entries = Array(101).fill(history.entries[0]); },
+  ]) {
+    const bundle = JSON.parse(json);
+    change(bundle.senderHistory);
+    const { getStorage } = await savedCodexWorkflow();
+    const { caseWarnings } = await importReviewPackage(getStorage, JSON.stringify(bundle));
+    assert(caseWarnings.some(warning => /history/i.test(warning)));
+    const item = reloadCase(getStorage);
+    assert.equal(item.senderHistory, undefined);
+    assert.equal(item.localHistory, undefined);
+    assert.equal((await recheckCase(getStorage)).resolved, true);
+  }
+});
+
+test('replacing a corrected run retains the sender repair and drops the closure for the old follow-up', async () => {
+  const { json } = await exportedRepairHistory();
+  const { getStorage } = await savedCodexWorkflow();
+  await importReviewPackage(getStorage, json);
+  const received = reloadCase(getStorage);
+  const [repair] = received.senderHistory.entries;
+  const replacement = nextCapture();
+  replacement['codex-events.jsonl'] += '{"type":"different.followup"}\n';
+  await attachCodexFollowUp(getStorage, received, await evidenceFor(replacement));
+  const updated = reloadCase(getStorage);
+  assert.notEqual(received.followUp.id, updated.followUp.id);
+  assert.deepEqual(updated.senderHistory.entries, [repair]);
+  assert.equal(updated.localHistory, undefined);
+  assert.equal((await recheckCase(getStorage)).resolved, false);
+});
+
+test('exporting a long sender history shares the most recent eligible events and preserves the full local history', async () => {
+  const { sender, options } = await exportedRepairHistory();
+  const storage = options.getStorage();
+  const inbox = JSON.parse(storage.getItem(REVIEW_STORAGE_KEY));
+  const [repair, closure] = sender.localHistory;
+  const firstTime = Date.parse(repair.at) - 100_000;
+  const repairs = Array.from({ length: 101 }, (_, i) => ({ ...repair, at: new Date(firstTime + i * 1000).toISOString() }));
+  const history = [...repairs, closure];
+  inbox.items[0].localHistory = history;
+  storage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(inbox));
+
+  const item = reloadCase(options.getStorage);
+  const bundle = JSON.parse(await createReviewCase(item, undefined, options));
+  assert.deepEqual(bundle.senderHistory.entries, history.slice(-100));
+  assert.deepEqual(reloadCase(options.getStorage).localHistory, history);
+});
+
 test('mismatched Codex donors, stale previews and failed writes preserve stored evidence', async () => {
   const { getStorage, storage, closed } = await damagedOriginalCase();
   const item = reloadCase(getStorage);

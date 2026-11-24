@@ -135,6 +135,16 @@ fingerprints of the pinned baseline and passing follow-up. Each action and its
 history entry share one inbox write. When the case reopens, the dashboard
 verifies its current evidence and pin independently of this history.
 
+Receipt-inclusive Codex cases can optionally carry sender-reported history.
+The export includes repairs recorded in the exporting profile and explicit
+closures for the attached follow-up. The recipient stores eligible events
+separately from local history, with the original case identifier. A repair’s
+replacement digest must match the recorded manifest. Closure references must
+match the baseline and follow-up in the case. The earlier digest and times are
+sender claims. The optional field supplies context for review. Import and
+reload use the existing receipt, pin, follow-up and resolution checks to decide
+whether the case is resolved.
+
 ## Optional actual-agent workflow
 
 ![Actual agent workflow sequence](docs/architecture/diagrams/agent-workflow.svg)

@@ -209,8 +209,8 @@
 
 .receipt-digest { display: block; margin: 4px 0; overflow-wrap: anywhere; color: var(--muted); }
 .codex-digest-only { padding: 8px 0; font-size: .8125rem; }
-#codex-local-history { margin-top: 16px; }
-#codex-local-history ol { margin: 8px 0; padding-left: 1.5rem; }
+.codex-history { margin-top: 16px; }
+.codex-history ol { margin: 8px 0; padding-left: 1.5rem; }
 .codex-history-entry { padding: 8px 0; border-top: 1px solid var(--line); }
 .codex-history-entry time { display: block; color: var(--muted); font-size: .8125rem; }
 .codex-history-entry p, .codex-history-entry dl { margin: 6px 0; }
