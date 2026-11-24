@@ -2,15 +2,15 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.14](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.14) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.15](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.15) · [Roadmap](ROADMAP.md)
 
 ![Trace the action back to its grant. In a fictional coding run, the repository owner grants authority to the coordinator, who delegates a single-file edit to the coding agent.](docs/images/delegation-hero.svg)
 
-For the first exercise, **repair a fictional coding agent’s altered receipt**, then decide whether to close the case. [Download the alpha.14 demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.14/adcp-codex-receipt-repair-demo-v0.1.0-alpha.14.zip) · [Walk through the repair](#try-the-portable-codex-review-demo)
+Start with the **Codex repair history demo**. A fictional coding agent edited a quickstart, and the copy you received has an altered output file. Repair it, check the before and after digests, then review the corrected grant before closing the case. [Download the alpha.15 demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Follow the exercise](#review-the-repair-history-of-a-codex-case)
 
 ## Run locally
 
-Download **Source code (zip)** from the [alpha.14 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.14). Extract the source and demo ZIPs into separate folders. From the source directory, start the dashboard with **Python 3.11+**.
+Download **Source code (zip)** from the [alpha.15 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.15). Extract the source and demo ZIPs into separate folders. From the source directory, start the dashboard with **Python 3.11+**.
 
 ```sh
 python3 scripts/serve.py
@@ -18,17 +18,24 @@ python3 scripts/serve.py
 
 Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choose a different port with `--port 48732`. The dashboard uses the browser and the Python standard library.
 
-## Try the portable Codex review demo
+<a id="try-the-portable-codex-review-demo"></a>
 
-The original run lacked an editor’s grant. A follow-up supplied it, but the original output in your copy has changed. Open the dashboard in a fresh Chromium profile and use the same address for every reload.
+## Review the repair history of a Codex case
 
-1. **Pin the baseline.** In **Investigate a run → Import a Codex run folder**, choose `pins/complete-capture`. In **Compare runs**, select the imported run under **Baseline run**. Expand **Save or replace a workflow baseline**, name the workflow `Follow-up review`, and select **Save baseline**.
-2. **Find the failed receipt.** In **Regression inbox → Import review package or case**, choose `cases/altered-original-receipt.json` and reload. **Original evidence** flags `after.md`. The case is **Open** and **Close as resolved** is disabled.
-3. **Try the wrong export.** Expand **Restore original Codex receipts** and choose `donors/mismatched-workflow.json`. The dashboard rejects it and disables **Apply receipt repair**. Reload to confirm the original mismatch is still there.
-4. **Apply the match.** Reopen **Restore original Codex receipts** and choose `donors/matching-case.json`. The preview lists only `after.md`. Select **Apply receipt repair** and reload. The case is still **Open**, now **Ready to close**. The baseline pin, **Evidence needed** decision, note and passing follow-up are preserved.
-5. **Close the case.** Select **Close as resolved** and reload again. The case now shows **Resolved**.
+Open the dashboard in a fresh Chromium profile. Use the same address and port for both reloads so you return to the same local history.
 
-The [step-by-step alpha guide](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt) shows where to inspect the repaired output and the grant in the corrected run.
+1. **Pin the baseline.** In **Investigate a run → Import a Codex run folder**, choose `pins/complete-capture`. In **Compare runs**, select the run beginning with `CODEX-3e20f2ce5add` under **Baseline run**. Expand **Save or replace a workflow baseline**, name the workflow `Follow-up review`, and select **Save baseline**.
+2. **Inspect the damaged case.** In **Regression inbox → Import review package or case**, choose `cases/altered-original-receipt.json`. Under **Original evidence**, `after.md` fails its hash check. The case is **Open** and **Local repair history** is empty.
+3. **Repair and reload.** Under **Restore original Codex receipts**, choose `donors/matching-case.json`, preview the change to `after.md`, and select **Apply receipt repair**. Reload before closing. The case stays **Open**, the checklist says **Ready to close**, and the single **Original receipts repaired** entry shows both digests.
+
+   | `after.md` | SHA-256 |
+   | --- | --- |
+   | Before repair | `0bec606c5209cbec36ec263c8f4bc261c440ef822af50e09db4a1351efae2f4f` |
+   | After repair | `700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa` |
+
+4. **Verify the grant, then close.** Under **Inspect follow-up evidence**, open the corrected `grants.jsonl` and find the editor’s grant for the read and write. Select **Close as resolved** and reload again. The case shows **Resolved**. A second entry, **Case explicitly closed**, identifies the pinned baseline and the passing follow-up.
+
+The alpha guide also shows how a rejected repair leaves history empty and what a second reviewer sees after importing the resolved case. [Full walkthrough](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt)
 
 ### Try the Codex run-folder demo
 
@@ -36,7 +43,7 @@ To build the case from the original capture and attach the corrected folder your
 
 ## Try the coding-agent review demo
 
-1. In a fresh profile, use the alpha.14 dashboard and extract the [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip).
+1. In a fresh profile, use the dashboard started above and extract the [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip).
 2. Import `baseline.investigation.json` and pin it in **Compare runs** as **Demo coding agent**.
 3. In **Regression inbox**, import the out-of-scope and missing-grant packages,
    then record a decision for each. Attach the corrected package as a follow-up,
@@ -45,7 +52,7 @@ To build the case from the original capture and attach the corrected folder your
 
 ## Try the portable invoice review demo
 
-1. Use the alpha.14 dashboard and extract the
+1. Use the dashboard started above and extract the
    [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
 2. In a fresh browser profile, open **Regression inbox → Import review package
    or case**. Import the two resolved JSON files below, one at a time.
