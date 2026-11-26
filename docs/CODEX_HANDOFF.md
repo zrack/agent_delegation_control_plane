@@ -45,3 +45,12 @@ Version 1 JSON contains input validity, disposition, reason codes, the receiver 
 ## Independent receiver exercise
 
 A separate agent reviewer used only the fictional reviewer packet and the dashboard in two fresh Chromium profiles. After reload, the matching receiver verified the recorded closure. The unpinned receiver identified the missing workflow pin and kept the case open. Both found the corrected editor grant, distinguished the sender’s repair from their empty local history, and checked the replacement digest against the saved output receipt. There were zero incorrect closures in two observations. The prior digest came from the sender. Human review time and repeat use remain unmeasured.
+
+## Compare ordinary review with the dashboard
+
+Prepare two reviewer folders with neutral task names and a separate facilitator key. The two schedules cover all seven frozen handoffs once per reviewer and reverse which method handles each task. The observer records setup and decision time, evidence cited, help, incorrect closures and abandoned rounds. A blank sheet reports all seven tasks as unrun. Preparing these files leaves human outcomes unmeasured. [Facilitator guide](reviewer-pilot/FACILITATOR.md)
+
+```sh
+python3 scripts/reviewer_pilot.py prepare --output output/reviewer-pilot
+python3 scripts/reviewer_pilot.py score output/reviewer-pilot/facilitator/sheet-A.json
+```
