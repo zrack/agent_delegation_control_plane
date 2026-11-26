@@ -19,7 +19,7 @@ checks += [
     ("domain", ["node", "--test", "tests/evaluator/evaluator.test.mjs", "tests/evaluator/comparison.test.mjs"]),
     ("browser-local persistence", ["node", "--test", "tests/evaluator/storage.test.mjs"]),
     ("offline regression command", ["node", "--test", "tests/evaluator/regression.test.mjs"]),
-    ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs"]),
+    ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs", "tests/evaluator/case-summary.test.mjs"]),
     ("offline Codex folder", ["node", "--test", "tests/evaluator/codex-import.test.mjs"]),
     ("portable case verifier and import preview", ["node", "--test", "tests/evaluator/verify-case.test.mjs", "tests/evaluator/codex-inspection.test.mjs"]),
     ("fictional Codex handoff kit", ["node", "--test", "tests/evaluator/codex-handoff.test.mjs"]),

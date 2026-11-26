@@ -58,3 +58,9 @@ Inbox filters remember the selected workflow name, decision category and
 closure filter in this tab’s session storage. Case evidence, notes and decisions
 continue to use the existing bounded inbox store. Clearing the filters removes
 the workflow name from the tab’s preferences.
+
+### Sharing a PR summary
+
+In a saved review, open **Preview PR summary** to inspect the exact text that **Copy summary** places on your clipboard. It includes the case and run references, the recorded and locally rechecked comparisons, relevant grant references, matching output receipt digests and the next review action. Check whether these identifiers are suitable for your PR audience before pasting.
+
+Notes, decision reasons, file contents, workflow names and sender history are omitted. Copying checks the case and receiver pin again. A change updates the preview for another review. When clipboard access is unavailable, the dashboard selects the text for manual copying. Posting to a PR is a separate reviewer action.
