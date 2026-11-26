@@ -787,6 +787,15 @@ const resolutionFor = item => item.invoice || item.codex
   ? runFingerprint({ original: item.id, decision: item.decision, followUp: item.followUp.id })
   : item.followUp.id;
 
+export function reviewClosureState(item, original, followUp) {
+  if (original.error) return 'blocked';
+  if (followUp.resolved) return 'resolved';
+  if (followUp.canResolve) return 'ready';
+  if (original.verdict && (!item.invoice || followUp.originalInvoice?.checked)
+    && !followUp.flagged && item.report.status === 'pass' && !item.decision) return 'clear';
+  return 'blocked';
+}
+
 export async function assessFollowUp(item, original, getStorage) {
   const { followUp } = item;
   const originalInvoice = item.invoice ? await inspectInvoice(item) : undefined;

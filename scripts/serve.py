@@ -6,7 +6,8 @@ from urllib.parse import urlsplit
 import argparse
 
 ROOT = Path(__file__).resolve().parents[1] / "src"
-ASSETS = {"/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css",
+ASSETS = {"/backup.mjs": "backup.mjs", "/backup-storage.mjs": "backup-storage.mjs", "/backup-view.mjs": "backup-view.mjs",
+          "/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css",
           "/app.js": "app.js", "/fixtures.mjs": "fixtures.mjs", "/evaluator.mjs": "evaluator.mjs",
           "/import.mjs": "import.mjs", "/codex-import.mjs": "codex-import.mjs",
           "/storage.mjs": "storage.mjs", "/comparison.mjs": "comparison.mjs",
