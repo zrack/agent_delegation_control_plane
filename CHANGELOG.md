@@ -3,7 +3,7 @@
 ## Unreleased technical alpha
 
 - Added a deterministic fictional sender-to-receiver handoff kit with separately supplied receiver baselines, optional repair history, and an offline command for checking portable Codex cases.
-
+- Added direct grant lookup, producer diagnostics, verified inbox filters and an optional preview before importing a Codex case.
 
 - Add a fictional coding-agent import demo covering a clean baseline, a write outside scope, a missing grant and a corrected follow-up verified against the original baseline.
 - Generate an offline private alpha kit with six fictional review packages, a reviewer task sheet and a separate facilitator answer key.

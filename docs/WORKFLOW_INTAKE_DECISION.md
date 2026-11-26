@@ -14,5 +14,5 @@ The proposed second workflow has two people or agents to review. One edits a fil
 ## Try recovery
 
 1. In **Regression inbox**, open **Preview a Codex case before importing**. Choose a receipt-inclusive fictional case from the [handoff kit](CODEX_HANDOFF.md). Inspect the workflow, required baseline fingerprint, current receiver pin, retained filenames, sender event count and resulting case state.
-2. **Cancel preview** leaves the inbox untouched. **Import this case** rechecks the file, pin and available space before saving. A conflicting pin keeps the case open. The preview also reports altered evidence, so a reviewer can choose whether to retain a flagged case.
+2. **Cancel preview** leaves the inbox untouched. **Import this case** rechecks the previewed bytes, pin and available space before saving. A conflicting pin keeps the case open. The preview also reports altered evidence, so a reviewer can choose whether to retain a flagged case.
 3. Preview the same file again to identify the existing case. For a malformed or oversized file, choose a supported export. If the inbox is full, back up a case you want to keep before choosing whether to remove one. Existing pins, notes, decisions and case contents are preserved on failure.

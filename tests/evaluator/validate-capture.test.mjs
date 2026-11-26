@@ -9,11 +9,11 @@ import test from 'node:test';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const examples = join(root, 'docs/producer/examples');
-const secret = 'fictional-private-content-must-stay-in-input';
+const inputMarker = 'fictional-private-content-must-stay-in-input';
 function run(...args) {
   const result = spawnSync(process.execPath, ['scripts/validate-capture.mjs', ...args, '--json'], { cwd: root, encoding: 'utf8' });
   assert.equal(result.stderr, '');
-  assert(!result.stdout.includes(secret) && !result.stdout.includes(root));
+  assert(!result.stdout.includes(inputMarker) && !result.stdout.includes(root));
   return { output: JSON.parse(result.stdout), exit: result.status };
 }
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -47,12 +47,12 @@ test('offline Codex checks identify source files and indices, validate hashes, b
     await writeFile(join(folder, name), text);
     await writeFile(join(folder, 'manifest.json'), JSON.stringify({ ...manifest, [name]: sha(text) }));
   };
-  await writeFile(join(folder, 'after.md'), secret);
+  await writeFile(join(folder, 'after.md'), inputMarker);
   const mismatch = invoke();
   assert.equal(mismatch.exit, 1);
   assert.equal(mismatch.output.status, 'receipt-mismatch');
   assert.equal(mismatch.output.diagnostics[0].file, 'after.md');
-  await replace('after.md', secret);
+  await replace('after.md', inputMarker);
   assert.equal(invoke().output.diagnostics[0].code, 'ACTION_RECEIPT_MISMATCH');
   await replace('after.md', files['after.md']);
   const grants = files['grants.jsonl'].trimEnd().split('\n');
@@ -61,7 +61,7 @@ test('offline Codex checks identify source files and indices, validate hashes, b
   assert.equal(missing.output.receipts, 'verified');
   assert.equal(missing.output.status, 'unverifiable');
   assert(missing.output.diagnostics.some(issue => issue.file === 'actions.jsonl' && issue.field === 'records[1].authorityId'));
-  await replace('grants.jsonl', grants[0] + '\n' + secret + '\n');
+  await replace('grants.jsonl', grants[0] + '\n' + inputMarker + '\n');
   assert.deepEqual(invoke().output.diagnostics[0], { code: 'INVALID_CAPTURE', file: 'grants.jsonl', field: 'records[1]',
     message: 'Expected a JSON object in grants.jsonl.' });
   const malformed = JSON.parse(grants[1]);

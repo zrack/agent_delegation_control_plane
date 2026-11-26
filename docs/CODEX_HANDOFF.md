@@ -37,3 +37,7 @@ node scripts/verify-case.mjs --json --case "$kit/cases/history-off.json" \
 ```
 
 Version 1 JSON contains input validity, disposition, reason codes, the receiver pin status and independently recomputed original and follow-up comparisons. Relevant checks can name a receipt or grant. Receipt bodies, notes and sender history are excluded. A resolved case can still have a flagged original comparison. Resolution describes the verified follow-up and explicit closure. A SHA-256 match checks supplied bytes. It cannot identify the person who produced them.
+
+## Independent receiver exercise
+
+A separate agent reviewer used only the fictional reviewer packet and the dashboard in two fresh Chromium profiles. After reload, the matching receiver verified the recorded closure. The unpinned receiver identified the missing workflow pin and kept the case open. Both found the corrected editor grant, distinguished the sender’s repair from their empty local history, and checked the replacement digest against the saved output receipt. There were zero incorrect closures in two observations. The prior digest came from the sender. Human review time and repeat use remain unmeasured.

@@ -107,7 +107,7 @@ test('the extracted release-candidate ZIP reproduces all receiver outcomes and a
     const sender = await receiver(kit, 'matching');
     await importReviewPackage(sender, await load('cases/altered-original.json'));
     const donor = await load('donors/matching-case.json');
-    assert.equal(hash(donor), '084c5053781ed38a172dc42cfaf7fa2ff67f597a3e973f17bab88f56408001ba');
+    assert.equal(donor, await readFile(new URL('../../docs/codex-handoff/fixtures/alpha15-case.json', import.meta.url), 'utf8'));
     await assert.rejects(previewCodexOriginalRepair(sender, reload(sender), await load('donors/mismatched-workflow.json')));
     const preview = await previewCodexOriginalRepair(sender, reload(sender), donor);
     assert.deepEqual(preview.restored, ['after.md']);
