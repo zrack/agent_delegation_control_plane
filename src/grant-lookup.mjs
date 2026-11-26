@@ -63,8 +63,11 @@ export function grantLookup(item, run, side, eventId, requestedGrant, escape, fi
   const event = trace.event;
   const id = requestedGrant ?? event.authorityId;
   const grant = trace.grants.find(record => record.id === id);
-  const returnLabel = finding ? 'Back to grouped missing grant finding' : 'Return to this action';
-  const returnLink = `<a href="${escape(route(item, side, event.id, finding, { view: 'actions' }))}">${returnLabel}</a>`;
+  const returnHref = escape(route(item, side, event.id, finding, { view: 'actions' }));
+  const returnLink = finding
+    ? `<a href="${returnHref}" aria-describedby="finding-return-hint">Back to grouped missing grant finding</a>
+      <p id="finding-return-hint" class="muted">Keyboard focus returns to the ${escape(side)} <code>${escape(event.action.action)}</code> link you opened.</p>`
+    : `<a href="${returnHref}">Return to this action</a>`;
   const field = (name, value) => `<dt>${name}</dt><dd><code>${escape(value)}</code></dd>`;
   const action = `<p><strong>${sides[side]} run</strong> · <code>${escape(run.id)}</code></p>
     <dl>${field('Action record', event.id)}${field('Actor', event.actor)}${field('For principal', run.principal.id)}
