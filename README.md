@@ -2,17 +2,15 @@
 
 Review **who acted for whom, which grant covered the action, and what changed between runs**. This local dashboard helps security and platform engineers investigate completed agent workflows, triage regressions, and verify follow-up evidence.
 
-**Public technical alpha** · [v0.1.0-alpha.15](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.15) · [Roadmap](ROADMAP.md)
+**Public technical alpha** · [v0.1.0-alpha.16](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.16) · [Roadmap](ROADMAP.md)
 
 ![Trace the action back to its grant. In a fictional coding run, the repository owner grants authority to the coordinator, who delegates a single-file edit to the coding agent.](docs/images/delegation-hero.svg)
 
-Start with the **Codex repair history demo**. A fictional coding agent edited a quickstart, and the copy you received has an altered output file. Repair it, check the before and after digests, then review the corrected grant before closing the case. [Download the alpha.15 demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Follow the exercise](#review-the-repair-history-of-a-codex-case)
-
-Working from a source checkout? Use the sender-to-receiver kit to rehearse a Codex handoff in two profiles, or use the four invoice cases to try the offline verifier. A reviewer can also preview a short summary in the inbox before copying it into a pull request. [Codex handoff kit](docs/CODEX_HANDOFF.md) · [Invoice verification](docs/INVOICE_VERIFICATION.md) · [What the summary shares](docs/PRIVACY.md#sharing-a-pr-summary)
+Start with the **Codex reviewer handoff**. A teammate says they repaired the output from a fictional quickstart edit and closed the case. Can you verify that decision from the receipts and your own pinned baseline? [Download the alpha.16 handoff ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) · [Follow the exercise](#review-a-codex-handoff)
 
 ## Run locally
 
-Download **Source code (zip)** from the [alpha.15 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.15). Extract the source and demo ZIPs into separate folders. From the source directory, start the dashboard with **Python 3.11+**.
+Download **Source code (zip)** from the [alpha.16 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.16). Extract the source and demo ZIPs into separate folders. From the source directory, start the dashboard with **Python 3.11+**.
 
 ```sh
 python3 scripts/serve.py
@@ -20,24 +18,21 @@ python3 scripts/serve.py
 
 Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choose a different port with `--port 48732`. The dashboard uses the browser and the Python standard library.
 
+## Review a Codex handoff
+
+Open `reviewer/TASK_SHEET.md` in the extracted demo. The seven scenarios share a case ID, so use a fresh Chromium profile for each. Start with the first row.
+
+1. **Choose your baseline.** In **Investigate a run → Import a Codex run folder**, choose `pins/matching`. In **Compare runs**, select the imported run as **Baseline run**. Expand **Save or replace a workflow baseline**, name it `Follow-up review` and select **Save baseline**.
+2. **Open the handoff.** In **Regression inbox → Import review package or case**, choose `cases/history-on.json`. Reload at the same address and reopen the case. Its **Resolved** status verifies against your pin and the passing follow-up.
+3. **Check what happened.** Under **Sender-reported history**, compare the replacement digest for `after.md` with the saved original output receipt. In the follow-up’s `grants.jsonl`, find the grant covering the editor’s read and write. **Local repair history** is empty because the repair and closure happened in the sender’s profile.
+
+Try `cases/history-off.json` with the same baseline in a second fresh profile. The closure still verifies, but the sender’s account of the repair is absent. The other five rows exercise missing or conflicting pins, damaged receipts and a passing follow-up awaiting closure. [Full handoff walkthrough](docs/ALPHA_REVIEW.md#review-a-codex-handoff) · [Verify a case offline](docs/CODEX_HANDOFF.md#verify-the-case-offline)
+
 <a id="try-the-portable-codex-review-demo"></a>
 
 ## Review the repair history of a Codex case
 
-Open the dashboard in a fresh Chromium profile. Use the same address and port for both reloads so you return to the same local history.
-
-1. **Pin the baseline.** In **Investigate a run → Import a Codex run folder**, choose `pins/complete-capture`. In **Compare runs**, select the run beginning with `CODEX-3e20f2ce5add` under **Baseline run**. Expand **Save or replace a workflow baseline**, name the workflow `Follow-up review`, and select **Save baseline**.
-2. **Inspect the damaged case.** In **Regression inbox → Import review package or case**, choose `cases/altered-original-receipt.json`. Under **Original evidence**, `after.md` fails its hash check. The case is **Open** and **Local repair history** is empty.
-3. **Repair and reload.** Under **Restore original Codex receipts**, choose `donors/matching-case.json`, preview the change to `after.md`, and select **Apply receipt repair**. Reload before closing. The case stays **Open**, the checklist says **Ready to close**, and the single **Original receipts repaired** entry shows both digests.
-
-   | `after.md` | SHA-256 |
-   | --- | --- |
-   | Before repair | `0bec606c5209cbec36ec263c8f4bc261c440ef822af50e09db4a1351efae2f4f` |
-   | After repair | `700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa` |
-
-4. **Verify the grant, then close.** Under **Inspect follow-up evidence**, open the corrected `grants.jsonl` and find the editor’s grant for the read and write. Select **Close as resolved** and reload again. The case shows **Resolved**. A second entry, **Case explicitly closed**, identifies the pinned baseline and the passing follow-up.
-
-The alpha guide also shows how a rejected repair leaves history empty and what a second reviewer sees after importing the resolved case. [Full walkthrough](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt)
+To perform the repair yourself, use the earlier alpha.15 exercise. Preview a replacement for `after.md`, check both digests after reload, and review the corrected grant before closing. [Alpha.15 repair history ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Repair walkthrough](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt)
 
 ### Try the Codex run-folder demo
 
@@ -98,7 +93,7 @@ For other captures in the same format, see the
 2. **Review a package.** In **Regression inbox**, use **Import review package or case** to open a `review-package.json` or `review-case.json`. **Import a report** also accepts a separate `regression.json` with its evidence exports. Matching fingerprints let the inbox reproduce the verdict locally. Save a review note and, for a flagged case, record a decision and reason.
 3. **Verify the follow-up.** Attach a package with both matching exports, the original pinned baseline, and a new candidate run ID. Compare the original and follow-up verdicts. **Close as resolved** requires a passing follow-up report and a passing local recheck.
 
-To move selected cases and their workflow pins between browser profiles, use the [inbox backup and restore guide](docs/INBOX_BACKUP.md).
+You can preview a case summary before copying it into a pull request, move cases and pins to another profile, or verify a portable invoice case offline. [What the summary shares](docs/PRIVACY.md#sharing-a-pr-summary) · [Inbox backup and restore](docs/INBOX_BACKUP.md) · [Invoice verification](docs/INVOICE_VERIFICATION.md)
 
 ![No regression found when only invoice call IDs and artifact hashes change. Regression detected for an unexpected export. Needs review when a referenced grant is missing.](docs/images/regression-verdicts.svg)
 
