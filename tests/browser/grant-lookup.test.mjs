@@ -18,7 +18,7 @@ async function openAction(page, side, eventId) {
   await page.locator('#grant-lookup-title').waitFor();
 }
 async function goBack(page) {
-  await page.getByRole('link', { name: 'Return to this action' }).click();
+  await page.getByRole('link', { name: 'Return to this action', exact: true }).click();
   const focused = page.locator('#review-action-directory a:focus');
   await focused.waitFor();
   return focused;
@@ -78,7 +78,7 @@ test('keyboard review returns to the exact missing-grant link for each baseline 
       await page.goForward();
       await page.locator('#grant-lookup-title:focus').waitFor();
       assert.equal(await field(page, 'Action record'), event.id);
-      await page.getByRole('link', { name: 'Return to this action' }).press('Enter');
+      await page.getByRole('link', { name: 'Back to grant finding', exact: true }).press('Enter');
       await checkFindingFocus(page, finding, side, event.id);
     }
   }
@@ -113,7 +113,7 @@ test('a reopened parent grant returns to its finding and a directory lookup retu
   await parentHeading.waitFor();
   const freshTab = await page.context().newPage();
   await freshTab.goto(parentUrl);
-  await freshTab.getByRole('link', { name: 'Return to this action' }).click();
+  await freshTab.getByRole('link', { name: 'Back to grant finding', exact: true }).click();
   const reopenedFinding = freshTab.locator('details.grant-finding');
   await checkFindingFocus(freshTab, reopenedFinding, 'baseline', id);
   await freshTab.goBack();
@@ -156,7 +156,7 @@ test('a baseline link shared by the original and follow-up findings returns only
   await expand(page, 'Inspect follow-up evidence');
   await finding.locator('summary').click();
   await recordLink(finding, 'baseline', id).click();
-  const back = page.getByRole('link', { name: 'Return to this action' });
+  const back = page.getByRole('link', { name: 'Back to grant finding', exact: true });
   const returnUrl = await back.evaluate(node => node.href);
   await back.click();
   await checkFindingFocus(page, finding, 'baseline', id);
