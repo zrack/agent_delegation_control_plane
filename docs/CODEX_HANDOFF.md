@@ -10,6 +10,8 @@ Open **`adcp-codex-handoff-demo/reviewer/TASK_SHEET.md` first** inside the outpu
 
 In the inbox, read **Sender-reported history** and **Local repair history** separately. When the sender panel has no events, the available history leaves the sender’s repair unknown. A receiver can still verify a recorded closure from the receipts, follow-up and matching pin.
 
+In the original or follow-up result, choose **Inspect original output receipt · after.md** or **Inspect follow-up output receipt · after.md**. Focus moves to the selected run’s saved file and its SHA-256. Reload reopens that receipt after the evidence passes its checks again. A failed stage displays its blocker.
+
 ## Verify the case offline
 
 Point the command to the case received from the sender. Supply the independently selected receiver baseline and the workflow it belongs to. The files stay on disk unchanged.
