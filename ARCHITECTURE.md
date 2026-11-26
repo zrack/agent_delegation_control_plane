@@ -133,6 +133,13 @@ available. Checklist navigation opens evidence or moves focus to an existing
 control. Pin adoption, attaching a corrected folder, and closing the case each
 require their own reviewer action.
 
+When a Codex receipt fails, the selected case can still show the sender’s
+recorded edit, target and referenced grant from the candidate investigation
+that matches that stage’s report. The receiver computes each retained file’s
+digest from its saved bytes and displays the failed check alongside the
+sender’s account. Original and follow-up evidence retain their own run IDs.
+Only the existing full verification of both runs can support closure.
+
 For an original Codex receipt that fails verification, a reviewer can select a
 receipt-inclusive export of the same case. Preview checks the original report,
 workflow, baseline and candidate investigations, and receipt snapshot against

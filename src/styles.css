@@ -218,6 +218,35 @@
 
 .receipt-digest { display: block; margin: 4px 0; overflow-wrap: anywhere; color: var(--muted); }
 .codex-digest-only { padding: 8px 0; font-size: .8125rem; }
+.codex-stage-evidence {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  overflow-wrap: anywhere;
+  font-size: .875rem;
+}
+.codex-stage-evidence h4 { margin: 0; font-size: 1rem; }
+.codex-stage-evidence h5 { margin: 0 0 4px; font-size: .875rem; }
+.codex-stage-evidence > section { margin-top: 12px; }
+.codex-stage-evidence > section + section { border-top: 1px solid var(--line); padding-top: 10px; }
+.codex-claim-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 8px 0 0;
+}
+.codex-claim-fields dt { color: var(--muted); }
+.codex-claim-fields dd { margin: 0; }
+.codex-receipt-checks { padding-left: 1.25rem; margin: 8px 0; }
+.codex-receipt-checks li + li { margin-top: 8px; }
+.codex-receipt-checks.failed strong { color: var(--violation); }
+.codex-receipt-checks p { font-size: .8125rem; }
+@media (max-width: 460px) {
+  .codex-claim-fields { grid-template-columns: minmax(0, 1fr); }
+  .codex-claim-fields dt:not(:first-child) { margin-top: 4px; }
+}
 .codex-history { margin-top: 16px; }
 .codex-history ol { margin: 8px 0; padding-left: 1.5rem; }
 .codex-history-entry { padding: 8px 0; border-top: 1px solid var(--line); }

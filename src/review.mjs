@@ -1,12 +1,13 @@
 // Reports are recorded claims. Only matching evidence can reproduce a verdict.
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from './comparison.mjs';
-import { assessCodexEvidence, codexReceiptNames, portableCodexEvidence, previousCodexReceiptDigest } from './codex-import.mjs';
+import { assessCodexEvidence, codexActionClaims, codexReceiptNames, inspectCodexReceiptDigests,
+  portableCodexEvidence, previousCodexReceiptDigest } from './codex-import.mjs';
 import { evaluateChain } from './evaluator.mjs';
 import { parseInvestigation } from './import.mjs';
 import { assessInvoiceFolder, portableInvoiceEvidence } from './invoice-import.mjs';
 import {
   restoreInvestigations, restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline,
-  STORAGE_KEY, workflowKey,
+  STORAGE_KEY, validWorkflowName, workflowKey,
 } from './storage.mjs';
 
 export const REVIEW_STORAGE_KEY = 'adcp.regression-reviews.v1';
@@ -416,8 +417,7 @@ async function saveFolderCandidate(getStorage, pin, candidate, snapshot) {
 
 function portableCodex(codex) {
   const { workflow, fingerprint, evidence } = codex ?? {};
-  if (typeof workflow !== 'string' || !workflow.trim() || workflow !== workflow.trim()
-    || workflow.length > 80 || /[\u0000-\u001f\u007f]/.test(workflow) || !isFingerprint(fingerprint)) {
+  if (!validWorkflowName(workflow) || !isFingerprint(fingerprint)) {
     throw new Error('The Codex receipt snapshot metadata is invalid.');
   }
   return { workflow, fingerprint, evidence: portableCodexEvidence(evidence) };
@@ -626,6 +626,25 @@ function sameBaseline(original, followUp) {
 function distinctCandidate(original, followUp) {
   return Boolean(followUp.candidateId) && followUp.candidateId !== original.candidateId
     && followUp.candidateId !== original.baselineId;
+}
+
+async function matchesCodexRecord(record) {
+  return Boolean(record?.report && validWorkflowName(record.codex?.workflow) && isFingerprint(record.codex.fingerprint)
+    && await reviewId(record.report, undefined, record.codex) === record.id);
+}
+
+// Inspect a restored inbox item without conferring a verdict on either run.
+// In particular, a missing candidate is never reconstructed from its ledgers
+// or borrowed from a different side that happens to reuse the same event IDs.
+export async function inspectCodexRunEvidence(item, stage) {
+  if (!['original', 'follow-up'].includes(stage) || !await matchesCodexRecord(item)) return;
+  const record = stage === 'original' ? item : item.followUp;
+  if (stage === 'follow-up' && (!await matchesCodexRecord(record) || record.codex.workflow !== item.codex.workflow
+    || !sameBaseline(item.report, record.report) || !distinctCandidate(item.report, record.report))) return;
+
+  const { report, candidate } = record;
+  const claims = await evidenceState(report, 'candidate', candidate) === 'matched' ? codexActionClaims(candidate) : undefined;
+  return { stage, runId: report.candidateId, claims, checks: await inspectCodexReceiptDigests(record.codex.evidence) };
 }
 
 export async function attachReviewFollowUp(getStorage, expected, contents) {
