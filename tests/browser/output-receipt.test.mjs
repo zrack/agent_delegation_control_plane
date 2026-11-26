@@ -112,9 +112,17 @@ test('altered receipts keep the sender’s account inspectable and closure block
       assert.equal(await page.locator('#codex-' + stage + '-output-receipt').count(), 0);
       assert.equal(await page.locator('[data-grant-side="' + (stage === 'original' ? 'candidate' : 'follow-up') + '"]').count(), 0);
       if (stage === 'original') {
+        const decision = await page.locator('#codex-blocked-decision').innerText();
+        assert.match(decision, /Previously saved decision/);
+        assert.ok(decision.includes(bundle.decision.reason));
         await expand(page, 'Restore original Codex receipts');
         assert.equal(await page.locator('#codex-restore-file').isEnabled(), true);
       } else {
+        const verdict = await page.locator('.review-case-verdicts .compare-run')
+          .filter({ has: page.getByRole('heading', { name: 'Follow-up run', exact: true }) }).innerText();
+        assert.match(verdict, /Sender-reported[^\n]*No regression found/);
+        assert.match(verdict, /Receiver check failed[^\n]*after\.md hash mismatch against manifest\.json/);
+        assert.doesNotMatch(verdict, /Evidence check unavailable/);
         await page.getByRole('button', { name: 'Inspect original output receipt · after.md' }).click();
         assert.match(await page.locator('#codex-original-output-receipt summary').innerText(), /Rechecked from saved bytes/);
         assert.equal(await page.locator('#review-follow-up-file').isEnabled(), true);
