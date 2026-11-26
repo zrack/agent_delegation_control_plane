@@ -13,11 +13,11 @@ updates:
         patterns:
           - pydantic
           - pydantic-core
-    # openai-agents 0.24.0 requires websockets >=15,<17. Remove this deferral
-    # when an SDK upgrade supports 17; then regenerate and test the full lock.
-    ignore:
-      - dependency-name: websockets
-        versions: [">=17,<18"]
+      # httpx2 pins httpcore2 to its exact version on supported hosts.
+      httpx2-transport:
+        patterns:
+          - httpx2
+          - httpcore2
   - package-ecosystem: pip
     directory: /scripts/security
     schedule:
