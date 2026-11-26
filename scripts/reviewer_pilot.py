@@ -22,7 +22,7 @@ def build_fixtures(directory):
     directory.mkdir()
     subprocess.run(["node", str(ROOT / "scripts/codex-handoff-fixtures.mjs"), str(directory)], check=True)
     matrix = json.loads((DOCS / "codex-handoff/facilitator/outcomes.json").read_bytes())
-    by_id = {row["id"]: row for row in matrix["scenarios"]}
+    by_id = {row["id"]: dict(row, handoffKeyRow=i) for i, row in enumerate(matrix["scenarios"], start=1)}
     if set(ORDER) != set(by_id) or len(ORDER) != len(matrix["scenarios"]):
         raise ValueError("The handoff matrix changed. Update the two assignments before use.")
     # Bind observations to the ordered outcomes and actual case and receiver records.
@@ -32,6 +32,9 @@ def build_fixtures(directory):
         for path in sorted((directory / folder).rglob("*")):
             if path.is_file():
                 files[path.relative_to(directory).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    # Guidance affects what counts as a supported answer even when evidence files stay the same.
+    for name in ("reviewer-pilot/TASK_SHEET.md", "reviewer-pilot/FACILITATOR.md", "codex-handoff/facilitator/ANSWER_KEY.md"):
+        files[name] = hashlib.sha256((DOCS / name).read_bytes()).hexdigest()
     identity = json.dumps([rows, files], sort_keys=True).encode()
     return rows, hashlib.sha256(identity).hexdigest()
 
@@ -39,6 +42,11 @@ def build_fixtures(directory):
 def method(schedule, position):
     dashboard_first = schedule == "A"
     return "dashboard" if (position % 2 == 0) == dashboard_first else "ordinary"
+
+
+def assignment_digest(digest, schedule, rows):
+    tasks = [(row["id"], method(schedule, i)) for i, row in enumerate(rows)]
+    return hashlib.sha256(json.dumps([digest, schedule, tasks]).encode()).hexdigest()
 
 
 def blank(task):
@@ -65,7 +73,7 @@ def prepare(output):
         shutil.copyfile(DOCS / "reviewer-pilot/FACILITATOR.md", facilitator / "START.md")
         task_ids = [f"{index:02}" for index in range(1, len(rows) + 1)]
         write_json(facilitator / "assignments.json",
-                   [dict(task=task, handoff=row["id"], disposition=row["disposition"], reason=row["reason"],
+                   [dict(task=task, handoff=row["id"], handoffKeyRow=row["handoffKeyRow"], disposition=row["disposition"], reason=row["reason"],
                          senderHistory=row["senderHistory"], localHistory=row["localHistory"])
                     for task, row in zip(task_ids, rows)])
         for schedule in ("A", "B"):
@@ -82,7 +90,7 @@ def prepare(output):
                 sheet += f"| {task} | {method(schedule, i)} |\n"
             (reviewer / "START.md").write_text(sheet, encoding="utf-8")
             write_json(facilitator / f"sheet-{schedule}.json",
-                       {"version": 1, "kitDigest": digest, "schedule": schedule, "source": "unassigned",
+                       {"version": 1, "kitDigest": assignment_digest(digest, schedule, rows), "schedule": schedule, "source": "unassigned",
                         "trials": [blank(task) for task in task_ids]})
         # mkdir claims the destination exclusively, even if two prepares race.
         output.mkdir()
@@ -106,10 +114,11 @@ def score(sheet, rows, digest):
 
     require(isinstance(sheet, dict) and set(sheet) == {"version", "kitDigest", "schedule", "source", "trials"},
             "Expected one pilot observation sheet.")
-    require(type(sheet["version"]) is int and sheet["version"] == 1 and sheet["kitDigest"] == digest,
-            "The observation sheet and current handoff kit do not match.")
     schedule, source, trials = sheet["schedule"], sheet["source"], sheet["trials"]
     require(schedule in ("A", "B") and source in ("unassigned", *SOURCES), "Unknown schedule or observation source.")
+    require(type(sheet["version"]) is int and sheet["version"] == 1
+            and sheet["kitDigest"] == assignment_digest(digest, schedule, rows),
+            "The observation sheet, assigned schedule and current handoff kit do not match.")
     require(isinstance(trials, list) and len(trials) == len(rows), "Preserve all assigned rows, including unrun tasks.")
     report = []
     reasons = tuple(row["reason"] for row in rows) + ("other",)
@@ -157,7 +166,7 @@ def score(sheet, rows, digest):
             result["timeToSupportedSeconds"] = trial["elapsedSeconds"]
     observed = [row for row in report if row["result"] != "unrun"]
     answered = [row for row in observed if row["result"] != "abandoned"]
-    return {"version": 1, "kitDigest": digest, "schedule": schedule, "source": source,
+    return {"version": 1, "kitDigest": sheet["kitDigest"], "schedule": schedule, "source": source,
             "counts": {status: sum(row["result"] == status for row in report) for status in
                        ("supported", "unsupported", "incorrect-disposition", "abandoned", "unrun")},
             "observedIncorrectClosures": sum(row["incorrectClosures"] for row in observed) if observed else None,

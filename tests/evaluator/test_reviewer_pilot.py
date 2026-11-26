@@ -1,10 +1,12 @@
 import copy
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -89,6 +91,52 @@ class ReviewerPilot(unittest.TestCase):
         self.assertEqual(report["observedIncorrectClosures"], 2)
         self.assertEqual(report["incorrectResolvedCalls"], 1)
         self.assertEqual(report["trials"][2]["missingCitations"], ["grant"])
+
+    def test_switching_schedule_cannot_reassign_observed_time_to_the_other_method(self):
+        sheet = copy.deepcopy(self.template)
+        sheet["source"] = "maintainer-rehearsal"
+        sheet["trials"][0].update(end="abandoned", setupSeconds=3, elapsedSeconds=12,
+                                  assisted=False, incorrectClosures=0)
+        self.assertEqual(pilot.score(sheet, self.rows, self.digest)["trials"][0]["method"], "dashboard")
+        sheet["schedule"] = "B"
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            pilot.score(sheet, self.rows, self.digest)
+        other = json.loads((self.packet / "facilitator/sheet-B.json").read_bytes())
+        self.assertNotEqual(self.template["kitDigest"], other["kitDigest"])
+        self.assertEqual(pilot.score(other, self.rows, self.digest)["kitDigest"], other["kitDigest"])
+
+    def test_an_old_template_cannot_be_scored_under_a_different_rubric(self):
+        with tempfile.TemporaryDirectory() as temp:
+            docs = Path(temp) / "docs"
+            shutil.copytree(pilot.DOCS / "reviewer-pilot", docs / "reviewer-pilot")
+            shutil.copytree(pilot.DOCS / "codex-handoff/facilitator", docs / "codex-handoff/facilitator")
+            with (docs / "reviewer-pilot/FACILITATOR.md").open("a", encoding="utf-8") as guide:
+                guide.write("Fictional updated rubric.")
+            with patch.object(pilot, "DOCS", docs):
+                rows, digest = pilot.build_fixtures(Path(temp) / "fixture")
+                with self.assertRaisesRegex(ValueError, "do not match"):
+                    pilot.score(self.template, rows, digest)
+
+    def test_cli_keeps_an_observed_automated_rehearsal_labelled(self):
+        sheet = copy.deepcopy(self.template)
+        sheet["source"] = "automated-rehearsal"
+        sheet["trials"][0].update(end="answered", setupSeconds=0, elapsedSeconds=4, assisted=False,
+                                  incorrectClosures=0, disposition=self.rows[0]["disposition"],
+                                  reason=self.rows[0]["reason"], citations=dict.fromkeys(pilot.EVIDENCE, True))
+        with tempfile.TemporaryDirectory() as temp:
+            draft = Path(temp) / "observed.json"
+            draft.write_text(json.dumps(sheet))
+            cmd = [sys.executable, ROOT / "scripts/reviewer_pilot.py", "score", draft]
+            result = json.loads(subprocess.run(cmd, capture_output=True, check=True).stdout)
+        self.assertEqual(result["source"], "automated-rehearsal")
+        self.assertEqual(result["counts"]["supported"], 1)
+        self.assertEqual(result["counts"]["unrun"], 6)
+
+    def test_facilitator_can_find_each_anonymous_task_in_the_original_key(self):
+        original = json.loads((pilot.DOCS / "codex-handoff/facilitator/outcomes.json").read_bytes())["scenarios"]
+        assignments = json.loads((self.packet / "facilitator/assignments.json").read_bytes())
+        for assignment in assignments:
+            self.assertEqual(assignment["handoff"], original[assignment["handoffKeyRow"] - 1]["id"])
 
     def test_stale_incomplete_duplicate_or_unlabelled_observations_are_rejected(self):
         for modify in (lambda s: s.update(kitDigest="older"), lambda s: s["trials"].pop(),
