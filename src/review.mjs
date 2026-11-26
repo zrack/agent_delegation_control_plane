@@ -184,6 +184,36 @@ export function importReviewPackage(getStorage, contents) {
   return importReview(getStorage, reportText, evidence, note);
 }
 
+// Preview uses the same capacity, receipt and duplicate checks as the eventual
+// import. Only the temporary storage overlay receives the simulated write.
+export async function inspectCodexCaseImport(getStorage, contents) {
+  const changes = new Map();
+  const overlay = {
+    getItem: key => changes.has(key) ? changes.get(key) : getStorage().getItem(key),
+    setItem: (key, value) => changes.set(key, value),
+  };
+  const fresh = () => overlay;
+  const { items, caseWarnings } = await importNewCodexCase(fresh, contents);
+  const item = items[0];
+  const original = await assessReview(item).catch(error => ({ error: error.message }));
+  const followUp = await assessFollowUp(item, original, fresh);
+  return {
+    pinState: followUp.pinState, workflow: item.codex.workflow,
+    baselineId: item.report.baselineId, fingerprint: item.report.baselineFingerprint,
+    originalReceipts: Object.keys(item.codex.evidence.files),
+    followUpReceipts: Object.keys(item.followUp?.codex?.evidence.files ?? {}),
+    senderEvents: item.senderHistory?.entries.length ?? 0,
+    disposition: followUp.resolved ? 'Resolved' : followUp.canResolve ? 'Open · Ready to close' : 'Open',
+    warnings: caseWarnings,
+  };
+}
+
+export function importNewCodexCase(getStorage, contents, expectedPinState) {
+  const { reportText, evidence, note, bundle } = readReviewPackage(contents, true);
+  if (bundle.kind !== codexCaseKind) throw new Error('Choose a portable Codex review case exported with receipts.');
+  return importReview(getStorage, reportText, evidence, note, bundle, { requireNew: true, expectedPinState });
+}
+
 function validateDecision(kind, reason) {
   if (typeof kind !== 'string' || !Object.hasOwn(reviewDecisions, kind)) throw new Error('Choose a review decision.');
   if (typeof reason !== 'string' || reason.length > MAX_REVIEW_NOTE || !reason.trim()) throw new Error('Add a reason for this decision.');
@@ -469,7 +499,7 @@ async function importInvoiceCase(getStorage, incoming, bundle, warnings) {
   }
 }
 
-export async function importReview(getStorage, reportText, evidence, initialNote = '', portableCase) {
+export async function importReview(getStorage, reportText, evidence, initialNote = '', portableCase, { requireNew = false, expectedPinState } = {}) {
   const report = parseRegressionReport(reportText);
   const invoice = portableCase?.kind === invoiceCaseKind ? portableInvoice(portableCase.invoice) : undefined;
   const codex = portableCase?.kind === codexCaseKind ? portableCodex(portableCase.codex) : undefined;
@@ -515,6 +545,10 @@ export async function importReview(getStorage, reportText, evidence, initialNote
   const storage = getStorage();
   const items = readReviews(storage);
   const current = items.find(item => item.id === id);
+  if (requireNew && current) throw new Error('This case is already in the inbox. Open the existing case to review it.');
+  if (expectedPinState && JSON.stringify(folderPinState(getStorage, incoming)) !== JSON.stringify(expectedPinState)) {
+    throw new Error('The receiver pin changed. Preview the case again before importing.');
+  }
   const next = { ...current, id, report, note: current?.note ?? initialNote, reviewed: current?.reviewed ?? false, ...attachments };
   if (codex) next.codex = current?.codex ?? codex;
   if (invoice) {

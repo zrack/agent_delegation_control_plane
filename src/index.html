@@ -75,6 +75,15 @@
           <label for="review-package-file">Import review package or case</label>
           <input id="review-package-file" type="file" accept=".json,application/json" aria-describedby="review-help review-status">
         </div>
+        <details id="codex-import-inspector">
+          <summary>Preview a Codex case before importing</summary>
+          <label for="codex-inspect-file">Codex review case with receipts</label>
+          <input id="codex-inspect-file" type="file" accept=".json,application/json" aria-describedby="codex-inspect-status">
+          <p id="codex-inspect-status" role="status"></p>
+          <div id="codex-inspect-result"></div>
+          <button type="button" id="codex-inspect-save" hidden>Import this case</button>
+          <button type="button" id="codex-inspect-cancel" hidden>Cancel preview</button>
+        </details>
         <details id="review-import-controls">
           <summary>Import a report</summary>
           <form id="review-import" aria-describedby="review-help">

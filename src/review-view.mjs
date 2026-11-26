@@ -4,7 +4,7 @@ import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
 import { restoreWorkflowBaselines, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
-  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
+  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage, importNewCodexCase, inspectCodexCaseImport,
   MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, MAX_SENDER_HISTORY_ENTRIES, removeReview, resolveReviewCase,
   applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision, senderHistoryEntries,
 } from './review.mjs';
@@ -120,6 +120,69 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     if (location.hash === itemRoute(id)) render({ focus: true });
     else location.hash = itemRoute(id);
   }
+
+  const inspectFile = document.querySelector('#codex-inspect-file');
+  const inspectStatus = document.querySelector('#codex-inspect-status');
+  const inspectResult = document.querySelector('#codex-inspect-result');
+  const acceptPreview = document.querySelector('#codex-inspect-save');
+  const cancelPreview = document.querySelector('#codex-inspect-cancel');
+  let previewRequest = 0;
+  let pendingImport;
+
+  function clearImportPreview(message) {
+    previewRequest++;
+    pendingImport = undefined;
+    inspectFile.value = '';
+    inspectResult.replaceChildren();
+    inspectStatus.textContent = message;
+    acceptPreview.hidden = true;
+    cancelPreview.hidden = true;
+  }
+
+  inspectFile.addEventListener('change', async () => {
+    const file = inspectFile.files[0];
+    clearImportPreview('');
+    if (!file) return;
+    const request = previewRequest;
+    cancelPreview.hidden = false;
+    inspectStatus.textContent = 'Checking the case and available inbox space…';
+    try {
+      if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a case no larger than 2 MiB.');
+      const contents = await file.text();
+      const preview = await inspectCodexCaseImport(getStorage, contents);
+      if (request !== previewRequest) return;
+      pendingImport = { contents, pinState: preview.pinState };
+      inspectResult.innerHTML = `<dl>
+        <dt>Workflow</dt><dd>${escape(preview.workflow)}</dd>
+        <dt>Required receiver baseline</dt><dd><code>${escape(preview.baselineId ?? 'Missing')}</code>
+        <code>${escape(preview.fingerprint ?? 'Missing')}</code></dd>
+        <dt>Receiver pin</dt><dd>${escape(preview.pinState.status)}</dd>
+        <dt>Original receipts</dt><dd>${escape(preview.originalReceipts.join(', '))}</dd>
+        <dt>Follow-up receipts</dt><dd>${escape(preview.followUpReceipts.join(', ') || 'None')}</dd>
+        <dt>Sender history entries</dt><dd>${preview.senderEvents}</dd>
+        <dt>Case after import</dt><dd>${escape(preview.disposition)}</dd></dl>`;
+      inspectStatus.textContent = ['Preview only. The case has not been saved.', ...preview.warnings].join(' ');
+      acceptPreview.hidden = false;
+    } catch (error) {
+      if (request === previewRequest) clearImportPreview(error.message + ' Choose another file or open an existing case.');
+    }
+  });
+  cancelPreview.addEventListener('click', () => clearImportPreview('Preview canceled.'));
+  acceptPreview.addEventListener('click', async () => {
+    if (!pendingImport || acceptPreview.disabled) return;
+    const route = location.hash;
+    const { contents, pinState } = pendingImport;
+    acceptPreview.disabled = inspectFile.disabled = cancelPreview.disabled = true;
+    try {
+      const imported = await importNewCodexCase(getStorage, contents, pinState);
+      clearImportPreview('Case imported.');
+      finishImport(imported, route);
+    } catch (error) {
+      clearImportPreview(error.message + ' Choose the file to preview it again.');
+    } finally {
+      acceptPreview.disabled = inspectFile.disabled = cancelPreview.disabled = false;
+    }
+  });
 
   function evidenceDetails(title, record, description = '') {
     const index = records.push(record) - 1;
