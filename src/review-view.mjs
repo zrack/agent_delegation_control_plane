@@ -27,6 +27,14 @@ const evidenceLabels = {
 export const reviewRoute = '#review?';
 const itemRoute = id => reviewRoute + new URLSearchParams({ item: id });
 
+function findingActionHash(hash, navigationParam) {
+  if (!hash?.startsWith(reviewRoute)) return;
+  const params = new URLSearchParams(hash.slice(reviewRoute.length));
+  if (!params.has('finding')) return;
+  params.delete(navigationParam);
+  return reviewRoute + params;
+}
+
 function isCaseDetailRoute(id) {
   if (!location.hash.startsWith(reviewRoute)) return false;
   const params = new URLSearchParams(location.hash.slice(reviewRoute.length));
@@ -338,7 +346,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const actions = [...new Set(finding.rows.map(row => row.after.event.action.action))].join(', ');
     const sideLabel = candidateSide === 'follow-up' ? 'follow-up' : 'candidate';
     const links = finding.rows.map(({ before, after }) => `<li><strong>${escape(after.event.action.action)}</strong> ·
-      ${actionLink(selected, 'baseline', before.event, escape)} · ${actionLink(selected, candidateSide, after.event, escape)}</li>`);
+      ${actionLink(selected, 'baseline', before.event, escape, candidateSide)} · ${actionLink(selected, candidateSide, after.event, escape, candidateSide)}</li>`);
     return `<details class="run-difference grant-finding"><summary><strong>Missing grant <code>${escape(finding.grantId)}</code></strong>
       <span class="muted">${escape(finding.actor)} · ${escape(actions)} · ${escape(finding.resource)}</span></summary>
       <div class="compare-detail"><p>The baseline supplied this grant. The ${sideLabel} references it but omits the grant record.</p>
@@ -795,12 +803,24 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <button type="button" id="remove-review">Remove from inbox</button>`;
   }
 
-  async function render({ focus = false } = {}) {
+  async function render({ focus = false, previousHash } = {}) {
     const currentRevision = ++revision;
     const { items, warning } = restoreReviews(getStorage);
     const route = new URLSearchParams(location.hash.slice(reviewRoute.length));
     const id = route.get('item');
     selected = items.find(item => item.id === id);
+    const returning = route.get('view') === 'actions';
+    let findingAction;
+    if (selected && returning) {
+      findingAction = findingActionHash(location.hash, 'view');
+      history.replaceState(null, '', itemRoute(id));
+      document.querySelector('#review-link').href = itemRoute(id);
+    } else if (previousHash && location.hash === itemRoute(id)) {
+      const fromAction = findingActionHash(previousHash, 'grant');
+      if (fromAction === history.state?.findingAction) findingAction = fromAction;
+    }
+    const caseHash = location.hash;
+    const isCurrent = () => currentRevision === revision && location.hash === caseHash;
     restoreDraft = undefined;
     records = [];
     runs = {};
@@ -823,7 +843,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         rows.push({ item, status: { closure: 'blocked', reason: 'Verification failed · ' + error.message } });
         if (item.id === id) selectedChecks = { error };
       }
-      if (currentRevision !== revision) return;
+      if (!isCurrent()) return;
     }
     queue = rows;
     renderQueue();
@@ -839,23 +859,27 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const invoice = followUp.originalInvoice;
       const receiptResults = invoice?.checked ? invoiceMarkup(invoice.checked)
         : invoice?.error ? `<p class="import-error">${escape(invoice.error)}</p>` : '';
-      if (currentRevision !== revision) return;
       const checklist = item.codex ? codexChecklist(item, assessment, followUp) : '';
       const damagedEvidence = await damagedCodexEvidence(item, assessment, followUp);
-      if (currentRevision !== revision) return;
+      if (!isCurrent()) return;
       if (assessment.error) {
         detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + damagedEvidence + evidenceRestorePanel(item))
           + summaryPanel(item, assessment, followUp, selectedChecks.status.closure);
-        restoreOutputReceipt(route, item);
+        if (!returning) restoreOutputReceipt(route, item);
         return;
       }
       for (const side of ['baseline', 'candidate', 'follow-up']) runs[side] = reviewRun(item, assessment, followUp, side);
       const lookupSide = route.get('side');
       const lookupEvent = route.get('event');
-      if (lookupEvent !== null && route.get('view') !== 'actions') {
-        const sameCapture = lookupSide !== 'follow-up' || (item.followUp && route.get('capture') === item.followUp.id);
-        const run = sameCapture && Object.hasOwn(runs, lookupSide) ? runs[lookupSide] : undefined;
-        detail.innerHTML = grantLookup(item, run, lookupSide, lookupEvent, route.get('grant'), escape);
+      const finding = route.get('finding');
+      const sameCapture = lookupSide === 'follow-up' || finding === 'follow-up'
+        ? item.followUp && route.get('capture') === item.followUp.id
+        : !finding || !route.has('capture');
+      if (lookupEvent !== null && !returning) {
+        const validOrigin = !route.has('finding') || (['candidate', 'follow-up'].includes(finding)
+          && (lookupSide === 'baseline' || lookupSide === finding));
+        const run = validOrigin && sameCapture && Object.hasOwn(runs, lookupSide) ? runs[lookupSide] : undefined;
+        detail.innerHTML = grantLookup(item, run, lookupSide, lookupEvent, route.get('grant'), escape, finding);
         detail.querySelector('#grant-lookup-title').focus();
         return;
       }
@@ -882,19 +906,25 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         </form>
         ${summaryPanel(item, assessment, followUp, selectedChecks.status.closure)}
         ${renderExport(item, assessment, followUp)}`;
-      restoreOutputReceipt(route, item);
-      if (lookupEvent && route.get('view') === 'actions') {
+      if (findingAction) {
+        // Match a link emitted by this verified comparison. The directory may list the same event.
+        const link = [...detail.querySelectorAll('.grant-finding a')].find(anchor => anchor.hash === findingAction);
+        if (link) {
+          for (let group = link.closest('details'); group; group = group.parentElement?.closest('details')) group.open = true;
+          link.focus();
+          if (returning) history.replaceState({ findingAction: link.hash }, '');
+        }
+      } else if (lookupEvent && returning && sameCapture) {
         const directory = detail.querySelector('#review-action-directory');
         const link = [...(directory?.querySelectorAll('a') ?? [])].find(anchor =>
           anchor.dataset.grantSide === lookupSide && anchor.dataset.grantEvent === lookupEvent);
         if (link) {
           directory.open = true;
           link.focus();
-          history.replaceState(null, '', itemRoute(item.id));
         }
-      }
+      } else if (!returning) restoreOutputReceipt(route, item);
     } catch (error) {
-      if (currentRevision !== revision) return;
+      if (!isCurrent()) return;
       const message = `<p class="import-error">${escape(error.message)}</p>`;
       detail.innerHTML = item.codex ? blockedCodexView(item, 'Case verification could not finish',
         message + '<p>Check the case export and reopen it in a fresh profile.</p>')
@@ -1214,6 +1244,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
 
   detail.addEventListener('click', async event => {
     if (!selected) return;
+    const findingLink = event.target.closest('.grant-finding a');
+    if (findingLink && !event.defaultPrevented && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+      // The browser will follow the link. Mark its source entry so Back can restore this exact link.
+      history.replaceState({ findingAction: findingLink.hash }, '', itemRoute(selected.id));
+      return;
+    }
     const receiptStage = event.target.dataset.outputReceipt;
     if (receiptStage && openOutputReceipt(receiptStage)) {
       const params = new URLSearchParams({ item: selected.id, receipt: receiptStage });

@@ -294,7 +294,7 @@ function updateClearButton() {
   document.querySelector('#clear-imports').disabled = importBusy || (!chains.some(item => item.imported) && !restored.warning);
 }
 
-function selectFromHash() {
+function selectFromHash(previousHash) {
   if (location.hash === '#review-inbox' && !reviewInbox.hidden) {
     reviewInbox.focus();
     history.replaceState(null, '', reviewLink.hash);
@@ -304,7 +304,7 @@ function selectFromHash() {
     const wasActive = !reviewInbox.hidden;
     setView('review-inbox');
     reviewLink.href = location.hash.startsWith(reviewRoute) ? location.hash : reviewRoute;
-    reviewView.render({ focus: wasActive });
+    reviewView.render({ focus: wasActive, previousHash });
     if (!wasActive && document.activeElement === reviewLink) reviewInbox.focus();
     return;
   }
@@ -403,9 +403,9 @@ function render() {
   document.querySelector('#announcement').textContent = `${chain.title}. ${statusLabels[result.status]}. Hop ${hop}, ${event.label}, ${statusLabels[eventStatus]}.`;
 }
 
-window.addEventListener('hashchange', () => {
+window.addEventListener('hashchange', event => {
   if (replacementDialog.open) replacementDialog.close('cancel');
-  selectFromHash();
+  selectFromHash(new URL(event.oldURL).hash);
 });
 workflowName.addEventListener('input', updateSaveLabel);
 workflowSelect.addEventListener('change', () => {

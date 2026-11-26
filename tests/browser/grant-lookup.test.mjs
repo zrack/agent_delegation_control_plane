@@ -3,7 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { browserSession, disposition, expand, importCase, kit, profile, savePin, work } from './dashboard.mjs';
+import { parseInvestigation } from '../../src/import.mjs';
+import { runFingerprint } from '../../src/storage.mjs';
+import { browserSession, disposition, expand, importCase, kit, profile, savedPin, savePin, work } from './dashboard.mjs';
 
 const directory = join(work, 'grant-rehearsal');
 execFileSync(process.execPath, ['scripts/alpha-rehearsal.mjs', '--output', directory]);
@@ -22,11 +24,21 @@ async function goBack(page) {
   return focused;
 }
 const field = (page, label) => page.locator('#review-grant-lookup dt').filter({ hasText: new RegExp('^' + label + '$') }).locator('+ dd').innerText();
+const recordLink = (group, side, id) => group.locator('a[data-grant-side="' + side + '"][data-grant-event="' + id + '"]');
 
-test('one missing grant links to the baseline and candidate records for both affected actions after reload', async t => {
+async function checkFindingFocus(page, finding, side, id) {
+  const link = recordLink(finding, side, id);
+  await link.waitFor();
+  assert.equal(await link.evaluate(node => node === document.activeElement), true, side + ' ' + id + ' should have keyboard focus');
+  assert.equal(await finding.evaluate(node => node.open), true);
+  assert.equal(await page.locator('#review-action-directory').evaluate(node => node.open), false);
+}
+
+test('keyboard review returns to the exact missing-grant link for each baseline and candidate action', async t => {
   const browser = await browserSession(t);
   const page = await profile(browser, t);
   await savePin(page, join(kit, 'pins/matching'));
+  const pin = await savedPin(page);
   const caseFile = join(kit, 'cases/altered-follow-up.json');
   const bundle = JSON.parse(await readFile(caseFile, 'utf8'));
   await importCase(page, caseFile);
@@ -42,12 +54,13 @@ test('one missing grant links to the baseline and candidate records for both aff
   for (const text of ['Missing grant ' + grantId, events[0].actor, events[0].action.resource, 'file:read', 'file:write']) {
     assert.ok(headline.includes(text), 'Grouped finding must identify ' + text);
   }
+  await heading.press('Enter');
+  assert.equal(await finding.getByRole('link').count(), 4);
   for (const event of events) {
-    for (const side of ['candidate', 'baseline']) {
-      await heading.click();
-      assert.equal(await finding.getByRole('link').count(), 4);
-      const link = finding.locator('a[data-grant-side="' + side + '"][data-grant-event="' + event.id + '"]');
-      await link.press('Enter');
+    for (const side of ['baseline', 'candidate']) {
+      await page.keyboard.press('Tab');
+      await checkFindingFocus(page, finding, side, event.id);
+      await page.keyboard.press('Enter');
       await page.locator('#grant-lookup-title:focus').waitFor();
       await page.locator('#review-grant-lookup').getByText(bundle[side].chain.id, { exact: true }).waitFor();
       assert.equal(await field(page, 'Action record'), event.id);
@@ -60,11 +73,17 @@ test('one missing grant links to the baseline and candidate records for both aff
         await page.getByRole('heading', { name: 'Grant ' + grantId, exact: true }).waitFor();
         assert.equal(await field(page, 'Subject'), event.actor);
       }
-      const back = await goBack(page);
-      assert.equal(await back.getAttribute('data-grant-side'), side);
-      assert.equal(await back.getAttribute('data-grant-event'), event.id);
+      await page.goBack();
+      await checkFindingFocus(page, finding, side, event.id);
+      await page.goForward();
+      await page.locator('#grant-lookup-title:focus').waitFor();
+      assert.equal(await field(page, 'Action record'), event.id);
+      await page.getByRole('link', { name: 'Return to this action' }).press('Enter');
+      await checkFindingFocus(page, finding, side, event.id);
     }
   }
+  assert.equal(await savedPin(page), pin);
+  assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
   await expand(page, 'Reasons recorded by the offline report');
   const offline = page.locator('details').filter({ has: page.getByText('Reasons recorded by the offline report', { exact: true }) });
   const reasons = offline.getByRole('listitem').filter({ hasText: 'Referenced grant supplied' });
@@ -73,6 +92,88 @@ test('one missing grant links to the baseline and candidate records for both aff
     const raw = await reasons.filter({ hasText: event.id }).innerText();
     assert.ok(raw.includes('baseline action ' + event.id));
     assert.ok(raw.includes('candidate action ' + event.id));
+  }
+});
+
+test('a reopened parent grant returns to its finding and a directory lookup returns to its own link', async t => {
+  const page = await profile(await browserSession(t), t);
+  await savePin(page, join(kit, 'pins/matching'));
+  await importCase(page, join(kit, 'cases/altered-follow-up.json'));
+  const caseUrl = page.url();
+  const finding = page.locator('details.grant-finding');
+  const id = 'CODING-FICTIONAL-PREVIEW-01-write';
+  await finding.locator('summary').click();
+  await recordLink(finding, 'baseline', id).click();
+  const parent = 'CODING-FICTIONAL-PREVIEW-01-root';
+  await page.getByRole('link', { name: 'Parent grant · ' + parent }).click();
+  const parentHeading = page.getByRole('heading', { name: 'Grant ' + parent, exact: true });
+  await parentHeading.waitFor();
+  const parentUrl = page.url();
+  await page.reload();
+  await parentHeading.waitFor();
+  const freshTab = await page.context().newPage();
+  await freshTab.goto(parentUrl);
+  await freshTab.getByRole('link', { name: 'Return to this action' }).click();
+  const reopenedFinding = freshTab.locator('details.grant-finding');
+  await checkFindingFocus(freshTab, reopenedFinding, 'baseline', id);
+  await freshTab.goBack();
+  await freshTab.getByRole('heading', { name: 'Grant ' + parent, exact: true }).waitFor();
+  await freshTab.goForward();
+  await checkFindingFocus(freshTab, reopenedFinding, 'baseline', id);
+  await freshTab.close();
+  await page.goto(caseUrl);
+  await disposition(page);
+  assert.equal(await finding.evaluate(node => node.open), false);
+  await openAction(page, 'Baseline', id);
+  const back = await goBack(page);
+  assert.equal(await back.getAttribute('data-grant-side'), 'baseline');
+  assert.equal(await back.getAttribute('data-grant-event'), id);
+  assert.equal(await finding.evaluate(node => node.open), false);
+});
+
+test('a baseline link shared by the original and follow-up findings returns only to the current comparison', async t => {
+  const page = await profile(await browserSession(t), t);
+  const pack = join(directory, 'grant-study/pack-A/dashboard');
+  const bundle = JSON.parse(await readFile(join(pack, 'case-02.json'), 'utf8'));
+  // All three captures have the same missing grant and action IDs.
+  async function missingCapture(id) {
+    const candidate = structuredClone(bundle.candidate);
+    candidate.chain.id = id;
+    const fingerprint = await runFingerprint(parseInvestigation(JSON.stringify(candidate)));
+    return { candidate, report: { ...bundle.report, candidateId: id, candidateFingerprint: fingerprint } };
+  }
+  const asFile = (name, record) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(record)) });
+  const reviewCase = {
+    ...bundle, kind: 'adcp-review-case',
+    decision: { kind: 'evidence-needed', reason: 'Restore the missing grant.' },
+    followUp: await missingCapture('GRANT-STUDY-A-SECOND-MISSING'),
+  };
+  await importCase(page, asFile('two-findings.json', reviewCase));
+  const original = page.locator('#review-detail > details.grant-finding');
+  const evidence = page.getByText('Inspect follow-up evidence', { exact: true }).locator('..');
+  const finding = evidence.locator('details.grant-finding');
+  const id = 'e2';
+  await expand(page, 'Inspect follow-up evidence');
+  await finding.locator('summary').click();
+  await recordLink(finding, 'baseline', id).click();
+  const back = page.getByRole('link', { name: 'Return to this action' });
+  const returnUrl = await back.evaluate(node => node.href);
+  await back.click();
+  await checkFindingFocus(page, finding, 'baseline', id);
+  assert.equal(await original.evaluate(node => node.open), false);
+  assert.equal(await evidence.evaluate(node => node.open), true);
+
+  const replacement = await missingCapture('GRANT-STUDY-A-THIRD-MISSING');
+  await page.locator('#review-follow-up-file').setInputFiles(asFile('replacement.json', { ...bundle, ...replacement }));
+  await page.locator('.review-case-verdicts').getByText(replacement.candidate.chain.id, { exact: true }).waitFor();
+  await page.goto(returnUrl);
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
+    assert.equal(await finding.evaluate(node => node.open), false);
+    assert.equal(await original.evaluate(node => node.open), false);
+    assert.equal(await page.locator('#review-action-directory').evaluate(node => node.open), false);
+    assert.equal(await page.locator('[data-grant-event]:focus').count(), 0);
   }
 });
 
