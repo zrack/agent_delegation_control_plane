@@ -8,6 +8,12 @@ For sandbox changes, build the digest-pinned image as described in the [pilot gu
 
 Never commit local keys, real investigation exports, generated run directories or screenshots. Choose a public-safe author identity/email for commits. Repository publication, service deployment, license changes and private-data use require maintainer decisions.
 
+## Independent verification
+
+For an agent-authored behavior change, write down the expected result before testing the implementation. Derive it from an independent source, such as a reviewed rule, a hand-calculated value or a released answer key. Include a case that should pass and a plausible wrong result that the check must reject. If the behavior changes intentionally, explain the rule change in the pull request.
+
+For example, an altered original receipt and a conflicting receiver pin both leave a Codex case open. A check that only asserts “open” would pass even if the dashboard gave the wrong reason. Use the [handoff answer key](docs/codex-handoff/facilitator/outcomes.json) to check which receipt failed or which pin conflicted, then verify that the reviewer cannot close the case after reload.
+
 ## Security checks
 
 Use a separate environment so security tooling does not change the SDK environment:

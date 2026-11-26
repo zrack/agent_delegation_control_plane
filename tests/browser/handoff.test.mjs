@@ -8,11 +8,12 @@ import { browserSession, disposition, expand, importCase, kit, pinImportedRun, p
 const json = async filename => JSON.parse(await readFile(filename, 'utf8'));
 const labels = { repair: 'Original receipts repaired', closure: 'Case explicitly closed' };
 const reasons = {
-  'missing-pin': /Baseline needed/i,
-  'conflicting-pin': /Conflicting baseline/i,
-  'original-receipt-mismatch': /Original evidence[\s\S]*after\.md/i,
-  'follow-up-receipt-mismatch': /Follow-up evidence[\s\S]*after\.md/i,
-  'explicit-closure-needed': /Ready to close/i,
+  'verified-closure': [],
+  'missing-pin': ['Baseline needed · There is no local pin for “Follow-up review”.'],
+  'conflicting-pin': ['Conflicting baseline · The current pin for “Follow-up review” differs from the case baseline.'],
+  'original-receipt-mismatch': ['Original evidence · after.md hash mismatch against manifest.json.'],
+  'follow-up-receipt-mismatch': ['Follow-up evidence · after.md hash mismatch against manifest.json.'],
+  'explicit-closure-needed': ['Ready to close · The original finding and passing follow-up verified against the matching pin.'],
 };
 
 async function history(page, side) {
@@ -23,10 +24,11 @@ async function verifyOutcome(page, row) {
   const expected = { state: row.disposition === 'resolved' ? 'Resolved' : 'Open', ready: row.disposition === 'open-ready' };
   const observed = await disposition(page);
   assert.deepEqual(observed, expected, `${row.id}: expected ${JSON.stringify(expected)}, observed ${JSON.stringify(observed)}`);
-  if (row.reason !== 'verified-closure') {
-    assert.ok(reasons[row.reason], `Unrecognized reason: ${row.reason}`);
-    assert.match(await page.locator('#codex-closure-reasons').innerText(), reasons[row.reason], row.id);
-  }
+  assert.ok(Object.hasOwn(reasons, row.reason), `Unrecognized reason: ${row.reason}`);
+  // Each item's first line gives the reason. The separate paragraph offers a next action.
+  const checklist = await page.locator('#codex-closure-reasons li').allInnerTexts();
+  const observedReasons = checklist.map(item => item.split('\n')[0].trim());
+  assert.deepEqual(observedReasons, reasons[row.reason], `${row.id}: closure checklist for ${row.reason}`);
   await verifySenderPanel(page, Boolean(row.senderHistory.length));
   assert.deepEqual(await history(page, 'sender'), row.senderHistory.map(kind => labels[kind]), row.id + ' sender history');
   assert.deepEqual(await history(page, 'local'), row.localHistory.map(kind => labels[kind]), row.id + ' local history');
@@ -89,9 +91,11 @@ test('handoff kit outcomes survive reload with baselines pinned directly from re
       await page.reload();
       await verifyOutcome(page, row);
       assert.equal(await savedPin(page), pin, 'Import or reload changed the receiver pin');
-      // A deliberately wrong outcome must fail in this exact acceptance path.
+      // A wrong disposition or a wrong receipt stage must fail the same acceptance path.
       if (row.id === 'altered-original') {
         await assert.rejects(verifyOutcome(page, { ...row, disposition: 'resolved' }), /expected .*Resolved.*observed .*Open/);
+        await assert.rejects(verifyOutcome(page, { ...row, reason: 'follow-up-receipt-mismatch' }),
+          { code: 'ERR_ASSERTION', message: /altered-original: closure checklist for follow-up-receipt-mismatch/ });
       }
     });
   }
