@@ -50,6 +50,11 @@ export async function createBackup(storage, { caseIds, pinNames = [], receipts =
       getStorage: get, includeCodexReceipts: receipts, includeInvoiceReceipts: receipts, includeSenderHistory: senderHistory,
     });
     const portable = JSON.parse(serialized);
+    for (const side of ['baseline', 'candidate']) {
+      if (item[side] !== undefined && !portable[side]) {
+        throw new Error(`Case ${item.report.candidateId ?? item.id} has a ${side} fingerprint mismatch. Attach matching evidence or exclude this case from the backup.`);
+      }
+    }
     if (item.followUp && !portable.followUp) throw new Error('The selected follow-up could not be backed up with its evidence.');
     if (item.resolution && !portable.resolution) throw new Error('A saved closure could not be verified for backup. Check the current pin and receipts before exporting this case.');
     cases.push(portable);

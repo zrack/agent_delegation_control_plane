@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { backupChoices, createBackup, inspectBackup, previewRestore, applyRestore } from '../../src/backup.mjs';
 import { collectionKeys, commitBackupState, guardedStorage, JOURNAL, readBackupState, recoverBackupRestore } from '../../src/backup-storage.mjs';
-import { adoptCodexBaseline, importReviewPackage, restoreReviews, saveReview } from '../../src/review.mjs';
+import { adoptCodexBaseline, assessReview, importReviewPackage, restoreReviews, saveReview } from '../../src/review.mjs';
 import { chains } from '../../src/fixtures.mjs';
 import { parseInvestigation } from '../../src/import.mjs';
 import { removeWorkflowBaseline, restoreWorkflowBaselines, runFingerprint } from '../../src/storage.mjs';
@@ -130,4 +130,34 @@ test('a verified report-only pass needs no closure in the selected restore', asy
   assert.equal(preview.outcomes[0].disposition, 'No closure needed');
   await applyRestore(target, preview, lock);
   assert.equal(restoreReviews(() => target).items[0].reviewed, false);
+});
+
+test('backup reports rejected attachments and preserves the distinction from absent evidence', async () => {
+  const { report, baseline, candidate } = JSON.parse(raw);
+  const complete = { kind: 'adcp-review-case', schemaVersion: 1, report, baseline, candidate };
+  const other = { ...complete, report: { ...report, reasons: [] } };
+  for (const side of ['baseline', 'candidate']) {
+    const source = newStorage(), get = () => source;
+    const { id: otherId } = await importReviewPackage(get, JSON.stringify(other));
+    const damaged = structuredClone(complete);
+    damaged[side].chain.title = 'Changed fictional title';
+    const { id, items: [item] } = await importReviewPackage(get, JSON.stringify(damaged));
+    assert.equal((await assessReview(item)).states[side], 'mismatch');
+    const before = readBackupState(source);
+    await assert.rejects(createBackup(source, { caseIds: [otherId, id] }), new RegExp(side + '.*fingerprint mismatch'));
+    assert.deepEqual(readBackupState(source), before);
+
+    const missing = structuredClone(complete);
+    delete missing[side];
+    const partialSource = newStorage(), receiver = newStorage();
+    const { id: partialId } = await importReviewPackage(() => partialSource, JSON.stringify(missing));
+    const backup = await createBackup(partialSource, { caseIds: [partialId] });
+    const plan = await previewRestore(receiver, await inspectBackup(receiver, backup), [partialId]);
+    await applyRestore(receiver, plan, lock);
+    assert.equal((await assessReview(restoreReviews(() => receiver).items[0])).states[side], 'missing');
+    // Reimporting the matching evidence makes that original case eligible for transfer.
+    await importReviewPackage(get, JSON.stringify(complete));
+    const repaired = await createBackup(source, { caseIds: [id] });
+    assert.ok(JSON.parse(repaired).cases[0][side]);
+  }
 });
