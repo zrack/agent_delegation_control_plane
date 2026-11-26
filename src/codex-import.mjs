@@ -167,6 +167,37 @@ export async function previousCodexReceiptDigest(files, name) {
   return digest(bytes);
 }
 
+// A file can still be compared with its manifest entry when another file in
+// the same snapshot fails. These per-file results never certify the capture.
+export async function inspectCodexReceiptDigests(evidence) {
+  return Promise.all(codexReceiptNames.map(async name => {
+    const listed = evidence?.hashes && Object.hasOwn(evidence.hashes, name);
+    const hash = listed ? evidence.hashes[name] : undefined;
+    const expected = typeof hash === 'string' && digestPattern.test(hash) ? hash : undefined;
+    const actual = await previousCodexReceiptDigest(evidence?.files, name);
+    if (actual === 'missing') return { name, expected, status: 'missing' };
+    if (actual === 'unreadable') return { name, expected, status: 'invalid' };
+    if (!expected) return { name, actual, status: listed ? 'invalid' : 'unlisted' };
+    return { name, expected, actual, status: actual === expected ? 'matched' : 'mismatch' };
+  }));
+}
+
+// Read only the selected, normalized candidate investigation. Tool/action
+// pairs identify output-producing actions without guessing from a label or ID.
+export function codexActionClaims(candidate) {
+  const grants = new Map(candidate.grants.map(grant => [grant.id, grant]));
+  return candidate.events.map(event => {
+    const supplied = grants.get(event.authorityId);
+    const tool = event.evidence?.tool;
+    const expected = Object.hasOwn(evidenceTools, tool) ? evidenceTools[tool] : undefined;
+    return {
+      eventId: event.id, actor: event.actor, action: event.action.action, target: event.action.resource,
+      grantId: event.authorityId, grant: supplied && { issuer: supplied.issuer, subject: supplied.subject },
+      receipt: expected?.action === event.action.action ? expected.receipt : undefined,
+    };
+  });
+}
+
 async function deriveChain(verified, manifest) {
   const actions = readRecords(verified.get('actions.jsonl'), 'actions.jsonl');
   const grants = readRecords(verified.get('grants.jsonl'), 'grants.jsonl');

@@ -7,7 +7,7 @@ import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
 import { restoreWorkflowBaselines, workflowKey, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
-  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage, importNewCodexCase, inspectCodexCaseImport,
+  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage, importNewCodexCase, inspectCodexCaseImport, inspectCodexRunEvidence,
   MAX_REPORT_BYTES, REVIEW_STORAGE_KEY, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, MAX_SENDER_HISTORY_ENTRIES, removeReview, resolveReviewCase,
   applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewClosureState, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision, senderHistoryEntries,
 } from './review.mjs';
@@ -467,6 +467,69 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <details class="review-differences"><summary>Inspect files and digests · ${stageLabel} run</summary>${rows.join('')}</details></section>`;
   }
 
+  function senderActionClaims(evidence, stage) {
+    if (!evidence) return '<p>The candidate investigation is unavailable for this stage.</p>';
+    const edits = evidence.claims?.filter(claim => claim.receipt === 'after.md');
+    if (!edits) return '<p>The sender’s candidate investigation could not be matched to this run’s report. Action and grant details are unavailable.</p>';
+    const source = stage === 'original' ? 'candidate.chain' : 'followUp.candidate.chain';
+    const sourceNote = `<p class="panel-description">The packaged candidate investigation records actions in <code>${source}.events</code> and grants in <code>${source}.grants</code>.</p>`;
+    if (!edits.length) return sourceNote + '<p>The investigation has no recorded edit associated with <code>after.md</code>.</p>';
+    return sourceNote + edits.map(claim => `<dl class="codex-claim-fields">
+      <dt>Action</dt><dd><code>${escape(claim.action)}</code> by <code>${escape(claim.actor)}</code></dd>
+      <dt>Target</dt><dd><code>${escape(claim.target)}</code></dd>
+      <dt>Referenced grant</dt><dd><code>${escape(claim.grantId)}</code></dd>
+      <dt>Grant record</dt><dd>${claim.grant ? `The supplied grant names <code>${escape(claim.grant.issuer)}</code> as issuer and <code>${escape(claim.grant.subject)}</code> as subject.`
+        : 'Missing from the sender’s grant records.'}</dd>
+      <dt>Action record</dt><dd><code>${escape(claim.eventId)}</code></dd>
+      <dt>Output receipt for this edit</dt><dd><code>${escape(claim.receipt)}</code></dd>
+    </dl>`).join('');
+  }
+
+  function receiverReceiptChecks(evidence, assessment, error, stage) {
+    const label = stage === 'original' ? 'Original' : 'Follow-up';
+    let result;
+    if (error) {
+      const consequence = stage === 'original' ? 'Closure requires the receiver to reproduce the original finding.'
+        : 'Closure requires a verified passing follow-up.';
+      result = `<p><strong>${label} verification failed.</strong> ${escape(error)} ${consequence}</p>`;
+    } else if (assessment?.codex && assessment.verdict) {
+      result = `<p><strong>${label} comparison rechecked</strong> · ${regressionLabels[assessment.verdict.status]}.</p>`;
+    } else {
+      result = `<p>The receiver could not reproduce the ${stage} comparison.</p>`;
+    }
+    if (!evidence?.checks?.length) return result + '<p>Individual receipt checks are unavailable.</p>';
+    const receiptRow = receipt => `<li><strong><code>${escape(receipt.name)}</code> · ${receiptLabels[receipt.status]}</strong>
+      ${receipt.expected ? `<p>Manifest SHA-256 <code>${escape(receipt.expected)}</code></p>` : ''}
+      ${receipt.actual ? `<p>Received bytes SHA-256 <code>${escape(receipt.actual)}</code></p>` : ''}</li>`;
+    const failed = evidence.checks.filter(receipt => receipt.status !== 'matched');
+    const matched = evidence.checks.filter(receipt => receipt.status === 'matched');
+    return result + (failed.length ? `<ul class="codex-receipt-checks failed">${failed.map(receiptRow).join('')}</ul>` : '')
+      + (matched.length ? `<details class="review-differences"><summary>Matching receipts · ${matched.length} of ${evidence.checks.length}</summary>
+        <ul class="codex-receipt-checks">${matched.map(receiptRow).join('')}</ul></details>` : '');
+  }
+
+  async function damagedCodexEvidence(item, original, followUp) {
+    if (!item.codex || (!original.error && !followUp.error)) return '';
+    const stages = item.followUp ? ['original', 'follow-up'] : ['original'];
+    const panels = await Promise.all(stages.map(async stage => {
+      // Preserve the other stage and the repair controls if this inspection fails.
+      const evidence = await inspectCodexRunEvidence(item, stage).catch(() => undefined);
+      const heading = 'codex-' + stage + '-evidence-title';
+      const label = stage === 'original' ? 'Original' : 'Follow-up';
+      const check = stage === 'original' ? original : followUp.assessment;
+      const error = stage === 'original' ? original.error : followUp.error?.replace(/^Follow-up Codex evidence: /, '');
+      return `<section class="codex-stage-evidence" aria-labelledby="${heading}">
+        <h4 id="${heading}">${label} run evidence</h4>
+        ${evidence?.runId ? `<p class="panel-description">Run <code>${escape(evidence.runId)}</code></p>` : ''}
+        <section aria-labelledby="${heading}-sender"><h5 id="${heading}-sender">Sender-reported action and grant</h5>
+          ${senderActionClaims(evidence, stage)}</section>
+        <section aria-labelledby="${heading}-receiver"><h5 id="${heading}-receiver">Receiver checks</h5>
+          ${receiverReceiptChecks(evidence, check, error, stage)}</section>
+      </section>`;
+    }));
+    return panels.join('');
+  }
+
   function codexChecklist(item, original, followUp) {
     const steps = codexClosureSteps(item, original, followUp, 'webkitdirectory' in invoiceInput);
     if (!steps.length) return '';
@@ -557,10 +620,11 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   function renderCase(item, original, followUp) {
     if (item.report.status === 'pass' && !followUp.flagged && !item.decision) return '';
     const { assessment, canResolve, pinChanged, resolved } = followUp;
-    const comparison = (label, record, check, stage) => `<div class="compare-run"><h3>${label}</h3>
+    const comparison = (label, record, check, stage, error) => `<div class="compare-run"><h3>${label}</h3>
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
-      <p class="panel-description">Reported · ${regressionLabels[record.report.status]}</p>
-      <p class="panel-description">${check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p>
+      <p class="panel-description">${error ? 'Sender-reported' : 'Reported'} · ${regressionLabels[record.report.status]}</p>
+      <p class="panel-description">${error ? `Receiver check failed · ${escape(error)}` :
+        check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p>
       ${outputReceiptControl(check, stage)}</div>`;
     const nextStep = (item.invoice || item.codex) && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
@@ -589,7 +653,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <label for="review-follow-up-file">${label}</label>
       <input id="review-follow-up-file" type="file" ${picker} aria-describedby="${item.codex && !resolved ? 'codex-closure-reasons' : 'review-case-help'}" ${canAttach ? '' : 'disabled'}>
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original, 'original')}
-        ${comparison('Follow-up run', item.followUp, assessment, 'follow-up')}</div>
+        ${comparison('Follow-up run', item.followUp, assessment, 'follow-up', followUp.error)}</div>
         ${receiptSummary}
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment, 'follow-up') + followUpRecords : ''}${receiptDetails}
@@ -647,7 +711,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   function blockedCodexView(item, message, explanation) {
     return `<section class="review-case"><h3><span class="badge unknown">Open</span> · ${escape(message)}</h3>
       ${explanation}
-      ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
+      ${item.decision ? `<p id="codex-blocked-decision"><strong>Previously saved decision</strong> · ${escape(reviewDecisions[item.decision.kind])} · ${escape(item.decision.reason)}</p>` : ''}
       ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
       <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>
       ${codexHistory(item)}
@@ -700,9 +764,11 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         : invoice?.error ? `<p class="import-error">${escape(invoice.error)}</p>` : '';
       if (currentRevision !== revision) return;
       const checklist = item.codex ? codexChecklist(item, assessment, followUp) : '';
+      const damagedEvidence = await damagedCodexEvidence(item, assessment, followUp);
+      if (currentRevision !== revision) return;
       if (assessment.error) {
         if (route.has('receipt')) history.replaceState(null, '', itemRoute(item.id));
-        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + evidenceRestorePanel(item))
+        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + damagedEvidence + evidenceRestorePanel(item))
           + summaryPanel(item, assessment, followUp, selectedChecks.status.closure);
         return;
       }
@@ -721,6 +787,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
         ${item.invoice || item.codex ? `<p class="panel-description">${item.codex ? 'Case workflow' : 'Pinned workflow'} · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
         ${checklist}
+        ${damagedEvidence}
         ${renderEvidence(item, assessment)}
         ${actionDirectory(item, runs, escape)}
         ${receiptResults}
