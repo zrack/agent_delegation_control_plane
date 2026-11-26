@@ -1,0 +1,8 @@
+{
+  "name": "adcp-browser-acceptance",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "playwright-core": "1.65.1"
+  }
+}

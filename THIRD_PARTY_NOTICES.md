@@ -4,6 +4,8 @@ The optional coding pilot builds from the official Python Docker image, pinned b
 
 The viewer and scripted experiment use browser-native APIs and Python/Node standard libraries. No third-party runtime source, fonts, dependencies or binary executables are vendored in this package. Dependencies installed by users retain their own licenses; this project's Apache-2.0 license does not replace those terms.
 
+The optional browser acceptance suite installs Playwright Core (Apache-2.0) and its compatible Chromium headless shell separately. Their licenses and notices accompany those downloads. The dashboard and demo ZIP do not include the browser or test driver.
+
 The optional SDK runner uses the separately installed, pinned packages below. The table records license labels from installed distribution metadata for these exact versions; it is not a legal opinion or an exhaustive redistribution review. Consult each installed distribution's LICENSE/NOTICE files before redistributing dependency code or binaries.
 
 | Package | Version | Reported license |
