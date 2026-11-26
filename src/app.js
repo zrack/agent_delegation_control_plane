@@ -1,3 +1,5 @@
+import { guardedStorage, recoverBackupRestore, writeLocal } from './backup-storage.mjs';
+import { connectBackup } from './backup-view.mjs';
 import { chains as examples } from './fixtures.mjs';
 import { evaluateChain, statusLabels } from './evaluator.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation, mergeInvestigation } from './import.mjs';
@@ -10,7 +12,12 @@ import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from '
 import { saveCodexCandidate } from './review.mjs';
 import { createReviewInbox, reviewRoute } from './review-view.mjs';
 
-const getStorage = () => window.localStorage;
+const rawStorage = () => window.localStorage;
+const getStorage = () => guardedStorage(rawStorage());
+let recoveryNotice = '';
+try {
+  if (await recoverBackupRestore(rawStorage())) recoveryNotice = 'An interrupted backup restore was rolled back.';
+} catch (error) { recoveryNotice = error.message; }
 const restored = restoreInvestigations(getStorage);
 let chains = [...examples, ...restored.chains];
 
@@ -61,6 +68,17 @@ const reviewView = createReviewInbox({
     updateCodexForm();
   },
 });
+connectBackup({ rawStorage, getStorage, onRestore() {
+  const recovered = restoreInvestigations(getStorage);
+  for (const chain of recovered.chains) {
+    chains = mergeInvestigation(chains, chain);
+    results.set(chain.id, evaluateChain(chain));
+  }
+  updateClearButton();
+  updateCodexForm();
+  selectFromHash();
+} });
+if (recoveryNotice) document.querySelector('#review-status').textContent = recoveryNotice;
 const compareRoute = '#compare?';
 let comparisonRows = [];
 let comparisonPair = [];
@@ -396,7 +414,7 @@ saveBaselineButton.addEventListener('click', async () => {
   saveBaselineButton.disabled = true;
   try {
     const fingerprint = await runFingerprint(baseline);
-    workflows = saveWorkflowBaseline(getStorage, name, baseline, fingerprint, expected);
+    workflows = await writeLocal(saveWorkflowBaseline, getStorage, name, baseline, fingerprint, expected);
     workflowStatus.textContent = `Saved baseline ${baseline.id} for ${name}.`;
     if (location.hash === currentRoute) {
       const candidate = candidateSelect.value === baseline.id ? '' : candidateSelect.value;
@@ -411,11 +429,11 @@ saveBaselineButton.addEventListener('click', async () => {
     saveBaselineButton.disabled = false;
   }
 });
-removeBaselineButton.addEventListener('click', () => {
+removeBaselineButton.addEventListener('click', async () => {
   const profile = workflows.find(item => workflowKey(item.name) === workflowSelect.value);
   if (!profile) return;
   try {
-    workflows = removeWorkflowBaseline(getStorage, profile);
+    workflows = await writeLocal(removeWorkflowBaseline, getStorage, profile);
     workflowStatus.textContent = `Removed the saved baseline for ${profile.name}.`;
     location.hash = comparisonHash(baselineSelect.value, candidateSelect.value);
   } catch (error) {
@@ -483,7 +501,7 @@ async function importRun(picker, status, read, openRun = false) {
     const assessment = evaluated.findings.some(finding => finding.code === 'EVALUATION_LIMIT')
       ? ' Evaluation is incomplete: a work or finding limit was reached. Retained violations remain visible; other evidence is unassessed.' : '';
     try {
-      saveInvestigation(getStorage, imported);
+      await writeLocal(saveInvestigation, getStorage, imported);
       status.textContent = `${notice}Imported and saved in this browser. Reload restores the run and evidence. Source claims remain unverified.${assessment}`;
       status.classList.remove('import-error');
     } catch {
@@ -545,7 +563,7 @@ codexForm.addEventListener('submit', async event => {
   codexSaveStatus.classList.remove('import-error');
   codexSaveStatus.textContent = 'Checking the baseline and receipts…';
   try {
-    const id = await saveCodexCandidate(getStorage, pin, codexDraft.evidence);
+    const id = await writeLocal(saveCodexCandidate, getStorage, pin, codexDraft.evidence);
     codexDraft = undefined;
     codexImportStatus.textContent = 'Codex comparison and evidence saved to the regression inbox.';
     if (location.hash === currentRoute) location.hash = reviewRoute + new URLSearchParams({ item: id });
@@ -571,9 +589,9 @@ codexFolder.addEventListener('change', () => importRun(codexFolder, codexImportS
   const { chain, verifiedFileCount, evidence } = await importCodexFolder(files, { retainEvidence: true });
   return { chain, evidence, notice: `Verified ${verifiedFileCount} manifest files and the action receipts. ` };
 }, true));
-document.querySelector('#clear-imports').addEventListener('click', () => {
+document.querySelector('#clear-imports').addEventListener('click', async () => {
   try {
-    clearInvestigations(getStorage);
+    await writeLocal(clearInvestigations, getStorage);
     codexDraft = undefined;
     codexForm.hidden = true;
     chains = [...examples];

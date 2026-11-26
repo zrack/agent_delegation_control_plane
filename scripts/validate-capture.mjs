@@ -5,9 +5,10 @@ import { parseArgs } from 'node:util';
 import { codexFolderLimits, importCodexFolder } from '../src/codex-import.mjs';
 import { evaluateChain } from '../src/evaluator.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from '../src/import.mjs';
+import { inspectSdkFolder, sdkFileLimits } from './sdk-folder.mjs';
 import { readBytes } from './bounded-file.mjs';
 
-const usage = 'Usage: node scripts/validate-capture.mjs (--investigation FILE | --codex-folder DIRECTORY) [--json]';
+const usage = 'Usage: node scripts/validate-capture.mjs (--investigation FILE | --codex-folder DIRECTORY | --sdk-folder DIRECTORY) [--json]';
 const issue = (file, message) => Object.assign(new Error(message), { file, code: 'UNREADABLE_INPUT' });
 
 function readSource(file, path, limit) {
@@ -27,10 +28,12 @@ async function loadInput(values) {
     catch { throw issue('investigation.json', 'Save the investigation as UTF-8 JSON.'); }
     return { chain: parseInvestigation(text) };
   }
-  const directory = values['codex-folder'];
+  const sdk = values['sdk-folder'] !== undefined;
+  const directory = sdk ? values['sdk-folder'] : values['codex-folder'];
   try {
-    if (!lstatSync(directory).isDirectory()) throw issue('Codex folder', 'Expected a directory.');
-  } catch { throw issue('Codex folder', 'Select the capture directory itself. Symbolic links are rejected.'); }
+    if (!lstatSync(directory).isDirectory()) throw new Error();
+  } catch { throw issue(sdk ? 'SDK folder' : 'Codex folder', 'Select the capture directory itself. Symbolic links are rejected.'); }
+  if (sdk) return inspectSdkFolder(name => readSource(name, join(directory, name), sdkFileLimits[name]));
   const files = Object.entries(codexFolderLimits).map(([name, limit]) =>
     Object.assign(new Blob([readSource(name, join(directory, name), limit)]), { webkitRelativePath: 'capture/' + name }));
   return importCodexFolder(files);
@@ -44,7 +47,16 @@ function location(field, folder, defaultFile = folder ? 'Codex folder' : 'invest
   return field ? { file: defaultFile, field } : { file: defaultFile };
 }
 
-function authFinding(finding, chain, folder) {
+function sdkLocation(field, source) {
+  const match = /^chain\.(events|grants)\[(\d+)\](.*)$/.exec(field);
+  if (!match) return { file: 'investigation.json', field };
+  const [, group, index, property] = match;
+  const row = source[group][Number(index)];
+  return { file: 'capture.jsonl', field: 'records[' + row + '].' + (group === 'events' ? 'event' : 'grant') + property,
+    line: row + 1 };
+}
+
+function authFinding(finding, chain, folder, sdkSource) {
   const event = chain.events.findIndex(event => event.id === finding.eventId);
   const grant = chain.grants.findIndex(grant => grant.id === finding.grantId);
   let field = 'chain';
@@ -60,10 +72,10 @@ function authFinding(finding, chain, folder) {
   } else if (event >= 0) {
     field = `chain.events[${event}]`;
   }
-  const result = { code: finding.code, ...location(field, folder), severity: finding.severity };
+  const result = { code: finding.code, ...(sdkSource ? sdkLocation(field, sdkSource) : location(field, folder)), severity: finding.severity };
   // parseInvestigation restricts all IDs to a short, safe alphabet.
-  if (finding.eventId) result.eventId = finding.eventId;
-  if (finding.grantId) result.grantId = finding.grantId;
+  if (!sdkSource && finding.eventId) result.eventId = finding.eventId;
+  if (!sdkSource && finding.grantId) result.grantId = finding.grantId;
   if (finding.code === 'GRANT_MISSING') result.message = 'Locate the referenced grant in the source ledger or leave authority unverifiable.';
   else if (finding.code === 'ACTION_OUTSIDE_SCOPE') result.message = 'Compare the recorded action and resource with the grant capabilities.';
   else result.message = 'Inspect the indicated authority record and its source evidence.';
@@ -72,21 +84,23 @@ function authFinding(finding, chain, folder) {
 
 async function validate(values) {
   const folder = Boolean(values['codex-folder']);
-  const header = { schemaVersion: 1, inputKind: folder ? 'codex-folder' : 'investigation' };
+  const sdk = Boolean(values['sdk-folder']);
+  const hasReceipts = folder || sdk;
+  const header = { schemaVersion: 1, inputKind: sdk ? 'sdk-folder' : folder ? 'codex-folder' : 'investigation' };
   try {
-    const { chain, verifiedFileCount } = await loadInput(values);
+    const { chain, verifiedFileCount, sdkSource } = await loadInput(values);
     const evaluation = evaluateChain(chain);
     const status = { valid: 'within-scope', unknown: 'unverifiable', violation: 'violation' }[evaluation.status];
     return {
-      ...header, status, authority: status, receipts: folder ? 'verified' : 'not-supplied',
-      ...(folder ? { verifiedFileCount } : {}), findingCount: evaluation.findings.length,
-      diagnostics: evaluation.findings.slice(0, 25).map(finding => authFinding(finding, chain, folder)),
+      ...header, status, authority: status, receipts: hasReceipts ? 'verified' : 'not-supplied',
+      ...(hasReceipts ? { verifiedFileCount } : {}), findingCount: evaluation.findings.length,
+      diagnostics: evaluation.findings.slice(0, 25).map(finding => authFinding(finding, chain, folder, sdkSource)),
     };
   } catch (error) {
     const mismatch = ['RECEIPT_HASH_MISMATCH', 'ACTION_RECEIPT_MISMATCH'].includes(error.code);
     // All errors emitted by loadInput or the importers use static labels and validated field paths.
     return { ...header, status: mismatch ? 'receipt-mismatch' : 'invalid-input', authority: 'unassessed',
-      receipts: folder ? (mismatch ? 'mismatch' : 'unverified') : 'not-supplied',
+      receipts: hasReceipts ? (mismatch ? 'mismatch' : 'unverified') : 'not-supplied',
       diagnostics: [{ code: error.code ?? 'INVALID_CAPTURE', ...location(error.field, folder, error.file), message: error.message }],
     };
   }
@@ -95,11 +109,12 @@ async function validate(values) {
 async function main() {
   let values;
   try {
-    ({ values } = parseArgs({ options: { investigation: { type: 'string' }, 'codex-folder': { type: 'string' },
+    ({ values } = parseArgs({ options: { investigation: { type: 'string' }, 'codex-folder': { type: 'string' }, 'sdk-folder': { type: 'string' },
       json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } } }));
   } catch { console.error(usage); return 2; }
   if (values.help) { console.log(usage); return 0; }
-  if (Boolean(values.investigation) === Boolean(values['codex-folder'])) { console.error(usage); return 2; }
+  const sources = [values.investigation, values['codex-folder'], values['sdk-folder']].filter(value => value !== undefined);
+  if (sources.length !== 1 || !sources[0]) { console.error(usage); return 2; }
   const result = await validate(values);
   if (values.json) console.log(JSON.stringify(result));
   else {

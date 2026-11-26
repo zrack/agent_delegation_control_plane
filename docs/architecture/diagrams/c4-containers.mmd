@@ -9,7 +9,7 @@ flowchart TB
       Experiment["Controlled experiment<br/>[Container: Node.js]<br/>Scripted reads/export and negative cases"]
       Pilot["Optional coding pilot<br/>[Container: Python / Agents SDK]<br/>Runtime pilot policy, capture and independent grading"]
       Sandbox["Disposable execution sandbox<br/>[Container: Docker / Python]<br/>No host mounts or network; bounded resources and workspace"]
-      Files[("Run artifacts<br/>[Data store: local files]<br/>Investigations, capture folders,<br/>portable cases and independent pins")]
+      Files[("Run artifacts<br/>[Data store: local files]<br/>Investigations, capture folders,<br/>portable cases, backups and pins")]
       Tools["Offline review commands<br/>[Container: Node.js processes]<br/>Producer diagnostics and case verification"]
       Tools -->|Read selected records and pin| Files
       Key[("Ignored credential config<br/>[Configuration: .env.local]<br/>API key; unavailable to viewer/server")]

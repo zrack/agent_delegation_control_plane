@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--with-sdk", action="store_true", help="Also run two offline SDK replay tests using this Python environment")
+parser.add_argument("--with-sdk", action="store_true", help="Also run offline SDK replay tests using this Python environment")
 parser.add_argument("--with-sandbox", action="store_true", help="Also run real Docker isolation and sandbox SDK replay checks; requires --with-sdk and a prebuilt image")
 args = parser.parse_args()
 if args.with_sandbox and not args.with_sdk:
@@ -19,11 +19,14 @@ checks += [
     ("domain", ["node", "--test", "tests/evaluator/evaluator.test.mjs", "tests/evaluator/comparison.test.mjs"]),
     ("browser-local persistence", ["node", "--test", "tests/evaluator/storage.test.mjs"]),
     ("offline regression command", ["node", "--test", "tests/evaluator/regression.test.mjs"]),
-    ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs"]),
+    ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs", "tests/evaluator/case-summary.test.mjs"]),
+    ("selective backup and atomic restore", ["node", "--test", "tests/evaluator/backup.test.mjs"]),
     ("offline Codex folder", ["node", "--test", "tests/evaluator/codex-import.test.mjs"]),
     ("portable case verifier and import preview", ["node", "--test", "tests/evaluator/verify-case.test.mjs", "tests/evaluator/codex-inspection.test.mjs"]),
     ("fictional Codex handoff kit", ["node", "--test", "tests/evaluator/codex-handoff.test.mjs"]),
+    ("offline receipt signature experiment", ["node", "--test", "experiments/receipt-provenance/prototype.test.mjs"]),
     ("producer capture validation", ["node", "--test", "tests/evaluator/validate-capture.test.mjs"]),
+    ("SDK producer compatibility corpus", [sys.executable, "-m", "unittest", "discover", "-s", "tests/evaluator", "-p", "test_sdk_folder.py", "-v"]),
     ("offline invoice folder", ["node", "--test", "tests/evaluator/invoice-import.test.mjs"]),
     ("private alpha rehearsal kit", ["node", "--test", "tests/evaluator/alpha-rehearsal.test.mjs"]),
     ("loopback HTTP", [sys.executable, "-m", "unittest", "discover", "-s", "tests/evaluator", "-p", "test_server.py", "-v"]),

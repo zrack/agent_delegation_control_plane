@@ -25,4 +25,6 @@ Success saves `account.json`, raw `capture.jsonl`, `investigation.json`, `mappin
 
 Start the viewer from the root README, choose **Import a completed run**, and select `investigation.json`. The normalized run and evidence are saved in this browser across reloads (20 runs / 2 MiB total), without upload. Use **Clear imported runs** to remove dashboard copies; keep original exports as backups. A visible saving failure means the new import lasts only until reload. Imported provenance remains an unverified source claim. Quota/authentication failures require checking your own provider access before retrying; viewing saved records needs no new model request.
 
-The two SDK tests use a deterministic replay model and establish wiring, not live provider execution or operator value. Read the [architecture](../../ARCHITECTURE.md) and [privacy guidance](../../docs/PRIVACY.md) before sharing any generated artifacts. No saved provider run, account identifier or API key is distributed.
+The offline SDK replay exercises the production folder writer and verifies the result locally. It establishes wiring with a deterministic model. Live provider execution and reviewer outcomes require separate evidence. [Check an existing folder](../../docs/producer/README.md#check-the-sdk-account-review-folder)
+
+Read the [architecture](../../ARCHITECTURE.md) and [privacy guidance](../../docs/PRIVACY.md) before sharing any generated artifacts. No saved provider run, account identifier or API key is distributed.

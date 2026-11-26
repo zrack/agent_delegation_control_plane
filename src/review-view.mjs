@@ -1,3 +1,5 @@
+import { caseSummary } from './case-summary.mjs';
+import { JOURNAL, writeLocal } from './backup-storage.mjs';
 import { regressionLabels } from './comparison.mjs';
 import { actionDirectory, actionLink, grantLookup, reviewRun } from './grant-lookup.mjs';
 import { importCodexFolder } from './codex-import.mjs';
@@ -7,7 +9,7 @@ import { restoreWorkflowBaselines, workflowKey, WORKFLOW_BASELINE_KEY } from './
 import {
   adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage, importNewCodexCase, inspectCodexCaseImport,
   MAX_REPORT_BYTES, REVIEW_STORAGE_KEY, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, MAX_SENDER_HISTORY_ENTRIES, removeReview, resolveReviewCase,
-  applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision, senderHistoryEntries,
+  applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewClosureState, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision, senderHistoryEntries,
 } from './review.mjs';
 
 const tones = { pass: 'valid', regression: 'violation', review: 'unknown' };
@@ -91,15 +93,14 @@ const closureLabels = { resolved: 'Verified resolved', ready: 'Ready to close', 
 
 export function reviewCardState(item, original, followUp) {
   const blocked = reason => ({ closure: 'blocked', reason });
+  const closure = reviewClosureState(item, original, followUp);
+  if (closure !== 'blocked') return { closure };
   if (original.error) return blocked(original.error);
-  if (followUp.resolved) return { closure: 'resolved' };
-  if (followUp.canResolve) return { closure: 'ready' };
   if (!original.verdict) {
     const sides = ['baseline', 'candidate'].filter(side => original.states?.[side] !== 'matched');
     return blocked(sides.length ? 'Verify the ' + sides.join(' and ') + ' evidence.' : 'The original comparison could not be reproduced.');
   }
   if (item.invoice && !followUp.originalInvoice?.checked) return blocked(followUp.originalInvoice?.error || 'Verify the original invoice receipts.');
-  if (!followUp.flagged && item.report.status === 'pass' && !item.decision) return { closure: 'clear' };
   if (item.codex) {
     const [step] = codexClosureSteps(item, original, followUp);
     if (step) return blocked(step.label + ' · ' + step.reason);
@@ -281,7 +282,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const { contents, pinState } = pendingImport;
     acceptPreview.disabled = inspectFile.disabled = cancelPreview.disabled = true;
     try {
-      const imported = await importNewCodexCase(getStorage, contents, pinState);
+      const imported = await writeLocal(importNewCodexCase, getStorage, contents, pinState);
       clearImportPreview('Case imported.');
       finishImport(imported, route);
     } catch (error) {
@@ -599,6 +600,24 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       ${item.decision ? '<button type="button" id="download-review-case">Download review case</button>' : ''}</div></details>`;
   }
 
+  function summaryPanel(item, assessment, followUp, closure) {
+    const preview = caseSummary(item, assessment, followUp, closure);
+    return `<details class="review-differences"><summary>Preview PR summary</summary>
+      <label for="review-summary-text">Text to copy</label>
+      <textarea id="review-summary-text" rows="9" readonly spellcheck="false">${escape(preview)}</textarea>
+      <button type="button" id="copy-review-summary">Copy summary</button>
+      <p id="review-summary-status" role="status"></p></details>`;
+  }
+
+  async function recheck(item) {
+    const assessment = await assessReview(item).catch(error => {
+      if (item.codex) return { error: error.message };
+      throw error;
+    });
+    const followUp = await assessFollowUp(item, assessment, getStorage);
+    return { assessment, followUp, status: reviewCardState(item, assessment, followUp) };
+  }
+
   function blockedCodexView(item, message, explanation) {
     return `<section class="review-case"><h3><span class="badge unknown">Open</span> · ${escape(message)}</h3>
       ${explanation}
@@ -630,13 +649,9 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     let selectedChecks;
     for (const item of [...items].sort((a, b) => Number(a.reviewed) - Number(b.reviewed) || priority[a.report.status] - priority[b.report.status])) {
       try {
-        const assessment = await assessReview(item).catch(error => {
-          if (item.codex) return { error: error.message };
-          throw error;
-        });
-        const followUp = await assessFollowUp(item, assessment, getStorage);
-        rows.push({ item, status: reviewCardState(item, assessment, followUp) });
-        if (item.id === id) selectedChecks = { assessment, followUp };
+        const checked = await recheck(item);
+        rows.push({ item, status: checked.status });
+        if (item.id === id) selectedChecks = checked;
       } catch (error) {
         rows.push({ item, status: { closure: 'blocked', reason: 'Verification failed · ' + error.message } });
         if (item.id === id) selectedChecks = { error };
@@ -660,7 +675,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       if (currentRevision !== revision) return;
       const checklist = item.codex ? codexChecklist(item, assessment, followUp) : '';
       if (assessment.error) {
-        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + evidenceRestorePanel(item));
+        detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + evidenceRestorePanel(item))
+          + summaryPanel(item, assessment, followUp, selectedChecks.status.closure);
         return;
       }
       for (const side of ['baseline', 'candidate', 'follow-up']) runs[side] = reviewRun(item, assessment, followUp, side);
@@ -693,6 +709,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
           <div class="review-note-actions"><label><input type="checkbox" id="review-complete" ${item.reviewed ? 'checked' : ''}> Mark as reviewed</label>
           <button type="submit">Save review</button><button type="button" id="remove-review">Remove from inbox</button></div>
         </form>
+        ${summaryPanel(item, assessment, followUp, selectedChecks.status.closure)}
         ${renderExport(item, assessment, followUp)}`;
       if (lookupEvent && route.get('view') === 'actions') {
         const directory = detail.querySelector('#review-action-directory');
@@ -714,7 +731,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   }
 
   window.addEventListener('storage', event => {
-    if ([WORKFLOW_BASELINE_KEY, REVIEW_STORAGE_KEY, null].includes(event.key) && location.hash.startsWith(reviewRoute)) render();
+    if ([WORKFLOW_BASELINE_KEY, REVIEW_STORAGE_KEY, JOURNAL, null].includes(event.key) && location.hash.startsWith(reviewRoute)) render();
   });
 
   function receiptFileChecks(states) {
@@ -780,7 +797,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     invoiceStatus.classList.remove('import-error');
     invoiceStatus.textContent = 'Checking the pinned baseline and saving the case…';
     try {
-      const id = await saveInvoiceCandidate(getStorage, pin, invoiceDraft.evidence);
+      const id = await writeLocal(saveInvoiceCandidate, getStorage, pin, invoiceDraft.evidence);
       invoiceDraft = undefined;
       invoiceResults.replaceChildren();
       invoiceStatus.textContent = '';
@@ -835,7 +852,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     announce('Checking the review file…');
     try {
       if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review file no larger than 2 MiB.');
-      finishImport(await importReviewPackage(getStorage, await file.text()), currentRoute);
+      finishImport(await writeLocal(importReviewPackage, getStorage, await file.text()), currentRoute);
     } catch (error) {
       announce(`Could not import the review file. ${error.message}`, true);
     } finally {
@@ -860,7 +877,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         if (exportFile.size > MAX_IMPORT_BYTES) throw new Error(`The ${side} export exceeds 1 MiB.`);
         evidence[side] = parseInvestigation(await exportFile.text());
       }
-      const imported = await importReview(getStorage, await file.text(), evidence);
+      const imported = await writeLocal(importReview, getStorage, await file.text(), evidence);
       form.reset();
       document.querySelector('#review-import-controls').open = false;
       finishImport(imported, currentRoute);
@@ -912,7 +929,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     if (event.target.id === 'review-decision-form' && selected) {
       event.preventDefault();
       try {
-        saveReviewDecision(getStorage, selected, detail.querySelector('#review-decision').value,
+        await writeLocal(saveReviewDecision, getStorage, selected, detail.querySelector('#review-decision').value,
           detail.querySelector('#review-decision-reason').value);
         announce('Decision saved.');
         await render();
@@ -923,7 +940,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     if (event.target.id !== 'review-note-form' || !selected) return;
     event.preventDefault();
     try {
-      saveReview(getStorage, selected, detail.querySelector('#review-note').value, detail.querySelector('#review-complete').checked);
+      await writeLocal(saveReview, getStorage, selected, detail.querySelector('#review-note').value, detail.querySelector('#review-complete').checked);
       announce('Review saved.');
       await render();
       if (!detail.closest('[hidden]')) detail.querySelector('#review-note')?.focus({ preventScroll: true });
@@ -992,13 +1009,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     try {
       if (item.codex) {
         const { evidence } = await importCodexFolder(input.files, { retainEvidence: true });
-        await attachCodexFollowUp(getStorage, item, evidence);
+        await writeLocal(attachCodexFollowUp, getStorage, item, evidence);
       } else if (item.invoice) {
         const { evidence } = await importInvoiceFolder(input.files);
-        await attachInvoiceFollowUp(getStorage, item, evidence);
+        await writeLocal(attachInvoiceFollowUp, getStorage, item, evidence);
       } else {
         if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a review package no larger than 2 MiB.');
-        await attachReviewFollowUp(getStorage, item, await file.text());
+        await writeLocal(attachReviewFollowUp, getStorage, item, await file.text());
       }
       announce('Follow-up saved.');
       if (location.hash === itemRoute(item.id)) await render();
@@ -1025,6 +1042,42 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
 
   detail.addEventListener('click', async event => {
     if (!selected) return;
+    if (event.target.id === 'copy-review-summary') {
+      const button = event.target;
+      const preview = detail.querySelector('#review-summary-text');
+      const message = detail.querySelector('#review-summary-status');
+      button.disabled = true;
+      try {
+        const current = restoreReviews(getStorage).items.find(item => item.id === selected?.id);
+        if (!current) throw new Error('Reopen the saved case before copying.');
+        const { assessment, followUp, status } = await recheck(current);
+        if (!button.isConnected) return;
+        const latest = restoreReviews(getStorage).items.find(item => item.id === current.id);
+        if (JSON.stringify(latest) !== JSON.stringify(current)) {
+          await render();
+          announce('The saved case changed. Reopen the PR summary to review it.');
+          return;
+        }
+        const checked = caseSummary(current, assessment, followUp, status.closure);
+        if (checked !== preview.value) {
+          preview.value = checked;
+          message.textContent = 'The evidence changed. Review the updated summary before copying.';
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(checked);
+          message.textContent = 'Summary copied.';
+        } catch {
+          preview.focus();
+          preview.select();
+          message.textContent = 'Summary selected. Use your device’s Copy command.';
+        }
+      } catch {
+        preview.value = '';
+        message.textContent = 'Reopen the case to recheck the evidence before copying.';
+      } finally { button.disabled = false; }
+      return;
+    }
     if (event.target.id === 'cancel-codex-restore') {
       cancelCodexPreview();
       return;
@@ -1054,7 +1107,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       message.textContent = 'Rechecking replacement evidence…';
       try {
         const apply = kind === 'codex' ? applyCodexOriginalRepair : restoreInvoiceEvidence;
-        await apply(getStorage, draft.item, draft.contents);
+        await writeLocal(apply, getStorage, draft.item, draft.contents);
         if (draft.route === location.hash) {
           announce(kind === 'codex' ? 'Original receipts repaired. The case is open for review.'
             : 'Matching evidence restored. Review the case before closing.');
@@ -1073,7 +1126,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const item = selected;
       event.target.disabled = true;
       try {
-        const baseline = await adoptCodexBaseline(getStorage, item);
+        const baseline = await writeLocal(adoptCodexBaseline, getStorage, item);
         onBaselineAdopted(baseline);
         announce('Included baseline pinned in this browser.');
       } catch (error) { announce(`Could not pin the included baseline. ${error.message}`, true); }
@@ -1084,7 +1137,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const item = selected;
       event.target.disabled = true;
       try {
-        await resolveReviewCase(getStorage, item);
+        await writeLocal(resolveReviewCase, getStorage, item);
         announce('Case closed as resolved.');
         if (location.hash === itemRoute(item.id)) await render();
       } catch (error) {
@@ -1133,7 +1186,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     if (event.target.id !== 'remove-review') return;
     if (!window.confirm('Remove this report and its saved evidence, follow-up, decision and notes?')) return;
     try {
-      removeReview(getStorage, selected);
+      await writeLocal(removeReview, getStorage, selected);
       announce('Report removed from the inbox.');
       location.hash = reviewRoute;
     } catch (error) { announce(`Could not remove the report. ${error.message}`, true); }

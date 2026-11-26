@@ -75,6 +75,24 @@
           <label for="review-package-file">Import review package or case</label>
           <input id="review-package-file" type="file" accept=".json,application/json" aria-describedby="review-help review-status">
         </div>
+        <details id="inbox-backup">
+          <summary>Back up or restore selected cases</summary>
+          <p>Selected cases include their report, matching investigations, saved decision and reason, and available follow-up. Restored entries start unreviewed. Backups are unencrypted local files. Close dashboard tabs running an older version before restoring.</p>
+          <fieldset><legend>Cases and pins to back up</legend><div id="backup-source" class="backup-options"></div></fieldset>
+          <label><input id="backup-receipts" type="checkbox"> Include folder receipts and source files for selected Codex or invoice cases</label>
+          <label><input id="backup-notes" type="checkbox"> Include saved notes</label>
+          <label><input id="backup-history" type="checkbox"> Include my local Codex repair history as sender-reported events</label>
+          <button type="button" id="backup-export">Download selected backup</button>
+          <fieldset><legend>Restore from a backup</legend>
+            <label for="backup-file">Inbox backup JSON</label><input id="backup-file" type="file" accept=".json,application/json">
+            <fieldset class="backup-options" id="backup-destination" aria-label="Restore selection"></fieldset>
+            <button type="button" id="backup-preview" hidden>Preview selected restore</button>
+            <div id="backup-result"></div>
+            <button type="button" id="backup-apply" hidden>Confirm restore</button>
+            <button type="button" id="backup-cancel" hidden>Cancel restore</button>
+          </fieldset>
+          <p id="backup-status" role="status"></p>
+        </details>
         <details id="codex-import-inspector">
           <summary>Preview a Codex case before importing</summary>
           <label for="codex-inspect-file">Codex review case with receipts</label>

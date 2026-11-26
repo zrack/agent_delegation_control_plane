@@ -2,6 +2,12 @@
 
 ## Unreleased technical alpha
 
+- Verify receipt-inclusive invoice cases offline, with separate results for authority, output and execution.
+- Back up selected cases and workflow pins, preview any conflicts, and recover from an interrupted restore.
+- Preview and copy a pull-request summary with the current disposition, grant reference, receipt digests and next action.
+- Validate the account-review folder written by the repository’s Agents SDK runner. Exercise its supported format with an offline replay.
+- Added a separate signature experiment for exact case bytes, receiver-pinned producer keys and revocation. Case closure still requires the existing independent checks.
+
 - Added a deterministic fictional sender-to-receiver handoff kit with separately supplied receiver baselines, optional repair history, and an offline command for checking portable Codex cases.
 - Added direct grant lookup, producer diagnostics, verified inbox filters and an optional preview before importing a Codex case.
 

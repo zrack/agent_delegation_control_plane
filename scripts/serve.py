@@ -6,12 +6,14 @@ from urllib.parse import urlsplit
 import argparse
 
 ROOT = Path(__file__).resolve().parents[1] / "src"
-ASSETS = {"/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css",
+ASSETS = {"/backup.mjs": "backup.mjs", "/backup-storage.mjs": "backup-storage.mjs", "/backup-view.mjs": "backup-view.mjs",
+          "/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css",
           "/app.js": "app.js", "/fixtures.mjs": "fixtures.mjs", "/evaluator.mjs": "evaluator.mjs",
           "/import.mjs": "import.mjs", "/codex-import.mjs": "codex-import.mjs",
           "/storage.mjs": "storage.mjs", "/comparison.mjs": "comparison.mjs",
           "/review.mjs": "review.mjs", "/review-view.mjs": "review-view.mjs",
-          "/invoice-import.mjs": "invoice-import.mjs", "/grant-lookup.mjs": "grant-lookup.mjs"}
+          "/invoice-import.mjs": "invoice-import.mjs", "/grant-lookup.mjs": "grant-lookup.mjs",
+          "/case-summary.mjs": "case-summary.mjs"}
 
 
 class DashboardHandler(SimpleHTTPRequestHandler):

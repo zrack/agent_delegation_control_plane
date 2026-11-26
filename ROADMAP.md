@@ -128,14 +128,16 @@ These are estimates for one developer, including implementation, tests, integrat
 
 ## Ranked backlog after hour 160
 
-These estimates are additional to the 160 hours above. Choose the next item using the evidence at F5.
+The first 160 hours describe the original delivery plan. The estimates below cover the follow-on work. The first four follow-on tools run in a source checkout. The fifth is an isolated research prototype.
 
-| Priority | Candidate | Estimate | Start when |
+| Priority | Result in this checkout | Original estimate | What to try or verify |
 | --- | --- | ---: | --- |
-| 1 | Extend offline case verification to portable invoice cases. Compare the command and dashboard on missing-receipt and altered-output repairs, corrected follow-ups and conflicts. | 12–18 h | An invoice reviewer needs the same independent check delivered in D. |
-| 2 | Add a case summary suitable for attaching to a pull request, with the disposition, relevant grant or missing reference, receipt digests and outstanding action. Preview the exact text locally before sharing. | 8–12 h | A reviewer is copying those fields by hand during handoff. |
-| 3 | Add selective local backup and restore across cases and pins, with a conflict preview and an all-or-nothing restore test. | 16–24 h | Multiple profiles or storage limits cause repeated loss or rework. |
-| 4 | Support another producer or a second version of the qualified format. Maintain a compatibility corpus with explicit rejection of unsupported versions. | 18–30 h | Another recurring source passes the F2 decision. |
-| 5 | Design authenticated evidence provenance covering who issues receipts, what is signed, how verifiers obtain keys and how revocation works. Start with a threat model and a bounded prototype. | 16–24 h for design and prototype | A downstream decision requires producer authenticity beyond matching bytes to a supplied digest. [Current threat model](docs/architecture/THREAT_MODEL.md) |
+| 1 | Offline verification for receipt-inclusive invoice cases | 12–18 h | Run the four released invoice examples. Two recorded closures verify with their packaged baseline. Altered output or a conflicting baseline keeps the case open. Inspect authority, output and execution separately. [Invoice exercise](docs/INVOICE_VERIFICATION.md) |
+| 2 | Copyable pull-request summary | 8–12 h | Preview the disposition, grant reference, digests and next action. Change the receiver pin before copying and review the refreshed result. [Summary privacy](docs/PRIVACY.md#sharing-a-pr-summary) |
+| 3 | Selective local backup and restore | 16–24 h | Choose cases and optional evidence, preview the effects of accepting a pin, and restore into a fresh profile. Conflicting pins and existing decisions are preserved. [Backup walkthrough](docs/INBOX_BACKUP.md) |
+| 4 | Compatibility check for the repository’s account-review producer | 18–30 h | Validate the output of the Coordinator → Researcher → Reporter workflow against its manifest, tool records and investigation. Run the deterministic producer replay and rejection tests offline. An independently operated workflow still needs a permissioned sample. [Producer guide](docs/producer/README.md) · [Source selection criteria](docs/WORKFLOW_INTAKE_DECISION.md) |
+| 5 | Offline evidence signature experiment | 16–24 h | Verify exact case bytes against an independently selected producer key. Try a revoked key and a signed case with an altered receipt. The receipt still blocks closure. [Experiment and trust assumptions](experiments/receipt-provenance/README.md) |
+
+**Next evidence to collect.** Give a reviewer the separate task sheet and receiver pin. Record whether they reach the correct decision, what evidence they cite, how long it takes and where they need help. Use that comparison to choose the next workflow. A production signing pilot also needs a named key owner and a way for offline receivers to obtain fresh, authenticated key status. [Handoff kit](docs/CODEX_HANDOFF.md) · [Measurement method](#next-evidence-gates)
 
 The product in this plan performs local, retrospective review. Shared accounts and hosted case storage need evidence of repeated collaboration friction and a design for who can read which records. Runtime authorization and revocation need a separate enforcement design and failure model. Those decisions belong to a later roadmap.

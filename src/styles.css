@@ -237,3 +237,7 @@
 #review-filters legend, #review-filters label { font-size: .875rem; font-weight: 650; }
 #review-filters select { display: block; max-width: 100%; }
 #review-filter-count { width: 100%; color: var(--muted); font-size: .8125rem; margin: 0; }
+
+#review-summary-text { display: block; width: 100%; margin: 6px 0; resize: vertical; }
+#inbox-backup label { display: block; overflow-wrap: anywhere; margin-block: .4rem; }
+#backup-destination:empty { display: none; }

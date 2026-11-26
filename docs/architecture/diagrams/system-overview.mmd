@@ -8,10 +8,10 @@ flowchart TB
       Files -->|Chosen locally| Viewer[Browser dashboard<br/>Actions, grants and case review]
       Server[Loopback static server] -->|Application assets| Viewer
       Viewer <-->|Save and recheck| Saved[(Origin-scoped local storage<br/>Runs, pins and cases)]
-      Viewer -->|Export selected evidence| Packages[Portable case files]
+      Viewer -->|Export selected evidence| Packages[Portable cases and selected backups]
       Packages -->|Import| Viewer
       Files -->|Check input and receipts| Producer[Producer diagnostics]
-      Packages -->|Recheck case| Receiver[Offline case verifier]
+      Packages -->|Recheck portable case| Receiver[Offline case verifier]
       Pin[Independent receiver baseline and pin] --> Receiver
       Experiment[Separate scripted experiment] -->|Normalized records| Eval[Offline evaluator]
     end
