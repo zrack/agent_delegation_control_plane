@@ -63,7 +63,7 @@ export function grantLookup(item, run, side, eventId, requestedGrant, escape, fi
   const event = trace.event;
   const id = requestedGrant ?? event.authorityId;
   const grant = trace.grants.find(record => record.id === id);
-  const returnLabel = finding ? 'Back to missing grant finding' : 'Return to this action';
+  const returnLabel = finding ? 'Back to grouped missing grant finding' : 'Return to this action';
   const returnLink = `<a href="${escape(route(item, side, event.id, finding, { view: 'actions' }))}">${returnLabel}</a>`;
   const field = (name, value) => `<dt>${name}</dt><dd><code>${escape(value)}</code></dd>`;
   const action = `<p><strong>${sides[side]} run</strong> · <code>${escape(run.id)}</code></p>
