@@ -12,16 +12,20 @@ Open **`adcp-codex-handoff-demo/reviewer/TASK_SHEET.md` first** inside the outpu
 
 In the inbox, read **Sender-reported history** and **Local repair history** separately. When the sender panel has no events, the available history leaves the sender’s repair unknown. A receiver can still verify a recorded closure from the receipts, follow-up and matching pin.
 
-In the original or follow-up result, choose **Inspect original output receipt · after.md** or **Inspect follow-up output receipt · after.md**. Focus moves to the selected run’s saved file and its SHA-256. Reload reopens that receipt after the evidence passes its checks again. A failed stage displays its blocker.
+In the tagged alpha.16 dashboard, choose **Inspect original output receipt · after.md** or **Inspect follow-up output receipt · after.md**. Focus moves to the selected run’s saved file and its SHA-256. Reload reopens that receipt after the evidence passes its checks again.
 
 ### Inspect an altered receipt
 
 Run the dashboard from current `main` and use the alpha.16 handoff ZIP. In a fresh profile, pin `pins/matching` for `Follow-up review`, import one of the cases below, then reload. Read the original and follow-up evidence in the inbox. **Sender-reported action and grant** identifies the editor, write target and referenced grant in the supplied investigation. **Receiver checks** shows which file failed, the manifest’s expected SHA-256 and the SHA-256 computed from the saved bytes.
 
+Choose **Go to original receipt for after.md** or **Go to follow-up receipt for after.md** on the run whose output verified. The button opens the saved text and its SHA-256 in the case. Reload to return to that same receipt. The other run’s failed check still blocks closure.
+
 | Case | What to look for | Why the case stays open |
 | --- | --- | --- |
 | `cases/altered-original.json` | The editor reported writing `docs/quickstart.md`. The original investigation references the edit grant but omits its record. The original `after.md` digest differs from the manifest. | The receiver cannot reproduce the original finding from intact receipts, even though the follow-up passes. |
 | `cases/altered-follow-up.json` | The follow-up supplies the previously missing coordinator-to-editor grant for the quickstart edit. Its `after.md` fails the digest check. | The receiver can see what the sender says was corrected. Verifying that correction for closure requires a passing follow-up with intact receipts. |
+
+In the altered-follow-up case, expand the original run’s **Missing grant** finding. The editor’s read and write both reference the same missing grant. Each action has its own link to the baseline and candidate evidence.
 
 Use another fresh profile for the second case. The two files share a case ID. The sender’s history can explain an earlier repair or close action. The receiver checks the evidence again after reload.
 

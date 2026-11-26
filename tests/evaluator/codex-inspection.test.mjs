@@ -6,6 +6,7 @@ import { parseInvestigation } from '../../src/import.mjs';
 import { assessFollowUp, assessReview, importNewCodexCase, inspectCodexCaseImport, inspectCodexRunEvidence,
   importReview, MAX_REVIEW_PACKAGE_BYTES, resolveReviewCase, restoreReviews, reviewClosureState, REVIEW_STORAGE_KEY, saveReview } from '../../src/review.mjs';
 import { runFingerprint, WORKFLOW_BASELINE_KEY } from '../../src/storage.mjs';
+import { groupGrantFindings } from '../../src/review-view.mjs';
 
 const raw = readFileSync(new URL('../../docs/codex-handoff/fixtures/alpha15-case.json', import.meta.url), 'utf8');
 
@@ -14,6 +15,42 @@ function local() {
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
   return { get: () => storage, values };
 }
+
+test('the checked grant finding retains both actions and keeps other grants, actors and resources distinct', async () => {
+  const { get } = local();
+  const { items: [item] } = await importNewCodexCase(get, raw);
+  const { verdict } = await assessReview(item);
+  const [read, write] = verdict.reasons.filter(reason => reason.message === 'Referenced grant supplied');
+  const display = groupGrantFindings(verdict.reasons);
+  const [missing] = display.filter(finding => finding.rows);
+  assert.equal(missing.grantId, 'CODING-FICTIONAL-PREVIEW-01-edit');
+  assert.deepEqual(missing.rows, [read.row, write.row]);
+  assert.deepEqual(missing.rows.map(row => row.after.event.action.action), ['file:read', 'file:write']);
+  assert.deepEqual(display.filter(finding => !finding.rows), verdict.reasons.filter(reason => reason !== read && reason !== write));
+
+  // Each pair still has the same report wording after these changes.
+  for (const field of ['authorityId', 'actor', 'resource']) {
+    const other = structuredClone(write);
+    for (const { event } of [other.row.before, other.row.after]) {
+      if (field === 'resource') event.action.resource = 'repo://fictional-preview/other.md';
+      else event[field] = 'another-' + field;
+    }
+    if (field === 'authorityId') other.row.after.findings.forEach(f => { f.grantId = other.row.after.event.authorityId; });
+    assert.deepEqual(groupGrantFindings([read, other]).map(finding => finding.rows), [[read.row], [other.row]]);
+  }
+
+  for (const change of [
+    reason => { reason.row.before.event.authorityId = 'different-baseline-grant'; },
+    reason => { reason.row.eventLinks[1] = 'different-action'; },
+    reason => { reason.row.after.findings = []; },
+    reason => { reason.message += ' · Tool'; },
+    reason => { Object.assign(reason.row.changes.find(field => field.label === reason.message), { before: false, after: true }); },
+  ]) {
+    const other = structuredClone(write);
+    change(other);
+    assert.deepEqual(groupGrantFindings([read, other]), [groupGrantFindings([read])[0], other]);
+  }
+});
 
 test('inspection preserves receiver records and catches a duplicate or changed pin at confirmation', async () => {
   const { get, values } = local();

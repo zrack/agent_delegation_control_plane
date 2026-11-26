@@ -643,8 +643,12 @@ export async function inspectCodexRunEvidence(item, stage) {
     || !sameBaseline(item.report, record.report) || !distinctCandidate(item.report, record.report))) return;
 
   const { report, candidate } = record;
-  const claims = await evidenceState(report, 'candidate', candidate) === 'matched' ? codexActionClaims(candidate) : undefined;
-  return { stage, runId: report.candidateId, claims, checks: await inspectCodexReceiptDigests(record.codex.evidence) };
+  const candidateMatched = await evidenceState(report, 'candidate', candidate) === 'matched';
+  const claims = candidateMatched ? codexActionClaims(candidate) : undefined;
+  const matchesOriginalTask = stage === 'follow-up' && candidateMatched
+    && await evidenceState(item.report, 'candidate', item.candidate) === 'matched'
+    && sameCodexWork(item.candidate, candidate);
+  return { stage, runId: report.candidateId, claims, matchesOriginalTask, checks: await inspectCodexReceiptDigests(record.codex.evidence) };
 }
 
 export async function attachReviewFollowUp(getStorage, expected, contents) {
@@ -767,11 +771,11 @@ export async function attachInvoiceFollowUp(getStorage, expected, evidence) {
 function sameCodexWork(original, candidate) {
   // The importer verifies a single preflight action against before.md. Event
   // and tool-call identifiers can change between runs of the same task.
-  const preflight = chain => chain.events.find(event => event.parentEventId === null && event.evidence.tool === 'preflight_read');
+  const preflight = chain => chain.events.find(event => event.parentEventId === null && event.evidence?.tool === 'preflight_read');
   const before = preflight(original);
   const after = preflight(candidate);
-  return before && after && before.actor === after.actor && before.action.resource === after.action.resource
-    && before.evidence.artifactSha256 === after.evidence.artifactSha256;
+  return Boolean(before && after && before.actor === after.actor && before.action.resource === after.action.resource
+    && before.evidence.artifactSha256 && before.evidence.artifactSha256 === after.evidence.artifactSha256);
 }
 
 export async function attachCodexFollowUp(getStorage, expected, evidence) {
