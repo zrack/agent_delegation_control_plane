@@ -2,7 +2,7 @@ import { parseInvestigation } from './import.mjs';
 
 const KiB = 1024;
 const maxRecords = 200;
-const fileLimits = {
+const fileLimits = Object.freeze({
   'actions.jsonl': 256 * KiB,
   'grants.jsonl': 256 * KiB,
   'attempts.jsonl': 128 * KiB,
@@ -10,7 +10,8 @@ const fileLimits = {
   'after.md': 128 * KiB,
   'quickstart.diff': 256 * KiB,
   'codex-events.jsonl': 512 * KiB,
-};
+});
+export const codexFolderLimits = Object.freeze({ 'manifest.json': 8 * KiB, ...fileLimits });
 
 const captureNames = Object.keys(fileLimits);
 const ledgerNames = ['actions.jsonl', 'grants.jsonl', 'attempts.jsonl'];
@@ -25,6 +26,7 @@ const evidenceTools = {
 const digestPattern = /^[0-9a-f]{64}$/;
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const decoder = new TextDecoder('utf-8', { fatal: true });
+const problem = (file, message, field, code = 'INVALID_CAPTURE') => Object.assign(new Error(message), { file, field, code });
 
 function selectFiles(files) {
   const selected = new Map();
@@ -74,63 +76,64 @@ function readManifest(bytes) {
     raw = decoder.decode(bytes);
     manifest = JSON.parse(raw);
   } catch {
-    throw new Error('Read manifest.json as a UTF-8 JSON object.');
+    throw problem('manifest.json', 'Read manifest.json as a UTF-8 JSON object.');
   }
   // Values must be digests. Counting key tokens also rejects duplicate JSON
   // keys that JSON.parse would otherwise silently discard.
   if (!validHashes(manifest) || [...raw.matchAll(/"(?:[^"\\]|\\.)*"\s*:/g)].length !== captureNames.length) {
-    throw new Error('manifest.json must list exactly the seven Codex capture files with one SHA-256 digest each.');
+    throw problem('manifest.json', 'manifest.json must list exactly the seven Codex capture files with one SHA-256 digest each.');
   }
   return manifest;
 }
 
 function readRecords(bytes, name) {
-  try {
-    const lines = decoder.decode(bytes).split(/\r?\n/).filter(line => line.trim());
-    if (lines.length > maxRecords) throw new Error('Too many records');
-    const records = lines.map(line => JSON.parse(line));
-    if (!records.every(object)) throw new Error('Expected JSON objects');
-    return records;
-  } catch {
-    throw new Error(`Expected up to ${maxRecords} UTF-8 JSON records in ${name}.`);
-  }
+  let lines;
+  try { lines = decoder.decode(bytes).split(/\r?\n/).filter(line => line.trim()); }
+  catch { throw problem(name, `Expected UTF-8 JSON records in ${name}.`); }
+  if (lines.length > maxRecords) throw problem(name, `Expected up to ${maxRecords} UTF-8 JSON records in ${name}.`);
+  return lines.map((line, index) => {
+    let value;
+    try { value = JSON.parse(line); } catch { /* Report the record position without its contents. */ }
+    if (!object(value)) throw problem(name, `Expected a JSON object in ${name}.`, `records[${index}]`);
+    return value;
+  });
 }
 
 function checkReceipts(actions, attempts, manifest) {
   const completed = new Map();
   const attemptIds = new Set();
-  for (const attempt of attempts) {
+  for (const [index, attempt] of attempts.entries()) {
     const { callId, tool, status } = attempt;
     if (typeof callId !== 'string' || !callId.trim() || attemptIds.has(callId) || typeof tool !== 'string'
       || (status !== 'completed' && status !== 'rejected')) {
-      throw new Error('attempts.jsonl contains an invalid or duplicate tool call.');
+      throw problem('attempts.jsonl', 'attempts.jsonl contains an invalid or duplicate tool call.', `records[${index}]`);
     }
     attemptIds.add(callId);
     if (status === 'completed') completed.set(callId, tool);
   }
 
   const actionCalls = new Set();
-  for (const event of actions) {
+  for (const [index, event] of actions.entries()) {
     const { callId, tool, artifactSha256 } = event.evidence ?? {};
     const expected = typeof tool === 'string' && Object.hasOwn(evidenceTools, tool) ? evidenceTools[tool] : undefined;
     if (typeof callId !== 'string' || !callId.trim() || actionCalls.has(callId)
       || !expected || event.action?.action !== expected.action || event.action.outcome !== 'completed') {
-      throw new Error('actions.jsonl contains a tool call outside the Codex pilot capture format.');
+      throw problem('actions.jsonl', 'actions.jsonl contains a tool call outside the Codex pilot capture format.', `records[${index}]`);
     }
     actionCalls.add(callId);
     if (artifactSha256 !== manifest[expected.receipt]) {
-      throw new Error(`${expected.receipt} does not match the digest recorded by its action.`);
+      throw problem(expected.receipt, `${expected.receipt} does not match the digest recorded by its action.`, undefined, 'ACTION_RECEIPT_MISMATCH');
     }
     if (expected.recordsAttempt) {
-      if (completed.get(callId) !== tool) throw new Error('A completed action does not match its tool receipt in attempts.jsonl.');
+      if (completed.get(callId) !== tool) throw problem('attempts.jsonl', 'A completed action does not match its tool receipt in attempts.jsonl.', undefined, 'ACTION_RECEIPT_MISMATCH');
       completed.delete(callId);
     }
   }
-  if (completed.size) throw new Error('attempts.jsonl contains a completed call without an action record.');
+  if (completed.size) throw problem('attempts.jsonl', 'attempts.jsonl contains a completed call without an action record.', undefined, 'ACTION_RECEIPT_MISMATCH');
 }
 
 async function verifyFile(name, bytes, hashes) {
-  if (await digest(bytes) !== hashes[name]) throw new Error(`${name} hash mismatch against manifest.json.`);
+  if (await digest(bytes) !== hashes[name]) throw problem(name, `${name} hash mismatch against manifest.json.`, undefined, 'RECEIPT_HASH_MISMATCH');
 }
 
 function encodeFile(buffer) {
@@ -170,7 +173,7 @@ async function deriveChain(verified, manifest) {
   const attempts = readRecords(verified.get('attempts.jsonl'), 'attempts.jsonl');
   checkReceipts(actions, attempts, manifest);
   const roots = actions.filter(event => event.parentEventId === null && event.evidence?.tool === 'preflight_read');
-  if (roots.length !== 1 || typeof roots[0].id !== 'string') throw new Error('Expected one coordinator preflight action.');
+  if (roots.length !== 1 || typeof roots[0].id !== 'string') throw problem('actions.jsonl', 'Expected one coordinator preflight action.');
   const root = roots[0];
   const rootGrant = grants.find(grant => grant.id === root.authorityId);
   const suppliedPrincipals = new Set(grants.map(grant => grant.principal));
@@ -190,7 +193,7 @@ async function deriveChain(verified, manifest) {
 
 export async function importCodexFolder(files, { retainEvidence = false } = {}) {
   const selected = selectFiles(files);
-  const hashes = readManifest(await readFile(selected, 'manifest.json', 8 * KiB));
+  const hashes = readManifest(await readFile(selected, 'manifest.json', codexFolderLimits['manifest.json']));
   const verified = new Map();
   const snapshotFiles = {};
   for (const name of captureNames) {

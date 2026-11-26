@@ -1,0 +1,16 @@
+{
+  "run": {"id": "GUIDE-01", "principal": "fictional-docs-owner", "rootGrant": "guide-read"},
+  "issuedGrant": {
+    "id": "guide-read", "parent": null, "issuer": "fictional-docs-owner", "subject": "fictional-reviewer",
+    "principal": "fictional-docs-owner", "delegationAllowed": false, "action": "file:read",
+    "resource": "repo://fictional/docs/guide.md",
+    "start": "2026-01-01T00:00:00Z", "expiry": "2026-01-01T01:00:00Z"
+  },
+  "toolCompletion": {
+    "id": "inspect-guide", "parent": null, "actor": "fictional-reviewer", "grant": "guide-read",
+    "operation": "file:read", "resource": "repo://fictional/docs/guide.md",
+    "time": "2026-01-01T00:10:00Z", "outcome": "completed",
+    "tool": "read_document", "call": "guide-call-01"
+  },
+  "observedArtifactUtf8": "Fictional guide.\n"
+}
