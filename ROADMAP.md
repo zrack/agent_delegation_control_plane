@@ -19,7 +19,7 @@ These are estimates for one developer, including implementation, tests, integrat
 
 | Block | Implementation and verification |
 | --- | --- |
-| A1–A4 | The [handoff kit](docs/CODEX_HANDOFF.md) builds a local alpha.16 candidate ZIP. It contains [seven expected outcomes](docs/codex-handoff/facilitator/outcomes.json), independent receiver pins, a [reviewer task sheet](docs/codex-handoff/reviewer/TASK_SHEET.md) and a [separate key](docs/codex-handoff/facilitator/ANSWER_KEY.md). Published download pointers still lead to alpha.15. |
+| A1–A4 | The [published alpha.16 ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) packages the fictional handoff kit. It contains [seven expected outcomes](docs/codex-handoff/facilitator/outcomes.json), independent receiver pins, a [reviewer task sheet](docs/codex-handoff/reviewer/TASK_SHEET.md) and a [separate key](docs/codex-handoff/facilitator/ANSWER_KEY.md). |
 | B1–B4 | The [Chromium suite](tests/browser/README.md) builds and extracts the ZIP, exercises isolated sender and receiver profiles and checks the outcome after reload. The same suite is configured to run on pull requests. |
 | C1–C4 | [Grant lookup exercises](docs/alpha-rehearsal/GRANT_TASKS.md) cover same-ID grants from different runs, missing references and parent authority. The original reviewer worksheet can be completed inside the dashboard. |
 | D1–D5 | The [offline verifier](docs/CODEX_HANDOFF.md#verify-the-case-offline) uses the case assessment and a separately supplied receiver pin. Its output distinguishes a verified resolution, a ready case, a blocked case and an invalid input. |
@@ -28,7 +28,9 @@ These are estimates for one developer, including implementation, tests, integrat
 
 ## Coding-agent review
 
-**First exercise in the published alpha.** Download the alpha.15 fictional demo ZIP. Pin `pins/complete-capture` as `Follow-up review`, then import `cases/altered-original-receipt.json`. The case opens with a failed `after.md` receipt and empty local history. [Demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Walkthrough](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt)
+**Start with the alpha.16 handoff.** Open `reviewer/TASK_SHEET.md` in the extracted kit. Pin the matching receiver baseline, import `cases/history-on.json`, and reload to verify the closure and inspect the sender’s repair history. [Handoff ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) · [Walkthrough](docs/ALPHA_REVIEW.md#review-a-codex-handoff)
+
+**Earlier alpha.15 repair exercise.** Download the alpha.15 fictional demo ZIP. Pin `pins/complete-capture` as `Follow-up review`, then import `cases/altered-original-receipt.json`. The case opens with a failed `after.md` receipt and empty local history. [Demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Walkthrough](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt)
 
 1. Apply the repair from `donors/matching-case.json` and reload. The case is **Open** and **Ready to close**. Its **Original receipts repaired** entry records the change below.
 2. Inspect the corrected editor grant, select **Close as resolved**, then reload. The case is **Resolved**. The **Case explicitly closed** entry identifies the pinned baseline and passing follow-up.
@@ -39,7 +41,7 @@ These are estimates for one developer, including implementation, tests, integrat
 | Before repair | `0bec606c5209cbec36ec263c8f4bc261c440ef822af50e09db4a1351efae2f4f` |
 | After repair | `700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa` |
 
-**Where development starts.** Public main adds opt-in sender repair history to receipt-inclusive portable Codex cases. This change is merged and awaits a release. A recipient can read the sender’s account of a repair and still has to verify closure against their own pin and the supplied receipts. The existing offline command pins and compares normalized runs. The proposed command in D checks a *saved case*, including the original, follow-up and closure record. The invoice workflow already has a folder importer and receipt follow-ups. [Sender-history change](https://github.com/zrack/agent_delegation_control_plane/pull/50) · [Offline regression command](scripts/regression.mjs) · [Architecture](ARCHITECTURE.md) · [Invoice validation](docs/SANDBOX_VALIDATION.md)
+**Offline review in alpha.16.** A recipient can inspect the sender’s optional repair history and verify a saved case against their own workflow pin. The offline verifier checks the original evidence, follow-up and closure record. The regression command continues to pin and compare normalized runs. [Case verification](docs/CODEX_HANDOFF.md#verify-the-case-offline) · [Offline regression command](scripts/regression.mjs)
 
 ## Development backlog
 

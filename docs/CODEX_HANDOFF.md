@@ -1,6 +1,8 @@
 # Review a fictional Codex handoff
 
-The handoff kit is built from this source checkout. Use Node 22+ and Python 3.11+. The published alpha.15 release remains available for the earlier repair-history exercise.
+Download the [alpha.16 handoff ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) and **Source code (zip)** from the [alpha.16 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.16). The [alpha guide](ALPHA_REVIEW.md#review-a-codex-handoff) walks through the first import.
+
+To rebuild the same fictional kit from the tagged source, use Node 22+ and Python 3.11+.
 
 ```sh
 python3 scripts/build_codex_handoff.py --output output/handoff
@@ -14,7 +16,7 @@ In the original or follow-up result, choose **Inspect original output receipt ·
 
 ## Verify the case offline
 
-Point the command to the case received from the sender. Supply the independently selected receiver baseline and the workflow it belongs to. The files stay on disk unchanged.
+Point the command to the case received from the sender. Supply the independently selected receiver baseline and the workflow it belongs to. The commands below use the source-build location. For a downloaded kit, set `kit` to the extracted `adcp-codex-handoff-demo` directory.
 
 ```sh
 kit=output/handoff/adcp-codex-handoff-demo

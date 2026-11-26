@@ -1,9 +1,40 @@
 # First-use alpha review
 
-For the source-checkout handoff exercise, build the [fictional sender and receiver kit](CODEX_HANDOFF.md). The published alpha.15 exercise below uses its own release ZIP.
+Start with the **alpha.16 Codex handoff**. You are the second reviewer of a fictional quickstart edit. Check whether the sender’s recorded closure holds up with the receipts and baseline available to you. The exercise runs locally with Python 3.11+ and Chromium. It requires no API key, account, Docker or model calls.
 
-Use fictional records only. The viewer and rehearsal kit run locally without an
-API key, account, Docker, or model calls.
+## Review a Codex handoff
+
+Download **Source code (zip)** from the release and the separate handoff ZIP. Extract each into its own folder. The handoff ZIP’s SHA-256 is `d13bd9772d6333ef656b7452d5c4bdf23a787aea4f0d7398dc07a8f08ddcda6c`. [Alpha.16 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.16) · [Handoff demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) · [Checksum](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip.sha256)
+
+From the extracted **source** directory, start the dashboard.
+
+```sh
+python3 scripts/serve.py
+```
+
+1. In the extracted **demo**, open `adcp-codex-handoff-demo/reviewer/TASK_SHEET.md`. The `pins/` and `cases/` paths below are relative to `adcp-codex-handoff-demo/`. Open the dashboard’s printed address in a fresh Chromium profile.
+2. In **Investigate a run → Import a Codex run folder**, choose the entire `pins/matching` folder. In **Compare runs**, choose the imported run beginning with `CODEX-3e20f2ce5add` as **Baseline run**. Expand **Save or replace a workflow baseline**, enter exactly `Follow-up review` and select **Save baseline**.
+3. In **Regression inbox → Import review package or case**, choose `cases/history-on.json`. Reload at the same address and reopen the case. Check its status and which profile recorded the events. Select **Inspect original output receipt · after.md**. Compare the file’s SHA-256 with the replacement digest in **Sender-reported history**. The earlier digest comes from the sender’s account of the repair. In the follow-up’s `grants.jsonl`, find the coordinator’s grant to the editor for the quickstart read and write.
+4. Record your decision on the task sheet. In a second fresh profile, repeat the matching-pin setup and import `cases/history-off.json`. Compare what you can verify about closure with what you can explain about the repair.
+
+Work through the remaining rows in fresh profiles because the exports share a case ID. For each row, reload at the same address and record the result before changing a pin, repairing a file or closing a case. The receiver’s **Local repair history** starts empty and stays empty through import and reload.
+
+<details>
+<summary>Check the seven expected results after recording your decisions</summary>
+
+| Case in `cases/` | Receiver pin | Result after reload |
+| --- | --- | --- |
+| `history-on.json` | `pins/matching` | **Resolved**. The receipts, corrected grant, saved closure and receiver pin verify. Sender history shows the repair and closure. |
+| `history-off.json` | `pins/matching` | **Resolved**. The same evidence verifies closure. The sender omitted their repair history. |
+| `history-on.json` | None | **Open**. The receiver has no baseline pin for `Follow-up review`. |
+| `history-on.json` | `pins/conflicting` | **Open**. The existing receiver pin conflicts with the case and remains in place. |
+| `altered-original.json` | `pins/matching` | **Open**. The original `after.md` fails its digest check. |
+| `altered-follow-up.json` | `pins/matching` | **Open**. The follow-up `after.md` fails its digest check. |
+| `open-follow-up.json` | `pins/matching` | **Open · Ready to close**. The corrected run passes and explicit closure is still needed. |
+
+</details>
+
+The kit’s separate `facilitator/ANSWER_KEY.md` identifies the grant and receipt evidence for each result. To reproduce the checks from the command line, use the receiver’s selected baseline under `receiver-baselines/`. [Offline verifier](CODEX_HANDOFF.md#verify-the-case-offline)
 
 ## Repair an original Codex receipt
 
