@@ -78,7 +78,11 @@ test('keyboard review returns to the exact missing-grant link for each baseline 
       await page.goForward();
       await page.locator('#grant-lookup-title:focus').waitFor();
       assert.equal(await field(page, 'Action record'), event.id);
-      await page.getByRole('link', { name: 'Back to grouped missing grant finding', exact: true }).press('Enter');
+      const back = page.getByRole('link', { name: 'Back to grouped missing grant finding', exact: true });
+      const hint = page.locator('#' + await back.getAttribute('aria-describedby'));
+      assert.equal(await hint.isVisible(), true);
+      assert.equal(await hint.innerText(), `Keyboard focus returns to the ${side} ${event.action.action} link you opened.`);
+      await back.press('Enter');
       await checkFindingFocus(page, finding, side, event.id);
     }
   }
@@ -125,6 +129,7 @@ test('a reopened parent grant returns to its finding and a directory lookup retu
   await disposition(page);
   assert.equal(await finding.evaluate(node => node.open), false);
   await openAction(page, 'Baseline', id);
+  assert.equal(await page.locator('#finding-return-hint').count(), 0);
   const back = await goBack(page);
   assert.equal(await back.getAttribute('data-grant-side'), 'baseline');
   assert.equal(await back.getAttribute('data-grant-event'), id);
