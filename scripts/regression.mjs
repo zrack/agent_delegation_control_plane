@@ -1,5 +1,6 @@
 // Offline command-line entry point for the viewer's regression rules.
-import { closeSync, constants, fstatSync, openSync, readSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { readText } from './bounded-file.mjs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { canPinBaseline, checkRegression, compareRuns, regressionLabels } from '../src/comparison.mjs';
@@ -9,24 +10,6 @@ import { createReviewPackage } from '../src/review.mjs';
 import { runFingerprint } from '../src/storage.mjs';
 
 const exitCodes = { pass: 0, regression: 1, review: 2 };
-
-function readText(path, limit) {
-  const file = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
-  try {
-    const info = fstatSync(file);
-    if (!info.isFile() || info.size > limit) throw new Error('Expected a bounded regular file.');
-    const buffer = Buffer.alloc(limit + 1);
-    let length = 0;
-    while (length <= limit) {
-      const count = readSync(file, buffer, length, buffer.length - length);
-      if (!count) return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, length));
-      length += count;
-    }
-    throw new Error('File exceeds its size limit.');
-  } finally {
-    closeSync(file);
-  }
-}
 
 function readRun(path) {
   return parseInvestigation(readText(path, MAX_IMPORT_BYTES));
