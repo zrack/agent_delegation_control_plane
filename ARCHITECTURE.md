@@ -8,7 +8,7 @@ The local viewer loads native HTML/CSS/JavaScript modules from a Python static s
 
 The optional Python SDK runner produces an importable `investigation.json`. The separate Node experiment produces raw records and bare `normalized.json` for offline evaluation; it has no browser-import adapter. Neither process is launched by the dashboard.
 
-Two offline Node commands run on caller-selected files. A producer can validate a completed investigation or a supported Codex folder before handoff. A receiver can verify a portable Codex case using a separately supplied workflow pin. Both commands reuse the viewer’s checks and finish locally. Neither command reads browser storage. [Producer validator](scripts/validate-capture.mjs) · [Receiver verifier](scripts/verify-case.mjs)
+Two offline Node commands read caller-selected files. The producer validator checks a completed investigation or a supported Codex or Agents SDK capture folder before handoff. The receiver verifier recomputes a portable Codex or invoice case in memory. A Codex resolution requires a matching independently supplied workflow pin. A previously closed invoice case can verify against its packaged baseline when the receiver has no pin. A conflicting receiver pin blocks both. [Producer validator](scripts/validate-capture.mjs) · [Receiver verifier](scripts/verify-case.mjs)
 
 ## C4 views
 
@@ -32,7 +32,10 @@ The [diagram guide](docs/architecture/README.md) links editable sources and rend
 | `scripts/regression.mjs` | Offline baseline pinning and regression reports using the viewer's normalization and comparison rules |
 | `src/review.mjs`, `src/review-view.mjs` | Report and package intake, local downloads, bounded inbox storage, review decisions and follow-up verification |
 | `scripts/validate-capture.mjs` | Read-only producer diagnostics using the investigation parser, folder checks and authority evaluator |
-| `scripts/verify-case.mjs` | Read-only receiver verification of portable Codex cases using the shared inbox assessment |
+| `scripts/verify-case.mjs` | Read-only receiver verification of portable Codex and invoice cases with the same checks as the inbox |
+| `src/backup.mjs`, `src/backup-storage.mjs`, `src/backup-view.mjs` | Selects portable cases and pins, previews restore effects and coordinates writes to the browser’s three collections |
+| `src/case-summary.mjs` | Builds a shareable text preview from the current disposition and bounded evidence references |
+| `scripts/sdk-folder.mjs` | Validates the supported Agents SDK capture folder against its manifest, recorded tool calls and investigation |
 | `scripts/build_codex_handoff.py` | Package generated fictional cases, independent pins and the separate reviewer and facilitator materials |
 | `scripts/alpha-rehearsal.mjs` | Offline generation of fictional reviewer and facilitator materials with the regression checker |
 | `src/fixtures.mjs` | Three fixed fictional investigations |
@@ -60,9 +63,9 @@ Regression checks use the selected workflow's pinned baseline, the same aligned 
 
 ## Local producer and receiver commands
 
-The producer validator accepts a version 1 investigation file or the supported flat Codex folder. It checks the file shape and size before evaluating authority. For a folder, it also checks the manifest and tool receipts. A missing grant referenced by a valid action yields an unverifiable authority result. Changed receipt bytes fail the evidence check before an authority assessment can be made. Diagnostics identify the affected file, field or reference without printing receipt bodies.
+The producer validator accepts a version 1 investigation file, the supported flat Codex folder or the account-review folder written by the repository’s Agents SDK runner. It checks the file shape and size before evaluating authority. For a folder, it also checks the manifest and tool receipts. A missing grant referenced by a valid action yields an unverifiable authority result. Changed receipt bytes fail the evidence check before an authority assessment can be made. Diagnostics identify the affected file, field or reference without printing receipt bodies.
 
-The receiver verifier reads a receipt-inclusive portable case. An optional, independently selected baseline directory contains the normalized investigation and its pin. The command recomputes the baseline fingerprint, checks its eligibility and imports the case into an in-memory inbox. The same assessment functions used by the dashboard recheck the original, follow-up, recorded closure and receiver pin. Output distinguishes a verified resolution, a case ready for explicit closure, a blocked case and invalid input. The process exits without changing the files, browser history or review decision. [Handoff and command examples](docs/CODEX_HANDOFF.md)
+The receiver verifier reads a receipt-inclusive portable Codex or invoice case. For invoices it reports authority, output integrity and execution separately, so a successful process exit cannot conceal changed output. [Four-case invoice exercise](docs/INVOICE_VERIFICATION.md) An optional, independently selected baseline directory contains the normalized investigation and its pin. The command recomputes the baseline fingerprint, checks its eligibility and imports the case into an in-memory inbox. The same assessment functions used by the dashboard recheck the original, follow-up, recorded closure and receiver pin. Output distinguishes a verified resolution, a case ready for explicit closure, a blocked case and invalid input. The process exits without changing the files, browser history or review decision. [Handoff and command examples](docs/CODEX_HANDOFF.md)
 
 ## Offline Codex run folder
 
@@ -274,6 +277,14 @@ against their reports. They provide no proof of authorship.
 Unreadable collections leave examples usable; malformed individual records are skipped with a visible warning and are never silently overwritten on save. Capacity, quota or denied-storage failures leave the new import available only in the current tab with a warning. No run is automatically evicted. **Clear imported runs** removes only this application key and the current tab's imports; other open tabs retain loaded copies until reload. Original export files remain unchanged. Browser site-data deletion or storage eviction can remove saved runs, and changing browser profile, host or port selects different storage. This is local convenience storage, not a backup or shared evidence service. Stop processes to end execution and preserve run directories for diagnosis. Use a new directory for a new attempt. Read the [threat model](docs/architecture/THREAT_MODEL.md) and [privacy guidance](docs/PRIVACY.md) before sharing records.
 
 No general live ingestion, verified external authority, revocation processing, shared durable state, action prevention, MCP/A2A conformance or production reliability is established. New capabilities require their own architecture and evidence contracts.
+
+A selective backup carries chosen portable cases and optional workflow pins. Folder receipts, notes and sender history require explicit selection. Restore previews skip existing cases, protect conflicting pins, and show the result of selected pins. Before committing, restore rechecks the saved state while holding the dashboard write lock. A rollback record covers the run, pin and inbox collections so a failed or interrupted restore can recover the previous view. Close older dashboard tabs before restoring. [Backup and recovery](docs/INBOX_BACKUP.md)
+
+## Reviewer handoff and producer signatures
+
+A reviewer can preview and copy plain text for a pull request. The summary includes the current disposition, a relevant grant or missing reference, receipt digests when available and the next review action. Copy rechecks the case so a changed pin cannot silently carry an earlier result into the clipboard. The reviewer chooses where to paste the text. [Summary and privacy](docs/PRIVACY.md#sharing-a-pr-summary)
+
+A separate offline experiment verifies a producer signature over the exact case bytes, issuer, workflow and run. The verifier obtains trust from a receiver-owned key list. A trusted producer can still sign a case with a broken receipt. Case assessment checks the records independently. [Signature experiment and threat model](experiments/receipt-provenance/README.md)
 
 ## Development safeguards
 

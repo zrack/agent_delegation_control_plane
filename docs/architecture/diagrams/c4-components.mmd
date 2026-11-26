@@ -15,6 +15,11 @@ flowchart TB
       Compare["Run comparison<br/>[Component: comparison.mjs]<br/>Aligned differences and regression verdicts"]
       Inbox["Regression review inbox<br/>[Component: review.mjs / review-view.mjs]<br/>Case intake, preview, filters and closure checks"]
       Lookup["Grant lookup<br/>[Component: grant-lookup.mjs]<br/>Action and parent grants in one snapshot"]
+      Backup["Selective backup and restore<br/>[Component: backup.mjs / backup-storage.mjs]<br/>Preview selections and commit local changes"]
+      Summary["PR summary<br/>[Component: case-summary.mjs]<br/>Preview checked references before copying"]
+      Inbox -->|Render rechecked case| Summary
+      Inbox -->|Case and pin selection| Backup
+      Backup <-->|Restore journal and versioned collections| Saved
       Inbox -->|Selected run and action| Lookup
       App -->|Binds controls and renders| Shell
       App -->|Parses file and merges chain| Intake
@@ -32,5 +37,5 @@ flowchart TB
     classDef component fill:#eaf2fc,stroke:#325e91,color:#132d4b
     classDef external fill:#f5f7fa,stroke:#66788c,color:#132d4b
     class Operator person
-    class Shell,App,Intake,Fixtures,Eval,Store,Compare,Inbox,Lookup component
+    class Shell,App,Intake,Fixtures,Eval,Store,Compare,Inbox,Lookup,Backup,Summary component
     class Server,Saved external

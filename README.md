@@ -8,7 +8,7 @@ Review **who acted for whom, which grant covered the action, and what changed be
 
 Start with the **Codex repair history demo**. A fictional coding agent edited a quickstart, and the copy you received has an altered output file. Repair it, check the before and after digests, then review the corrected grant before closing the case. [Download the alpha.15 demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Follow the exercise](#review-the-repair-history-of-a-codex-case)
 
-Working from a source checkout? The [sender-to-receiver handoff kit](docs/CODEX_HANDOFF.md) exercises optional sender history in two profiles and includes an offline case verifier.
+Working from a source checkout? Use the sender-to-receiver kit to rehearse a Codex handoff in two profiles, or use the four invoice cases to try the offline verifier. A reviewer can also preview a short summary in the inbox before copying it into a pull request. [Codex handoff kit](docs/CODEX_HANDOFF.md) · [Invoice verification](docs/INVOICE_VERIFICATION.md) · [What the summary shares](docs/PRIVACY.md#sharing-a-pr-summary)
 
 ## Run locally
 
@@ -130,7 +130,7 @@ Optional workflows run separately from the viewer. The [Agents SDK example](inte
 python3 scripts/check.py
 ```
 
-The standard check runs offline tests with Node 22+ and briefly binds a loopback port. Use `--with-sdk` with the pinned SDK environment to include two offline replay tests. With the pilot image built and Docker running, use `--with-sdk --with-sandbox` for the full suite. GitHub also runs dependency advisory and source security checks. [Contributing](CONTRIBUTING.md)
+The standard check runs offline tests with Node 22+ and briefly binds a loopback port. Use `--with-sdk` with the pinned SDK environment to include offline SDK replay and capture checks. With the pilot image built and Docker running, use `--with-sdk --with-sandbox` for the full suite. GitHub also runs dependency advisory and source security checks. [Contributing](CONTRIBUTING.md)
 
 Report vulnerabilities through [GitHub’s private reporting form](https://github.com/zrack/agent_delegation_control_plane/security/advisories/new). See the [security policy](SECURITY.md) for what to include.
 

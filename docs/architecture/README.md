@@ -1,6 +1,6 @@
 # Architecture diagrams
 
-[Architecture](../../ARCHITECTURE.md) owns implementation structure and trust boundaries. The overview and C4 views show the local viewer, the offline producer and receiver commands, and the optional capture workflows. The sequence diagrams detail the SDK and isolated coding pilots.
+[Architecture](../../ARCHITECTURE.md) owns implementation structure and trust boundaries. The overview and C4 views show the local viewer, the offline producer and receiver commands, and the optional capture workflows. The component view locates the copyable case summary and selective restore alongside the inbox and its local store. The sequence diagrams detail the SDK and isolated coding pilots.
 
 The [sandbox validation report](../SANDBOX_VALIDATION.md) records observed live-run,
 final-executor, control-test and dashboard-persistence results. Use it to distinguish
