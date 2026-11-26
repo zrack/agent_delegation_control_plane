@@ -4,6 +4,7 @@ import { chains as examples } from './fixtures.mjs';
 import { evaluateChain, statusLabels } from './evaluator.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation, mergeInvestigation } from './import.mjs';
 import { importCodexFolder } from './codex-import.mjs';
+import { connectEditTestInspector } from './edit-test-view.mjs';
 import {
   restoreInvestigations, saveInvestigation, clearInvestigations, restoreWorkflowBaselines,
   saveWorkflowBaseline, removeWorkflowBaseline, workflowKey, runFingerprint,
@@ -66,6 +67,7 @@ const investigateLink = document.querySelector('#investigate-link');
 const compareLink = document.querySelector('#compare-link');
 const reviewLink = document.querySelector('#review-link');
 const reviewInbox = document.querySelector('#review-inbox');
+connectEditTestInspector();
 const reviewView = createReviewInbox({
   getStorage, escape, comparisonDetail,
   onBaselineAdopted(baseline) {
@@ -272,7 +274,7 @@ function setView(view) {
   if (view !== 'investigation') importedPinForm.hidden = true;
   comparison.hidden = view !== 'comparison';
   reviewInbox.hidden = view !== 'review-inbox';
-  for (const selector of ['.workspace', '#overview', '.demo-note', '.dataset-note']) document.querySelector(selector).hidden = view !== 'investigation';
+  for (const selector of ['.workspace', '#overview', '.demo-note', '.dataset-note', '#edit-test-inspector']) document.querySelector(selector).hidden = view !== 'investigation';
   document.querySelector('.import-controls').hidden = view === 'review-inbox';
   const skipLink = document.querySelector('.skip-link');
   skipLink.href = '#' + view;

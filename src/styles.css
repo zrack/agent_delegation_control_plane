@@ -132,7 +132,7 @@
   .workflow-controls, .workflow-save { grid-template-columns: 1fr; }
 }
 
-#review-import-controls, #invoice-folder-import, #review-note-form, .review-case {
+#review-import-controls, #invoice-folder-import, #edit-test-inspector, #review-note-form, .review-case {
   margin-top: 16px;
   padding: 12px;
   border: 1px solid var(--line);
@@ -140,7 +140,7 @@
   background: #f8fafc;
 }
 #review-inbox .review-package-import { background: #f8fafc; }
-#review-import-controls summary, #invoice-folder-import > summary, .review-differences > summary { color: var(--blue); cursor: pointer; font-size: .875rem; font-weight: 650; }
+#review-import-controls summary, #invoice-folder-import > summary, #edit-test-inspector > summary, .review-differences > summary { color: var(--blue); cursor: pointer; font-size: .875rem; font-weight: 650; }
 #review-import { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 12px; }
 #review-import > div { min-width: 0; flex: 1 1 13rem; }
 #review-import label, #review-note-form > label { display: block; margin-bottom: 4px; font-size: .875rem; font-weight: 650; }
@@ -162,6 +162,18 @@
 #review-inbox .import-error { color: var(--violation); }
 #invoice-folder-import { margin-bottom: 16px; }
 #invoice-folder-status { margin-top: 8px; font-size: .875rem; color: var(--muted); }
+#edit-test-status:not(:empty) { margin-top: 12px; font-size: .9375rem; font-weight: 650; }
+#edit-test-results { overflow-wrap: anywhere; }
+#edit-test-results h2 { margin: 14px 0 8px; font-size: 1.125rem; }
+#edit-test-results h4 { margin: 14px 0 4px; }
+#edit-test-results .event-details { margin: 4px 0 0; }
+#edit-test-results .event-details > div { padding: 3px 0; }
+#edit-test-results ul { margin: 4px 0; padding-left: 1.25rem; font-size: .875rem; }
+#edit-test-results .compare-run { background: white; }
+#edit-test-results > .compare-run, #edit-test-results > .compare-run + .compare-sides { margin-top: 12px; }
+@media (max-width: 480px) {
+  #edit-test-results .event-details > div { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 5px 0; }
+}
 .invoice-results h3 { margin: 12px 0 8px; }
 .invoice-results dl, .invoice-results p, .invoice-results ul {
   margin: 8px 0 0;

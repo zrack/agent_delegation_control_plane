@@ -9,7 +9,29 @@ The proposed second workflow has two people or agents to review. One edits a fil
 | Attempt and result | Attempt records reference tool calls. Before/after receipts and an unsigned manifest bind supplied file bytes. | An independent result receipt for the verifier, with a link to the completed check. A requested or rejected check must remain distinguishable. |
 | Repeat review need | The fictional fixture and reviewer worksheet exercise one bounded coding workflow. | A permissioned representative export and an observed recurring decision using the reviewer’s usual process. |
 
-**Decision for this development cycle.** Implement local import recovery. The available example and worksheet establish a reproducible review exercise. A second qualifying source and independent human comparison are still pending. A future adapter can use the field map above when a reviewer brings a recurring workflow and permission to inspect its records. Real records stay with their owner.
+**First implementation.** The quickstart supported the local import recovery exercise below. A later permissioned pilot captured an edit in a disposable repository and a separately granted verifier running a precommitted test suite against the edited revision. That capture supplies the input format for the bounded offline importer. Its applicability to an independently operated, recurring workflow remains open.
+
+## Inspect an edit-and-test capture
+
+1. Extract the capture ZIP locally. In **Investigate a run**, expand **Inspect an edit-and-test folder** and choose the inner directory containing `setup.json` and `SHA256SUMS`.
+2. Read the editor and verifier grants separately. Compare the issuer, subject, parent, exact action and resource, and validity with each recorded action.
+3. Inspect the test receipt. Check the tested revision, recorded exit code and the expected and computed hashes of the receipt and its output. A passed process can still have missing authority or damaged evidence.
+
+From the source checkout, run the same inspection with Node 22 or later. Replace the example path with the extracted capture directory.
+
+```sh
+node scripts/validate-capture.mjs --edit-test-folder ./capture --json
+```
+
+| Capture | Expected finding |
+| --- | --- |
+| Both grants, completed test and intact evidence | The edit and test verify against the supplied records. |
+| Missing verifier grant | The verifier’s authority is unverifiable even when the receipt checks out. |
+| Altered test receipt | Its bytes differ from the digest saved on the completed test action. |
+| Altered output | The computed output digest differs from the digest recorded in the receipt. |
+| Test attempt without a completion | The attempt supplies no completed verification, even when an old receipt is present. |
+
+The command exits with 0 for a verified run, 1 for a run with outstanding findings, and 2 for invalid input. The capture is unsigned. The importer compares recorded Git identifiers and file digests, reads the selected local evidence, and leaves the original files untouched. Inspecting the original Git objects and rerunning the suite are separate steps.
 
 ## Try recovery
 

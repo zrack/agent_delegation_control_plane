@@ -56,6 +56,8 @@ Inspect the receipts for two corrected invoices, then see how an altered output 
 
 ## Inspect records
 
+From a source checkout, open **Investigate a run → Inspect an edit-and-test folder** and choose the extracted capture directory. Inspect the editor’s grant, the independent verifier’s grant, and the test receipt for the edited revision. The same checks are available offline from the command line. [Edit-and-test walkthrough](docs/WORKFLOW_INTAKE_DECISION.md#inspect-an-edit-and-test-capture)
+
 Start with the three built-in examples or select **Import a completed run** to open a version 1 `investigation.json`. Choose an agent hop to inspect its recorded action, grant, parent grant, and findings.
 
 Validate a producer record locally before importing it. The [producer walkthrough](docs/producer/README.md) includes a minimal example, a missing grant and a malformed field.

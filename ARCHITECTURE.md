@@ -4,11 +4,11 @@
 
 ![Current system overview](docs/architecture/diagrams/system-overview.svg)
 
-The local viewer loads native HTML/CSS/JavaScript modules from a Python static server on IPv4 loopback. It evaluates fixed fictional examples or a manually selected version 1 completed-record export. File API intake is normalized and saved in origin-scoped browser localStorage across reloads. There is no data upload, writable backend, server database, cookie, authenticated session or provider connection from the browser.
+The local viewer loads native HTML/CSS/JavaScript modules from a Python static server on IPv4 loopback. It evaluates fictional examples and files the reviewer selects. Imported version 1 investigations are normalized and saved in origin-scoped browser localStorage across reloads. Edit-and-test folders are inspected in memory for the current page. The browser performs these checks locally without uploading the records.
 
 The optional Python SDK runner produces an importable `investigation.json`. The separate Node experiment produces raw records and bare `normalized.json` for offline evaluation; it has no browser-import adapter. Neither process is launched by the dashboard.
 
-Two offline Node commands read caller-selected files. The producer validator checks a completed investigation or a supported Codex or Agents SDK capture folder before handoff. The receiver verifier recomputes a portable Codex or invoice case in memory. A Codex resolution requires a matching independently supplied workflow pin. A previously closed invoice case can verify against its packaged baseline when the receiver has no pin. A conflicting receiver pin blocks both. [Producer validator](scripts/validate-capture.mjs) · [Receiver verifier](scripts/verify-case.mjs)
+Two offline Node commands read caller-selected files. The producer validator checks completed investigations and supported Codex, Agents SDK and edit-and-test folders before handoff. The receiver verifier recomputes a portable Codex or invoice case in memory. A Codex resolution requires a matching independently supplied workflow pin. A previously closed invoice case can verify against its packaged baseline when the receiver has no pin. A conflicting receiver pin blocks both. [Producer validator](scripts/validate-capture.mjs) · [Receiver verifier](scripts/verify-case.mjs)
 
 ## C4 views
 
@@ -27,6 +27,7 @@ The [diagram guide](docs/architecture/README.md) links editable sources and rend
 | `src/comparison.mjs` | Deterministic alignment, comparison and regression classification of two normalized runs |
 | `src/import.mjs` | Bounded version 1 intake, normalization and imported-chain merge |
 | `src/codex-import.mjs` | Offline pilot-folder manifest and tool receipt checks before version 1 normalization |
+| `src/edit-test-import.mjs`, `src/edit-test-grants.mjs`, `src/edit-test-view.mjs` | Bounded edit-and-test intake, per-actor authority checks and the in-memory receipt view |
 | `src/grant-lookup.mjs` | Resolve an action and its grant ancestry within the selected case snapshot |
 | `src/storage.mjs` | Versioned, bounded browser-local imports and workflow baseline pins |
 | `scripts/regression.mjs` | Offline baseline pinning and regression reports using the viewer's normalization and comparison rules |
@@ -63,9 +64,13 @@ Regression checks use the selected workflow's pinned baseline, the same aligned 
 
 ## Local producer and receiver commands
 
-The producer validator accepts a version 1 investigation file, the supported flat Codex folder or the account-review folder written by the repository’s Agents SDK runner. It checks the file shape and size before evaluating authority. For a folder, it also checks the manifest and tool receipts. A missing grant referenced by a valid action yields an unverifiable authority result. Changed receipt bytes fail the evidence check before an authority assessment can be made. Diagnostics identify the affected file, field or reference without printing receipt bodies.
+The producer validator accepts a version 1 investigation file and the supported Codex, SDK account-review and edit-and-test folders. It checks the file shape and size before evaluating authority. For a folder, it also checks the manifest and tool receipts. A missing grant referenced by a valid action yields an unverifiable authority result. Codex and SDK receipt failures stop their intake. An edit-and-test inspection can show a receipt mismatch alongside the authority assessment from the supplied grant ledger. Diagnostics identify the affected file, field or reference without printing receipt bodies.
 
 The receiver verifier reads a receipt-inclusive portable Codex or invoice case. For invoices it reports authority, output integrity and execution separately, so a successful process exit cannot conceal changed output. [Four-case invoice exercise](docs/INVOICE_VERIFICATION.md) An optional, independently selected baseline directory contains the normalized investigation and its pin. The command recomputes the baseline fingerprint, checks its eligibility and imports the case into an in-memory inbox. The same assessment functions used by the dashboard recheck the original, follow-up, recorded closure and receiver pin. Output distinguishes a verified resolution, a case ready for explicit closure, a blocked case and invalid input. The process exits without changing the files, browser history or review decision. [Handoff and command examples](docs/CODEX_HANDOFF.md)
+
+## Offline edit-and-test folder
+
+The browser and producer CLI use the same [edit-and-test importer](src/edit-test-import.mjs). It reads bounded top-level setup, grant, attempt, action, receipt, output and checksum files. It checks the two action-to-grant paths, the link from the test to the completed edit, the recorded revision and source/test digests, and the SHA-256 of the receipt and each output. The view reports authority separately for each actor and shows the receipt checks even when authority is missing. File selection lasts for the current inspection. Scripts, repository bundles and local paths named by the capture are outside the importer's read set. [Supported outcomes and usage](docs/WORKFLOW_INTAKE_DECISION.md#inspect-an-edit-and-test-capture)
 
 ## Offline Codex run folder
 

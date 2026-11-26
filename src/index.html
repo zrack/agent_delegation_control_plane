@@ -63,6 +63,16 @@
         <a id="compare-link" href="#compare?">Compare runs</a>
         <a id="review-link" href="#review?">Regression inbox</a>
       </nav>
+      <details id="edit-test-inspector">
+        <summary>Inspect an edit-and-test folder</summary>
+        <div class="import-controls">
+          <label for="edit-test-folder">Edit-and-test run folder</label>
+          <input id="edit-test-folder" type="file" webkitdirectory aria-describedby="edit-test-help">
+          <p id="edit-test-help">Choose the run folder containing setup.json and SHA256SUMS. This tab checks the unsigned records locally without running captured code or tests. Reloading clears the inspection.</p>
+        </div>
+        <p id="edit-test-status" role="status"></p>
+        <div id="edit-test-results"></div>
+      </details>
       <section id="comparison" tabindex="-1" aria-labelledby="comparison-title" hidden>
         <h2 id="comparison-title">Compare runs</h2>
         <p class="panel-description" id="comparison-help">Choose two captures of the same workflow to see what changed in permissions, actions and evidence.</p>
