@@ -523,10 +523,11 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     return `<section class="codex-history" id="codex-local-history" aria-labelledby="codex-history-title">
       <h3 id="codex-history-title">Local repair history</h3>
       ${item.localHistory?.length ? `<ol>${codexHistoryEntries(item.localHistory)}</ol>` : '<p class="muted">No local repairs or closures recorded.</p>'}</section>
-      ${sender?.length ? `<section class="codex-history" id="codex-sender-history" aria-labelledby="codex-sender-history-title">
+      <section class="codex-history" id="codex-sender-history" aria-labelledby="codex-sender-history-title">
         <h3 id="codex-sender-history-title">Sender-reported history</h3>
-        <p class="panel-description">These events and prior receipt digests come from the sender. This browser checks the case evidence and your workflow pin to determine the current status.</p>
-        <ol>${codexHistoryEntries(sender)}</ol></section>` : ''}`;
+        ${sender?.length ? `<p class="panel-description">These events and prior receipt digests come from the sender. This browser checks the case evidence and your workflow pin to determine the current status.</p>
+          <ol>${codexHistoryEntries(sender)}</ol>`
+          : '<p class="muted">No sender-reported repair or closure events are available for this case. Whether the sender made a repair is unknown.</p>'}</section>`;
   }
 
   function renderCase(item, original, followUp) {

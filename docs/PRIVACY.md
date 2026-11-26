@@ -36,7 +36,7 @@ Explicit closures identify the baseline and must refer to the attached follow-up
 The previous receipt contents and reviewer identity are omitted.
 
 In the receiving profile, **Sender-reported history** describes the sender’s
-actions. The receiver can compare the restored digest with the included
+actions. An empty sender panel leaves the sender’s repair history unknown. The receiver can compare the restored digest with the included
 receipt. The earlier digest is the sender’s observation. Importing the case
 creates no local repair or closure event, and a later export can share only
 actions recorded in the exporting profile. The receiver’s closure check still

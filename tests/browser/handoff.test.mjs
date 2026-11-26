@@ -27,8 +27,21 @@ async function verifyOutcome(page, row) {
     assert.ok(reasons[row.reason], `Unrecognized reason: ${row.reason}`);
     assert.match(await page.locator('#codex-closure-reasons').innerText(), reasons[row.reason], row.id);
   }
+  await verifySenderPanel(page, Boolean(row.senderHistory.length));
   assert.deepEqual(await history(page, 'sender'), row.senderHistory.map(kind => labels[kind]), row.id + ' sender history');
   assert.deepEqual(await history(page, 'local'), row.localHistory.map(kind => labels[kind]), row.id + ' local history');
+}
+
+async function verifySenderPanel(page, hasEvents) {
+  const panel = page.getByRole('region', { name: 'Sender-reported history', exact: true });
+  assert.equal(await panel.isVisible(), true);
+  if (hasEvents) {
+    assert.match(await panel.innerText(), /These events and prior receipt digests come from the sender/);
+    assert.doesNotMatch(await panel.innerText(), /Whether the sender made a repair is unknown/);
+  } else {
+    assert.match(await panel.innerText(), /No sender-reported repair or closure events are available/);
+    assert.match(await panel.innerText(), /Whether the sender made a repair is unknown/);
+  }
 }
 
 async function download(page, name, shareHistory) {
@@ -140,13 +153,40 @@ test('sender repairs and closes explicitly; recipients recheck both downloaded c
       assert.deepEqual(await disposition(receiver), { state: 'Resolved', ready: false });
       assert.deepEqual(await history(receiver, 'local'), []);
       assert.deepEqual(await history(receiver, 'sender'), shareHistory ? [labels.repair, labels.closure] : []);
+      await verifySenderPanel(receiver, shareHistory);
       if (shareHistory) {
-        const forwarded = await json(await download(receiver, 'forwarded', false));
+        const onwardFile = await download(receiver, 'forwarded', false);
+        const forwarded = await json(onwardFile);
         assert.ok(forwarded.resolution);
         assert.equal(forwarded.senderHistory, undefined);
         assert.equal(forwarded.localHistory, undefined);
         assert.equal(await receiver.locator('#include-sender-history').count(), 0);
+        const nextReceiver = await profile(browser, child);
+        await savePin(nextReceiver, join(kit, 'pins/matching'));
+        const nextPin = await savedPin(nextReceiver);
+        await importCase(nextReceiver, onwardFile);
+        await nextReceiver.reload();
+        assert.deepEqual(await disposition(nextReceiver), { state: 'Resolved', ready: false });
+        await verifySenderPanel(nextReceiver, false);
+        assert.deepEqual(await history(nextReceiver, 'local'), []);
+        assert.deepEqual(await history(nextReceiver, 'sender'), []);
+        assert.equal(await savedPin(nextReceiver), nextPin);
       }
     });
   }
+});
+
+test('an invalid sender record preserves the import warning alongside the empty sender panel', async t => {
+  const browser = await browserSession(t);
+  const receiver = await profile(browser, t);
+  await savePin(receiver, join(kit, 'pins/matching'));
+  const incoming = await json(join(kit, 'cases/history-on.json'));
+  incoming.senderHistory.caseId = 'unrelated-case';
+  await importCase(receiver, { name: 'invalid-sender-history.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(incoming)) });
+  await receiver.getByText(/Sender-reported history was omitted because it was invalid/).waitFor();
+  await verifySenderPanel(receiver, false);
+  await receiver.reload();
+  await verifySenderPanel(receiver, false);
+  assert.deepEqual(await history(receiver, 'local'), []);
+  assert.deepEqual(await disposition(receiver), { state: 'Resolved', ready: false });
 });
