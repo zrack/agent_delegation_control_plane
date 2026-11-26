@@ -1,16 +1,20 @@
 """Offline contract verification; deterministic SDK replay is not a live model result."""
 import asyncio
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from agents import RunConfig, Runner, Usage, set_tracing_disabled
 from agents.items import ModelResponse
 from agents.models.interface import Model
 from openai.types.responses import ResponseFunctionToolCall, ResponseOutputMessage, ResponseOutputText
 from capture import Capture
+import run
 from run import Hooks, make_workflow
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,6 +67,29 @@ class WorkflowContract(unittest.TestCase):
             evaluated = subprocess.run(["node", "--input-type=module", "-e", program], input=json.dumps(envelope), text=True,
                                        cwd=ROOT, capture_output=True, check=True)
             self.assertEqual(json.loads(evaluated.stdout)["status"], "valid")
+
+    def test_production_export_replayed_offline_passes_sdk_folder_validation(self):
+        # Only the model and external dependencies are replaced. Use the production
+        # runner, hooks, file writers and manifest so format drift fails this check.
+        workflow = make_workflow(ReplayModel())
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary) / "completed"
+            with (
+                patch("sys.argv", ["run.py", "--output", str(directory)]),
+                patch.object(run, "make_workflow", return_value=workflow),
+                patch.object(run, "MODEL", "offline-test-replay"),
+                patch.object(run, "key_value"),
+                patch.object(run, "AsyncOpenAI"),
+                patch("socket.socket.connect", side_effect=AssertionError("Offline replay attempted a connection")),
+                redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(asyncio.run(run.main()), 0)
+            checked = subprocess.run(["node", "scripts/validate-capture.mjs", "--sdk-folder", str(directory), "--json"],
+                                     cwd=ROOT, text=True, capture_output=True, timeout=10, check=True)
+            report = json.loads(checked.stdout)
+            self.assertEqual((report["status"], report["receipts"], report["verifiedFileCount"]),
+                             ("within-scope", "verified", 6))
+            self.assertEqual(report["diagnostics"], [])
 
     def test_out_of_order_handoff_duplicate_action_and_wrong_role_cannot_create_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
