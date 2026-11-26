@@ -1,19 +1,21 @@
 flowchart TB
-    API[OpenAI API] <-->|HTTPS: fictional tasks| Runner
+    API[OpenAI API] <-->|Fictional tasks and responses| Runner
     subgraph local[Operator workstation]
-      Runner[Optional SDK runner<br/>and local capture] --> JSON[SDK investigation.json]
-      JSON -->|Operator chooses file| Browser[Browser-local import<br/>Deterministic evaluator<br/>Chain, hop and evidence view]
-      Saved[(Browser-local saved runs<br/>Versioned, bounded localStorage)] <-->|Save / revalidate on reload / clear| Browser
-      Fixtures[Three fictional examples] --> Browser
-      Server[Loopback server] -->|Application assets| Browser
-      Experiment[Separate scripted<br/>Node experiment] --> Normalized[Raw records and<br/>normalized.json]
-      Normalized --> Offline[Offline evaluator results<br/>Valid / violation / unknown]
-      Pilot[Optional coding pilot<br/>SDK, policy and independent grader] <-->|HTTPS: fictional task and code| API
-      Pilot -->|Generated Python and fictional CSV<br/>No keys or host mounts| Sandbox[Disposable Docker execution<br/>No network, bounded workspace and resources]
-      Sandbox -->|Actual output bytes and exit status| Pilot
-      Pilot --> JSON
+      Runner[Optional agent workflows<br/>SDK capture and coding pilot]
+      Runner <-->|Code and fictional input / results| Sandbox[Disposable Docker execution<br/>Bounded workspace, no network]
+      Runner -->|Produces| Files[Completed investigations<br/>and capture folders]
+      Fixtures[Fictional examples] --> Viewer
+      Files -->|Chosen locally| Viewer[Browser dashboard<br/>Actions, grants and case review]
+      Server[Loopback static server] -->|Application assets| Viewer
+      Viewer <-->|Save and recheck| Saved[(Origin-scoped local storage<br/>Runs, pins and cases)]
+      Viewer -->|Export selected evidence| Packages[Portable case files]
+      Packages -->|Import| Viewer
+      Files -->|Check input and receipts| Producer[Producer diagnostics]
+      Packages -->|Recheck case| Receiver[Offline case verifier]
+      Pin[Independent receiver baseline and pin] --> Receiver
+      Experiment[Separate scripted experiment] -->|Normalized records| Eval[Offline evaluator]
     end
     classDef process fill:#eaf2fc,stroke:#325e91,color:#132d4b
     classDef data fill:#f5f7fa,stroke:#66788c,color:#132d4b
-    class Runner,Browser,Server,Experiment,Offline,Pilot,Sandbox process
-    class JSON,Fixtures,Normalized,Saved data
+    class Runner,Viewer,Server,Experiment,Eval,Producer,Receiver,Sandbox process
+    class Files,Fixtures,Packages,Pin,Saved data
