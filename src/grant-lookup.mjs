@@ -31,7 +31,10 @@ export function actionGrants(run, eventId) {
 }
 
 function route(item, side, event, extra) {
-  const params = new URLSearchParams({ item, side, event, ...extra });
+  const params = new URLSearchParams({ item: item.id, side, event });
+  // A reviewer can replace a follow-up without replacing the inbox case.
+  if (side === 'follow-up') params.set('capture', item.followUp.id);
+  for (const [key, value] of Object.entries(extra ?? {})) params.set(key, value);
   return '#review?' + params;
 }
 
@@ -43,7 +46,7 @@ export function actionLink(item, side, event, escape) {
 export function actionDirectory(item, runs, escape) {
   const groups = Object.entries(runs).filter(([, run]) => run).map(([side, run]) =>
     `<h4>${sides[side]} · <code>${escape(run.id)}</code></h4><ul>${run.events.map(event =>
-      `<li>${actionLink(item.id, side, event, escape)}<span class="muted"> · ${escape(event.action.action)} · ${escape(event.action.resource)}</span></li>`).join('')}</ul>`);
+      `<li>${actionLink(item, side, event, escape)}<span class="muted"> · ${escape(event.action.action)} · ${escape(event.action.resource)}</span></li>`).join('')}</ul>`);
   if (!groups.length) return '';
   return `<details class="review-differences" id="review-action-directory"><summary>Actions and supporting grants</summary>${groups.join('')}</details>`;
 }
@@ -59,7 +62,7 @@ export function grantLookup(item, run, side, eventId, requestedGrant, escape) {
   const event = trace.event;
   const id = requestedGrant ?? event.authorityId;
   const grant = trace.grants.find(record => record.id === id);
-  const returnLink = `<a href="${escape(route(item.id, side, event.id, { view: 'actions' }))}">Return to this action</a>`;
+  const returnLink = `<a href="${escape(route(item, side, event.id, { view: 'actions' }))}">Return to this action</a>`;
   const field = (name, value) => `<dt>${name}</dt><dd><code>${escape(value)}</code></dd>`;
   const action = `<p><strong>${sides[side]} run</strong> · <code>${escape(run.id)}</code></p>
     <dl>${field('Action record', event.id)}${field('Actor', event.actor)}${field('For principal', run.principal.id)}
@@ -69,7 +72,7 @@ export function grantLookup(item, run, side, eventId, requestedGrant, escape) {
   if (grant) {
     const parent = grant.parentGrantId;
     const parentLink = parent === null ? '<p>This grant has no recorded parent.</p>' :
-      `<p><a href="${escape(route(item.id, side, event.id, { grant: parent }))}">Parent grant · ${escape(parent)}</a></p>`;
+      `<p><a href="${escape(route(item, side, event.id, { grant: parent }))}">Parent grant · ${escape(parent)}</a></p>`;
     const scope = grant.capabilities.map(pair => `<li><code>${escape(pair.action)}</code> · <code>${escape(pair.resource)}</code></li>`).join('');
     details = `<h4>Grant <code>${escape(grant.id)}</code></h4><dl>${field('Issuer', grant.issuer)}${field('Subject', grant.subject)}
       ${field('Principal', grant.principal)}${field('Valid from', grant.validFrom)}${field('Expires at', grant.expiresAt)}

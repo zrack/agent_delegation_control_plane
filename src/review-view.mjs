@@ -667,7 +667,8 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const lookupSide = route.get('side');
       const lookupEvent = route.get('event');
       if (lookupEvent !== null && route.get('view') !== 'actions') {
-        const run = Object.hasOwn(runs, lookupSide) ? runs[lookupSide] : undefined;
+        const sameCapture = lookupSide !== 'follow-up' || (item.followUp && route.get('capture') === item.followUp.id);
+        const run = sameCapture && Object.hasOwn(runs, lookupSide) ? runs[lookupSide] : undefined;
         detail.innerHTML = grantLookup(item, run, lookupSide, lookupEvent, route.get('grant'), escape);
         detail.querySelector('#grant-lookup-title').focus();
         return;
@@ -902,7 +903,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const changed = index === 0 ? record.row?.before : record.row?.after;
       const actions = eventId ? run.events.filter(event => event.id === eventId) :
         changed && Object.hasOwn(changed, 'parentGrantId') ? run.events.filter(event => event.authorityId === changed.id) : [];
-      for (const event of actions) links.push(actionLink(selected.id, side, event, escape));
+      for (const event of actions) links.push(actionLink(selected, side, event, escape));
     }
     if (links.length) container.insertAdjacentHTML('afterbegin', '<nav aria-label="Actions and supporting grants">' + links.join(' · ') + '</nav>');
   }, true);

@@ -68,6 +68,16 @@ test('worksheet supports lookup, repaired follow-ups and explicit closure inside
     await openAction(page, 'Follow-up', eventId);
     assert.equal(await field(page, 'Referenced grant'), grantId);
     await page.getByRole('heading', { name: 'Grant ' + grantId, exact: true }).waitFor();
+    const currentCaptureUrl = page.url();
+    const wrongCapture = new URL(currentCaptureUrl);
+    const params = new URLSearchParams(wrongCapture.hash.slice('#review?'.length));
+    assert.ok(params.get('capture'), 'A replaceable follow-up needs a snapshot-bound link');
+    params.set('capture', 'another-follow-up');
+    wrongCapture.hash = 'review?' + params;
+    await page.goto(wrongCapture.href);
+    await page.getByText('No matching run snapshot is available for this selection.').waitFor();
+    await page.goto(currentCaptureUrl);
+    await page.getByRole('heading', { name: 'Grant ' + grantId, exact: true }).waitFor();
     await goBack(page);
     await page.locator('#resolve-review-case').click();
     await page.locator('.review-case .badge').filter({ hasText: /^Resolved$/ }).waitFor();
