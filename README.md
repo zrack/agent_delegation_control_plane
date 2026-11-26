@@ -8,6 +8,8 @@ Review **who acted for whom, which grant covered the action, and what changed be
 
 Start with the **Codex repair history demo**. A fictional coding agent edited a quickstart, and the copy you received has an altered output file. Repair it, check the before and after digests, then review the corrected grant before closing the case. [Download the alpha.15 demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Follow the exercise](#review-the-repair-history-of-a-codex-case)
 
+Working from a source checkout? The [sender-to-receiver handoff kit](docs/CODEX_HANDOFF.md) exercises optional sender history in two profiles and includes an offline case verifier.
+
 ## Run locally
 
 Download **Source code (zip)** from the [alpha.15 release](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.15). Extract the source and demo ZIPs into separate folders. From the source directory, start the dashboard with **Python 3.11+**.
