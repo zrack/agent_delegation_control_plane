@@ -4,9 +4,11 @@ Review **who acted for whom, which grant covered the action, and what changed be
 
 **Public technical alpha** · [v0.1.0-alpha.16](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.16) · [Roadmap](ROADMAP.md)
 
+**Participating in the two-reviewer pilot?** Start with `START.md` in the packet your facilitator gave you. Save the public walkthrough for after your session.
+
 ![Trace the action back to its grant. In a fictional coding run, the repository owner grants authority to the coordinator, who delegates a single-file edit to the coding agent.](docs/images/delegation-hero.svg)
 
-Start with the **Codex reviewer handoff**. A teammate says they repaired the output from a fictional quickstart edit and closed the case. Can you verify that decision from the receipts and your own pinned baseline? [Download the alpha.16 handoff ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) · [Follow the exercise](#review-a-codex-handoff)
+To try the **Codex reviewer handoff** on your own, take the receiver’s side of a fictional quickstart edit. Can you trace the editor’s grant and decide whether the case should be closed? [Download the alpha.16 handoff ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) · [Follow the exercise](#review-a-codex-handoff)
 
 ## Run locally
 
@@ -23,10 +25,14 @@ Open [the local dashboard](http://127.0.0.1:48731/). Stop with `Ctrl+C` or choos
 Open `reviewer/TASK_SHEET.md` in the extracted demo. The seven scenarios share a case ID, so use a fresh Chromium profile for each. Start with the first row.
 
 1. **Choose your baseline.** In **Investigate a run → Import a Codex run folder**, choose `pins/matching`. In **Compare runs**, select the imported run as **Baseline run**. Expand **Save or replace a workflow baseline**, name it `Follow-up review` and select **Save baseline**.
-2. **Open the handoff.** In **Regression inbox → Import review package or case**, choose `cases/history-on.json`. Reload at the same address and reopen the case. Its **Resolved** status verifies against your pin and the passing follow-up.
-3. **Check what happened.** Under **Sender-reported history**, compare the replacement digest for `after.md` with the saved original output receipt. In the follow-up’s `grants.jsonl`, find the grant covering the editor’s read and write. Your **Local repair history** stays empty when you import and reload the case.
+2. **Open the handoff.** In **Regression inbox → Import review package or case**, choose `cases/history-on.json`. Reload at the same address and reopen the case.
+3. **Explain your decision.** Compare the digest for `after.md` in **Sender-reported history** with the saved original output receipt. Find the editor’s grant in the follow-up’s `grants.jsonl`. Which evidence supports the status you see after reload?
 
-Try `cases/history-off.json` with the same baseline in a second fresh profile. The closure still verifies, but the sender’s account of the repair is absent. The other five rows exercise missing or conflicting pins, damaged receipts and a passing follow-up awaiting closure. [Full handoff walkthrough](docs/ALPHA_REVIEW.md#review-a-codex-handoff) · [Verify a case offline](docs/CODEX_HANDOFF.md#verify-the-case-offline)
+Try `cases/history-off.json` with the same baseline in a second fresh profile. Record what you can verify about closure and what you can establish about the repair. Then compare your answers with the walkthrough. [All seven scenarios and expected results](docs/ALPHA_REVIEW.md#review-a-codex-handoff) · [Verify a case offline](docs/CODEX_HANDOFF.md#verify-the-case-offline)
+
+### Run the two-reviewer pilot
+
+Give each reviewer their own packet. Both review the same seven cases, with opposite assignments for manual review and the dashboard. Time setup separately. For each decision, record the reason and the evidence the reviewer cites, where they needed help, and any incorrect closure action. Keep the answer key and observations with the facilitator. [Prepare the two packets](docs/CODEX_HANDOFF.md#compare-ordinary-review-with-the-dashboard) · [Facilitator and scoring guide](docs/reviewer-pilot/FACILITATOR.md)
 
 <a id="try-the-portable-codex-review-demo"></a>
 
@@ -40,35 +46,11 @@ To build the case from the original capture and attach the corrected folder your
 
 ## Try the coding-agent review demo
 
-1. In a fresh profile, use the dashboard started above and extract the [four-case coding-agent demo ZIP from alpha.8](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip).
-2. Import `baseline.investigation.json` and pin it in **Compare runs** as **Demo coding agent**.
-3. In **Regression inbox**, import the out-of-scope and missing-grant packages,
-   then record a decision for each. Attach the corrected package as a follow-up,
-   verify the passing check, and close each case. Reload and confirm both cases
-   are **Resolved**. [Coding-agent walkthrough](docs/ALPHA_REVIEW.md#try-the-coding-agent-review-demo)
+Review an out-of-scope edit and a missing grant, then check whether each corrected follow-up supports closure against the original baseline. [Alpha.8 four-case ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.8/adcp-coding-agent-review-demo-v0.1.0-alpha.8.zip) · [Coding-agent walkthrough](docs/ALPHA_REVIEW.md#try-the-coding-agent-review-demo)
 
 ## Try the portable invoice review demo
 
-1. Use the dashboard started above and extract the
-   [portable invoice review demo ZIP from alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip).
-2. In a fresh browser profile, open **Regression inbox → Import review package
-   or case**. Import the two resolved JSON files below, one at a time.
-3. Open each entry, check its decision and status, and reload at the same
-   address to verify that both return. Use another fresh profile or a different
-   loopback port for the two **Open** variants, then repeat the import and reload
-   checks. The inbox preserves existing local decisions and follow-ups on reimport.
-
-| Case file | Expected status after reload | What to verify |
-| --- | --- | --- |
-| `invoice-b-resolved.json` | **Resolved** | Missing validation receipt in the original case. Corrected follow-up verifies 1,231 cents. |
-| `invoice-c-resolved.json` | **Resolved** | Altered output in the original case. Corrected follow-up verifies 2,441 cents. |
-| `invoice-b-altered-receipt.json` | **Open** | Follow-up output changed after export. Closure verification fails. |
-| `invoice-c-different-baseline.json` | **Open** | The packaged baseline differs from the original. Closure verification fails. |
-
-Under **Inspect follow-up evidence**, expand **File checks against manifest**.
-All six files should match in the corrected follow-ups. For the altered variants,
-check the import warning and the **Closure checklist**. Confirm **Close as resolved** is disabled.
-[Full alpha walkthrough](docs/ALPHA_REVIEW.md#try-the-portable-invoice-review-demo)
+Inspect the receipts for two corrected invoices, then see how an altered output or a different baseline affects closure after reload. The walkthrough lists the files, expected totals and checklist results for all four cases. [Alpha.7 invoice ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.7/adcp-invoice-closure-checklist-demo-v0.1.0-alpha.7.zip) · [Invoice walkthrough](docs/ALPHA_REVIEW.md#try-the-portable-invoice-review-demo)
 
 ## Inspect records
 
