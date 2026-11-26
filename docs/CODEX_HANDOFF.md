@@ -25,7 +25,7 @@ Choose **Go to original receipt for after.md** or **Go to follow-up receipt for 
 | `cases/altered-original.json` | The editor reported writing `docs/quickstart.md`. The original investigation references the edit grant but omits its record. The original `after.md` digest differs from the manifest. | The receiver cannot reproduce the original finding from intact receipts, even though the follow-up passes. |
 | `cases/altered-follow-up.json` | The follow-up supplies the previously missing coordinator-to-editor grant for the quickstart edit. Its `after.md` fails the digest check. | The receiver can see what the sender says was corrected. Verifying that correction for closure requires a passing follow-up with intact receipts. |
 
-In the altered-follow-up case, expand the original run’s **Missing grant** finding. The editor’s read and write both reference the same missing grant. Each action has its own link to the baseline and candidate evidence.
+In the altered-follow-up case, expand the original run’s **Missing grant** finding. The editor’s read and write both reference the same missing grant. Each action has its own link to the baseline and candidate evidence. Follow a read or write link, then return from the action. The finding stays expanded and keyboard focus returns to the same baseline or candidate link, so you can continue to the next record.
 
 Use another fresh profile for the second case. The two files share a case ID. The sender’s history can explain an earlier repair or close action. The receiver checks the evidence again after reload.
 
