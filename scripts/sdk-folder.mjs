@@ -41,6 +41,19 @@ function readLedger(bytes) {
   });
 }
 
+function readCall(call, index, position) {
+  const field = 'records[' + index + '].output[' + position + '].arguments';
+  const reject = () => invalid('capture.jsonl', 'The tool arguments do not match the account-review tool contract.', 'INVALID_SDK_CAPTURE', field);
+  if (typeof call.arguments !== 'string') reject();
+  let args;
+  try { args = JSON.parse(call.arguments); } catch { reject(); }
+  if (call.name === 'save_summary') {
+    // Capture.perform accepts 1–2000 Unicode characters, including newlines.
+    if (typeof args?.summary !== 'string' || Object.keys(args).length !== 1 || !/^.{1,2000}$/su.test(args.summary)) reject();
+  } else if (!equal(args, {})) reject();
+  return { ...call, arguments: args };
+}
+
 function checkTool(row, call, role, parent, account, hashes) {
   const event = row.event;
   const writing = role === 'Reporter';
@@ -54,9 +67,8 @@ function checkTool(row, call, role, parent, account, hashes) {
   if (event.evidence.artifactSha256 !== hashes[file]) {
     invalid(file, 'The file bytes disagree with the completed action digest.', 'ACTION_RECEIPT_MISMATCH');
   }
-  const args = parse(call.arguments, 'capture.jsonl');
   if (writing) {
-    if (typeof args?.summary !== 'string' || sha(args.summary) !== hashes[file]) {
+    if (sha(call.arguments.summary) !== hashes[file]) {
       invalid(file, 'The saved output disagrees with the recorded tool input.', 'ACTION_RECEIPT_MISMATCH');
     }
     if (!equal(row.result, { saved: true, sha256: hashes[file] })) {
@@ -102,7 +114,7 @@ function checkLedger(rows, chain, mapping, account, manifest, result) {
         if (calls.length > 1 || (calls.length && (!id(calls[0].call_id) || recordCalls.has(calls[0].call_id)))) {
           invalid('capture.jsonl', 'Expected at most one uniquely identified function call per response.');
         }
-        pendingCall = calls[0];
+        pendingCall = calls.length ? readCall(calls[0], index, row.output.indexOf(calls[0])) : undefined;
         if (pendingCall) recordCalls.add(pendingCall.call_id);
         finalMessage = !pendingCall && events.length === roles.length
           ? row.output.findLast(item => item?.type === 'message' && item.role === 'assistant') : undefined;

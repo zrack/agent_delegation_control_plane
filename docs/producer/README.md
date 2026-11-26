@@ -41,7 +41,7 @@ node scripts/validate-capture.mjs --sdk-folder PATH_TO_COMPLETED_FOLDER --json
 | Local evidence | What the verifier checks |
 | --- | --- |
 | `manifest.json` | SHA-256 of all six named files. The existing producer emits an unversioned manifest and a version 1 investigation. The verifier accepts the same manifest layout with an explicit version of 1 and rejects other versions. |
-| `capture.jsonl` and `mapping.json` | Model requests and responses, tool-call IDs, both ordered handoffs, completed actions, and the source lines for grants and actions. A mapped record must agree with the normalized investigation. |
+| `capture.jsonl` and `mapping.json` | Model requests and responses, tool-call IDs, both ordered handoffs, completed actions, and the source lines for grants and actions. Account reads and handoffs take an empty JSON object. The summary tool takes a single `summary` string of 1–2000 characters. A mapped record must agree with the normalized investigation. |
 | `account.json` and `summary.txt` | Both read receipts match the account, and the recorded write input, action digest and write result agree with the saved summary. |
 | `result.json` and `investigation.json` | The run and model agree with the manifest. The recorded reporter response agrees with the final result. The evaluator assesses the supplied grant chain for each completed action. |
 

@@ -35,6 +35,15 @@ class ReplayModel(Model):
         expected_handoffs = ["delegate_to_researcher"] if index == 1 else ["delegate_to_reporter"] if index == 3 else []
         assert [tool.name for tool in available_tools] == expected_tools
         assert [item.tool_name for item in available_handoffs] == expected_handoffs
+        # Bind the offline verifier's accepted arguments to the schemas exposed
+        # by the installed SDK for the tools available on this model turn.
+        schemas = [tool.params_json_schema for tool in available_tools] + [item.input_json_schema for item in available_handoffs]
+        for schema in schemas:
+            fields = ["summary"] if expected_tools == ["save_summary"] else []
+            assert schema["type"] == "object" and schema["additionalProperties"] is False
+            assert sorted(schema["properties"]) == sorted(schema["required"]) == fields
+            if fields:
+                assert schema["properties"]["summary"]["type"] == "string"
         if index < len(sequence):
             name, arguments = sequence[index]
             output = [ResponseFunctionToolCall(type="function_call", name=name, call_id=f"offline-call-{index}", arguments=json.dumps(arguments))]

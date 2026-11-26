@@ -134,6 +134,30 @@ class SdkSourceContract(unittest.TestCase):
         self.save_ledger(rows)
         self.assertEqual(self.check(2, "invalid-input")["diagnostics"][0]["file"], "capture.jsonl")
 
+    def test_tool_argument_contracts_survive_manifest_rehashing(self):
+        for tool, arguments in [
+            ("read_account", json.dumps({"format": MARKER})),
+            ("read_account", "null"),
+            ("delegate_to_researcher", "incomplete JSON"),
+            ("delegate_to_reporter", "[]"),
+            ("delegate_to_reporter", {}),
+            ("save_summary", json.dumps({"summary": MARKER, "format": "short"})),
+            ("save_summary", json.dumps({"summary": "x" * 2001})),
+        ]:
+            with self.subTest(tool=tool, arguments=arguments):
+                rows = self.ledger()
+                index = next(i for i, row in enumerate(rows) if row["kind"] == "model_response"
+                             and row["output"][0].get("name") == tool)
+                call = rows[index]["output"][0]
+                saved = call["arguments"]
+                call["arguments"] = arguments
+                self.save_ledger(rows)
+                result = self.check(2, "invalid-input")
+                self.assertEqual(result["authority"], "unassessed")
+                self.assertEqual(result["diagnostics"][0]["field"], f"records[{index}].output[0].arguments")
+                call["arguments"] = saved
+                self.save_ledger(rows)
+
     def test_unhandled_actions_and_unconsumed_calls_cannot_hide_in_the_response(self):
         rows = self.ledger()
         response = next(row for row in rows if row["kind"] == "model_response")
