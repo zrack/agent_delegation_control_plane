@@ -55,9 +55,9 @@ export function clearInvestigations(getStorage) {
 }
 
 export const workflowKey = name => name.trim().toLowerCase();
-const validWorkflowName = name => typeof name === 'string' && name === name.trim()
+export const validWorkflowName = name => typeof name === 'string' && name === name.trim()
   && name.length > 0 && name.length <= MAX_WORKFLOW_NAME && !/[\u0000-\u001f\u007f]/.test(name);
-const validRunId = id => typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(id);
+export const validRunId = id => typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9:._-]{0,159}$/.test(id);
 const validFingerprint = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
 function readWorkflowBaselines(getStorage) {
