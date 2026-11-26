@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { importInvoiceFolder } from '../../src/invoice-import.mjs';
 import {
@@ -7,52 +6,7 @@ import {
   previewInvoiceEvidenceRestore, resolveReviewCase, restoreInvoiceEvidence, restoreReviews, REVIEW_STORAGE_KEY, saveInvoiceCandidate, saveReview, saveReviewDecision,
 } from '../../src/review.mjs';
 import { restoreWorkflowBaselines, runFingerprint, saveInvestigation, saveWorkflowBaseline } from '../../src/storage.mjs';
-import { parseInvestigation } from '../../src/import.mjs';
-
-function folder(id = 'SANDBOX-000000000001') {
-  const stamp = '2026-01-01T00:00:00Z';
-  const end = '2026-01-01T00:02:00Z';
-  const scope = [
-    { action: 'code:execute', resource: `sandbox:${id}` },
-    { action: 'artifact:verify', resource: `sandbox:${id}:results.json` },
-  ];
-  const result = { invoice_count: 1, subtotal_cents: 100, tax_cents: 7, total_cents: 107 };
-  const files = {
-    'results.json': JSON.stringify(result),
-    'expected.json': JSON.stringify(result),
-    'validation.json': JSON.stringify({ passed: true, actual: result }),
-    'execution.json': JSON.stringify({ status: 'completed', exit_code: 0, input_unchanged: true, cleaned: true }),
-  };
-  const evidence = scope.map(({ action }, index) => ({
-    callId: 'call-' + index, tool: action, artifactSha256: digest(files['results.json']),
-  }));
-  const identity = { principal: 'owner', validFrom: stamp, expiresAt: end };
-  files['investigation.json'] = JSON.stringify({ schemaVersion: 1, chain: {
-    id, principal: { id: 'owner' }, rootGrantId: 'g1',
-    grants: [
-      { ...identity, id: 'g1', parentGrantId: null, issuer: 'owner', subject: 'Coder', capabilities: scope, canDelegate: true },
-      { ...identity, id: 'g2', parentGrantId: 'g1', issuer: 'Coder', subject: 'Verifier', capabilities: [scope[1]], canDelegate: false },
-    ],
-    events: ['Coder', 'Verifier'].map((actor, index) => ({
-      id: 'e' + (index + 1), actor, parentEventId: index ? 'e1' : null, authorityId: 'g' + (index + 1),
-      action: { ...scope[index], outcome: 'completed', at: '2026-01-01T00:01:00Z' }, evidence: evidence[index],
-    })),
-  } });
-  files['attempts.json'] = JSON.stringify(['Coder', 'Verifier'].map((actor, index) => ({
-    actor, ...scope[index], callId: evidence[index].callId, outcome: 'allowed',
-  })));
-  return files;
-}
-
-const digest = text => createHash('sha256').update(text).digest('hex');
-const manifestFor = files => ({
-  case: 'invoice-b',
-  files: Object.fromEntries(Object.entries(files).map(([name, contents]) => [name, digest(contents)])),
-});
-function selectedFiles(files, manifest = manifestFor(files)) {
-  return Object.entries({ ...files, 'manifest.json': JSON.stringify(manifest) })
-    .map(([name, contents]) => Object.assign(new Blob([contents]), { webkitRelativePath: 'invoice-b/' + name }));
-}
+import { folder, manifestFor, selectedFiles, savedWorkflow } from '../fixtures/invoice-case.mjs';
 
 test('checks authority, exact invoice output, and execution independently from one selected folder', async () => {
   const files = selectedFiles(folder());
@@ -128,18 +82,6 @@ test('malformed or non-integer output is invalid even when the manifest hash mat
     assert.equal(check.output.tone, 'unknown');
   }
 });
-
-async function savedWorkflow() {
-  const records = new Map();
-  const getStorage = () => ({
-    getItem: key => records.get(key) ?? null,
-    setItem: (key, value) => records.set(key, value),
-  });
-  const baseline = parseInvestigation(folder()['investigation.json']);
-  saveInvestigation(getStorage, baseline);
-  saveWorkflowBaseline(getStorage, 'Invoices', baseline, await runFingerprint(baseline));
-  return { getStorage, baseline, pin: restoreWorkflowBaselines(getStorage).baselines[0] };
-}
 
 test('saved invoice comparisons recheck exact receipts and preserve different snapshots of the same run', async () => {
   const { getStorage, pin } = await savedWorkflow();

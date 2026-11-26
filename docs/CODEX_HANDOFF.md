@@ -26,6 +26,8 @@ Omit both receiver options to check what an unpinned reviewer sees. The `conflic
 | 1 | `open-ready` or `open-blocked` | A valid case still needs an explicit closure or has an outstanding evidence or pin check. |
 | 2 | No disposition | The files, format, arguments or receiver baseline could not be verified. |
 
+The same command handles [portable invoice cases](INVOICE_VERIFICATION.md), including their three independent receipt checks and their own rules for verifying an existing closure without a receiver pin.
+
 ### CI example
 
 From a clean checkout with the kit built as above, run the following step in a shell. The resolved case exits successfully only when its closure verifies. Use the exit table above when deliberately checking an open scenario.
