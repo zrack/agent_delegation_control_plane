@@ -13,8 +13,10 @@ could only finish with help.
 2. For each case, record the current evidence check and explain it in your own
    words. Identify who acted for whom, the recorded action and resource, and the
    grant or evidence that supports your explanation. Open the relevant details.
-   If a matching grant is absent from the differences, use the action's grant ID
-   to find it in the package JSON.
+   Open **Actions and supporting grants**. Choose the candidate action, inspect
+   the referenced grant and follow **Parent grant** to see who delegated it.
+   Record any missing grant ID. Select **Return to this action** to resume the
+   case. Use the baseline entry when you want the earlier run's record.
 3. For each flagged case, save a **Decision** and a **Reason for decision**.
    Record what you would ask the workflow owner to do next.
 

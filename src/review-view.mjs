@@ -1,4 +1,5 @@
 import { regressionLabels } from './comparison.mjs';
+import { actionDirectory, actionLink, grantLookup, reviewRun } from './grant-lookup.mjs';
 import { importCodexFolder } from './codex-import.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
@@ -106,6 +107,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   let restoreDraft;
   let revision = 0;
   let records = [];
+  let runs = {};
 
   function announce(message, error = false) {
     status.textContent = message;
@@ -190,7 +192,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <span class="muted">${escape(description)}</span></summary><div class="compare-detail"></div></details>`;
   }
 
-  function renderEvidence(item, assessment) {
+  function renderEvidence(item, assessment, candidateSide = 'candidate') {
     const { states, groups, candidateResult, verdict } = assessment;
     const evidence = `<dl class="review-evidence-status">${['baseline', 'candidate'].map(side => `<div>
       <dt>${side === 'baseline' ? 'Baseline' : 'Candidate'}</dt><dd><code>${escape(item.report[side + 'Id'] ?? 'No run ID')}</code>
@@ -201,18 +203,18 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const explanation = reproduced ? 'The current check reproduced the reported verdict.'
       : 'The current check differs from the reported verdict. Review the matching evidence below.';
     const reasons = verdict.reasons.slice(0, 12).map(reason => {
-      if (reason.row) return evidenceDetails(reason.row.title, { row: reason.row }, reason.message);
+      if (reason.row) return evidenceDetails(reason.row.title, { row: reason.row, candidateSide }, reason.message);
       const chain = item.candidate;
       const event = chain.events.find(record => record.id === reason.eventId);
       const grant = chain.grants.find(record => record.id === event?.authorityId);
       const parentGrant = chain.grants.find(record => record.id === grant?.parentGrantId);
       const findings = candidateResult.findings.filter(finding => finding.eventId === (event?.id ?? null));
-      return evidenceDetails(event?.label ?? 'Candidate assessment', { snapshot: {
+      return evidenceDetails(event?.label ?? 'Candidate assessment', { candidateSide, snapshot: {
         event, grant: grant ?? null, parentGrant: parentGrant ?? null, findings,
       } }, reason.message);
     });
     const differences = Object.entries(groups).filter(([, rows]) => rows.length).map(([group, rows]) =>
-      `<h4>${escape(group[0].toUpperCase() + group.slice(1))}</h4>${rows.map(row => evidenceDetails(row.title, { row },
+      `<h4>${escape(group[0].toUpperCase() + group.slice(1))}</h4>${rows.map(row => evidenceDetails(row.title, { row, candidateSide },
         row.changes.map(change => change.label).join(' · ') || 'Only supplied in one run')).join('')}`).join('');
     return `${evidence}<section class="assessment review-verdict ${tones[verdict.status]}">
       <div><strong>${item.invoice ? 'Baseline regression' : 'Current evidence check'} · ${regressionLabels[verdict.status]}</strong><p>${explanation}</p></div></section>
@@ -458,7 +460,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         ${comparison('Follow-up run', item.followUp, assessment)}</div>
         ${receiptSummary}
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
-          ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}
+          ${assessment ? renderEvidence(item.followUp, assessment, 'follow-up') + followUpRecords : ''}${receiptDetails}
           ${assessment?.codex ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
       ${item.invoice && !resolved && item.decision ? evidenceRestorePanel(item) : ''}
       <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
@@ -505,10 +507,12 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   async function render({ focus = false } = {}) {
     const currentRevision = ++revision;
     const { items, warning } = restoreReviews(getStorage);
-    const id = new URLSearchParams(location.hash.slice(reviewRoute.length)).get('item');
+    const route = new URLSearchParams(location.hash.slice(reviewRoute.length));
+    const id = route.get('item');
     selected = items.find(item => item.id === id);
     restoreDraft = undefined;
     records = [];
+    runs = {};
     if (warning) announce(warning, true);
     if (!savingInvoice) updateInvoiceWorkflows();
     list.innerHTML = [...items].sort((a, b) => Number(a.reviewed) - Number(b.reviewed)
@@ -543,12 +547,22 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + evidenceRestorePanel(item));
         return;
       }
+      for (const side of ['baseline', 'candidate', 'follow-up']) runs[side] = reviewRun(item, assessment, followUp, side);
+      const lookupSide = route.get('side');
+      const lookupEvent = route.get('event');
+      if (lookupEvent !== null && route.get('view') !== 'actions') {
+        const run = Object.hasOwn(runs, lookupSide) ? runs[lookupSide] : undefined;
+        detail.innerHTML = grantLookup(item, run, lookupSide, lookupEvent, route.get('grant'), escape);
+        detail.querySelector('#grant-lookup-title').focus();
+        return;
+      }
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
         ${item.invoice || item.codex ? `<p class="panel-description">${item.codex ? 'Case workflow' : 'Pinned workflow'} · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
         ${checklist}
         ${renderEvidence(item, assessment)}
+        ${actionDirectory(item, runs, escape)}
         ${receiptResults}
         ${assessment.codex ? codexFolderEvidence(assessment) : ''}
         ${item.report.reasons.length ? `<details class="review-differences"><summary>Reasons recorded by the offline report</summary>
@@ -563,6 +577,16 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
           <button type="submit">Save review</button><button type="button" id="remove-review">Remove from inbox</button></div>
         </form>
         ${renderExport(item, assessment, followUp)}`;
+      if (lookupEvent && route.get('view') === 'actions') {
+        const directory = detail.querySelector('#review-action-directory');
+        const link = [...(directory?.querySelectorAll('a') ?? [])].find(anchor =>
+          anchor.dataset.grantSide === lookupSide && anchor.dataset.grantEvent === lookupEvent);
+        if (link) {
+          directory.open = true;
+          link.focus();
+          history.replaceState(null, '', itemRoute(item.id));
+        }
+      }
     } catch (error) {
       if (currentRevision !== revision) return;
       const message = `<p class="import-error">${escape(error.message)}</p>`;
@@ -753,6 +777,18 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       evidence.textContent = JSON.stringify(record.snapshot, null, 2);
       container.append(evidence);
     }
+    if (!record.candidateSide) return;
+    const links = [];
+    for (const [index, side] of ['baseline', record.candidateSide].entries()) {
+      const run = runs[side];
+      if (!run) continue;
+      const eventId = record.row?.eventLinks?.[index] ?? (index === 1 ? record.snapshot?.event?.id : null);
+      const changed = index === 0 ? record.row?.before : record.row?.after;
+      const actions = eventId ? run.events.filter(event => event.id === eventId) :
+        changed && Object.hasOwn(changed, 'parentGrantId') ? run.events.filter(event => event.authorityId === changed.id) : [];
+      for (const event of actions) links.push(actionLink(selected.id, side, event, escape));
+    }
+    if (links.length) container.insertAdjacentHTML('afterbegin', '<nav aria-label="Actions and supporting grants">' + links.join(' · ') + '</nav>');
   }, true);
 
   detail.addEventListener('submit', async event => {
