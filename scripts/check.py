@@ -22,6 +22,7 @@ checks += [
     ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs", "tests/evaluator/case-summary.test.mjs"]),
     ("selective backup and atomic restore", ["node", "--test", "tests/evaluator/backup.test.mjs"]),
     ("offline Codex folder", ["node", "--test", "tests/evaluator/codex-import.test.mjs"]),
+    ("offline edit-and-test folder", ["node", "--test", "tests/evaluator/edit-test-import.test.mjs", "tests/evaluator/edit-test-grants.test.mjs"]),
     ("portable case verifier and import preview", ["node", "--test", "tests/evaluator/verify-case.test.mjs", "tests/evaluator/codex-inspection.test.mjs"]),
     ("reviewer pilot assignments and scoring", [sys.executable, "-m", "unittest", "discover", "-s", "tests/evaluator", "-p", "test_reviewer_pilot.py", "-v"]),
     ("fictional Codex handoff kit", ["node", "--test", "tests/evaluator/codex-handoff.test.mjs"]),

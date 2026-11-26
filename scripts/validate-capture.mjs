@@ -3,12 +3,13 @@ import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { codexFolderLimits, importCodexFolder } from '../src/codex-import.mjs';
+import { editTestFolderLimits, importEditTestFolder } from '../src/edit-test-import.mjs';
 import { evaluateChain } from '../src/evaluator.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from '../src/import.mjs';
 import { inspectSdkFolder, sdkFileLimits } from './sdk-folder.mjs';
 import { readBytes } from './bounded-file.mjs';
 
-const usage = 'Usage: node scripts/validate-capture.mjs (--investigation FILE | --codex-folder DIRECTORY | --sdk-folder DIRECTORY) [--json]';
+const usage = 'Usage: node scripts/validate-capture.mjs (--investigation FILE | --codex-folder DIRECTORY | --sdk-folder DIRECTORY | --edit-test-folder DIRECTORY) [--json]';
 const issue = (file, message) => Object.assign(new Error(message), { file, code: 'UNREADABLE_INPUT' });
 
 function readSource(file, path, limit) {
@@ -37,6 +38,53 @@ async function loadInput(values) {
   const files = Object.entries(codexFolderLimits).map(([name, limit]) =>
     Object.assign(new Blob([readSource(name, join(directory, name), limit)]), { webkitRelativePath: 'capture/' + name }));
   return importCodexFolder(files);
+}
+
+async function validateEditTest(directory) {
+  const header = { schemaVersion: 1, inputKind: 'edit-test-folder' };
+  try {
+    if (!lstatSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
+      throw issue('Edit-and-test folder', 'Select a capture directory. Symbolic links are rejected.');
+    }
+    const files = [];
+    for (const [name, limit] of Object.entries(editTestFolderLimits)) {
+      const path = join(directory, name);
+      if (!lstatSync(path, { throwIfNoEntry: false })) continue;
+      files.push(Object.assign(new Blob([readSource(name, path, limit)]), { webkitRelativePath: 'capture/' + name }));
+    }
+    return { ...header, ...await importEditTestFolder(files) };
+  } catch (error) {
+    const diagnostic = error.code && error.file ? { code: error.code, file: error.file, message: error.message }
+      : { code: 'INVALID_CAPTURE', file: 'Edit-and-test folder', message: 'Could not validate the selected capture.' };
+    return { ...header, status: 'invalid-input', diagnostics: [diagnostic] };
+  }
+}
+
+function printEditTest(result) {
+  console.log(`Edit and test · ${result.status}`);
+  for (const [label, stage] of [['Editor', result.editor], ['Verifier', result.verifier]]) {
+    if (!stage) continue;
+    console.log(`${label} · ${stage.authority} · ${stage.actor ?? 'unknown actor'} · ${stage.action} on ${stage.resource ?? 'unknown resource'}`);
+    const grant = stage.grant;
+    if (grant) {
+      console.log(`  Grant ${grant.id} · ${grant.issuer} → ${grant.subject} · parent ${grant.parentGrantId}`);
+      for (const pair of grant.capabilities) console.log(`  Scope · ${pair.action} on ${pair.resource}`);
+      console.log(`  Valid from ${grant.validFrom} until ${grant.expiresAt}`);
+    } else {
+      console.log(`  Referenced grant · ${stage.grantId ?? 'unknown'} · unavailable`);
+    }
+  }
+  const receipt = result.receipt;
+  if (!receipt) return;
+  console.log(`Test receipt · ${receipt.status}`);
+  if (receipt.command) console.log(`  Recorded test command · ${receipt.command.join(' ')}`);
+  if (receipt.testedRevision) console.log(`  Tested revision ${receipt.testedRevision} · recorded exit ${receipt.exitCode ?? 'unknown'}`);
+  if (receipt.expectedSha256 || receipt.actualSha256) {
+    console.log(`  test-receipt.json · expected ${receipt.expectedSha256 ?? 'unknown'} · computed ${receipt.actualSha256 ?? 'unavailable'}`);
+  }
+  for (const output of receipt.outputs ?? []) {
+    console.log(`  ${output.file} · expected ${output.expectedSha256 ?? 'unknown'} · computed ${output.actualSha256 ?? 'unavailable'}`);
+  }
 }
 
 function location(field, folder, defaultFile = folder ? 'Codex folder' : 'investigation.json') {
@@ -110,21 +158,24 @@ async function main() {
   let values;
   try {
     ({ values } = parseArgs({ options: { investigation: { type: 'string' }, 'codex-folder': { type: 'string' }, 'sdk-folder': { type: 'string' },
+      'edit-test-folder': { type: 'string' },
       json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } } }));
   } catch { console.error(usage); return 2; }
   if (values.help) { console.log(usage); return 0; }
-  const sources = [values.investigation, values['codex-folder'], values['sdk-folder']].filter(value => value !== undefined);
+  const sources = [values.investigation, values['codex-folder'], values['sdk-folder'], values['edit-test-folder']].filter(value => value !== undefined);
   if (sources.length !== 1 || !sources[0]) { console.error(usage); return 2; }
-  const result = await validate(values);
+  const editTest = values['edit-test-folder'] !== undefined;
+  const result = editTest ? await validateEditTest(values['edit-test-folder']) : await validate(values);
   if (values.json) console.log(JSON.stringify(result));
   else {
-    console.log(`${result.status} · authority ${result.authority} · receipts ${result.receipts}`);
+    if (editTest) printEditTest(result);
+    else console.log(`${result.status} · authority ${result.authority} · receipts ${result.receipts}`);
     for (const { file, field, code, message, grantId, eventId } of result.diagnostics) {
       console.log([file, field, code, eventId && 'event ' + eventId, grantId && 'grant ' + grantId, message].filter(Boolean).join(' · '));
     }
     if (result.findingCount > result.diagnostics.length) console.log(`Showing ${result.diagnostics.length} of ${result.findingCount} findings.`);
   }
-  if (result.status === 'within-scope') return 0;
+  if (result.status === 'within-scope' || result.status === 'verified') return 0;
   if (result.status === 'invalid-input') return 2;
   return 1;
 }

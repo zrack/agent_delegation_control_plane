@@ -5,6 +5,7 @@ flowchart TB
       Shell["Semantic shell and styling<br/>[Component: index.html / styles.css]<br/>Native controls, details and status"]
       App["View controller<br/>[Component: app.js]<br/>Run and hop selection, hash state and escaped evidence"]
       Intake["Bounded record intake<br/>[Component: import.mjs]<br/>Version 1 checks and normalization"]
+      EditTest["Edit-and-test inspection<br/>[Component: edit-test-import.mjs]<br/>Editor and verifier grants, test receipt and output"]
       Store["Saved-run repository<br/>[Component: storage.mjs]<br/>Bounded envelopes and workflow baseline pins"]
       Saved[("Saved investigations, baseline pins and reviews<br/>[Data store: browser localStorage]<br/>Scoped to browser profile and origin")]
       App -->|Restores, saves and clears imports| Store
@@ -23,6 +24,7 @@ flowchart TB
       Inbox -->|Selected run and action| Lookup
       App -->|Binds controls and renders| Shell
       App -->|Parses file and merges chain| Intake
+      App -->|Inspects a selected capture| EditTest
       App -->|Reads examples| Fixtures
       App -->|Evaluates supplied chains| Eval
       App -->|Compares selected runs and assessments| Compare
@@ -37,5 +39,5 @@ flowchart TB
     classDef component fill:#eaf2fc,stroke:#325e91,color:#132d4b
     classDef external fill:#f5f7fa,stroke:#66788c,color:#132d4b
     class Operator person
-    class Shell,App,Intake,Fixtures,Eval,Store,Compare,Inbox,Lookup,Backup,Summary component
+    class Shell,App,Intake,EditTest,Fixtures,Eval,Store,Compare,Inbox,Lookup,Backup,Summary component
     class Server,Saved external
