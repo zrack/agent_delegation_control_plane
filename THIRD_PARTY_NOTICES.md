@@ -40,7 +40,7 @@ The optional SDK runner uses the separately installed, pinned packages below. Th
 | requests | 2.34.2 | Apache Software License |
 | rpds-py | 2026.9.1 | MIT |
 | sniffio | 1.3.1 | MIT License; Apache Software License |
-| sse-starlette | 3.7.0 | BSD-3-Clause |
+| sse-starlette | 3.7.1 | BSD-3-Clause |
 | starlette | 1.10.0 | BSD-3-Clause |
 | truststore | 0.10.5 | MIT |
 | typing-inspection | 0.4.5 | MIT |
