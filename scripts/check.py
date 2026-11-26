@@ -23,6 +23,7 @@ checks += [
     ("selective backup and atomic restore", ["node", "--test", "tests/evaluator/backup.test.mjs"]),
     ("offline Codex folder", ["node", "--test", "tests/evaluator/codex-import.test.mjs"]),
     ("portable case verifier and import preview", ["node", "--test", "tests/evaluator/verify-case.test.mjs", "tests/evaluator/codex-inspection.test.mjs"]),
+    ("reviewer pilot assignments and scoring", [sys.executable, "-m", "unittest", "discover", "-s", "tests/evaluator", "-p", "test_reviewer_pilot.py", "-v"]),
     ("fictional Codex handoff kit", ["node", "--test", "tests/evaluator/codex-handoff.test.mjs"]),
     ("offline receipt signature experiment", ["node", "--test", "experiments/receipt-provenance/prototype.test.mjs"]),
     ("producer capture validation", ["node", "--test", "tests/evaluator/validate-capture.test.mjs"]),
