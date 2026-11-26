@@ -51,7 +51,7 @@ function authFinding(finding, chain, folder) {
   if (finding.code === 'GRANT_MISSING' && event >= 0 && chain.events[event].authorityId === finding.grantId) {
     field = `chain.events[${event}].authorityId`;
   } else if (finding.code === 'GRANT_MISSING') {
-    const child = chain.grants.findIndex(record => record.parentGrantId === finding.grantId);
+    const child = chain.grants.findIndex(record => record.id === finding.compared?.referencingGrantId);
     if (child >= 0) field = `chain.grants[${child}].parentGrantId`;
   } else if (finding.code === 'ROOT_MISSING') {
     field = 'chain.rootGrantId';

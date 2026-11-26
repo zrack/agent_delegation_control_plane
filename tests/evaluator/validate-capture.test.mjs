@@ -75,3 +75,24 @@ test('offline Codex checks identify source files and indices, validate hashes, b
   await symlink('before.md', join(folder, 'after.md'));
   assert.equal(invoke().output.diagnostics[0].code, 'UNREADABLE_INPUT');
 });
+
+test('two branches with one missing ancestor identify their own referring grant', async t => {
+  const temp = await mkdtemp(join(tmpdir(), 'adcp-branch-source-'));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const input = JSON.parse(await readFile(join(examples, 'investigation.json')));
+  const { chain } = input;
+  const original = chain.grants[0];
+  const rootEvent = chain.events[0];
+  for (const suffix of ['first', 'second']) {
+    const grant = { ...original, id: 'grant-' + suffix, parentGrantId: 'missing-ancestor' };
+    chain.grants.push(grant);
+    chain.events.push({ ...rootEvent, id: 'read-' + suffix, parentEventId: rootEvent.id, authorityId: grant.id });
+  }
+  const path = join(temp, 'branches.json');
+  await writeFile(path, JSON.stringify(input));
+  const checked = run('--investigation', path).output;
+  const gaps = checked.diagnostics.filter(finding => finding.code === 'GRANT_MISSING' && finding.grantId === 'missing-ancestor');
+  assert.deepEqual(gaps.map(({ eventId, field }) => [eventId, field]), [
+    ['read-first', 'chain.grants[1].parentGrantId'], ['read-second', 'chain.grants[2].parentGrantId'],
+  ]);
+});
