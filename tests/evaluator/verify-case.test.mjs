@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+test('offline verifier reproduces receiver outcomes and preserves selected inputs', t => {
+  const tmp = mkdtempSync(join(tmpdir(), 'adcp-verify-case-'));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const output = join(tmp, 'build');
+  const built = spawnSync('python3', ['scripts/build_codex_handoff.py', '--output', output], { encoding: 'utf8' });
+  assert.equal(built.status, 0, built.stderr);
+  const kit = join(output, 'adcp-codex-handoff-demo');
+  const matrix = JSON.parse(readFileSync(join(kit, 'facilitator/outcomes.json')));
+  const pinArgs = (pin, workflow = matrix.workflow) => ['--workflow', workflow, '--baseline-dir', join(kit, 'receiver-baselines', pin)];
+  const verify = (file, args = []) => {
+    const run = spawnSync(process.execPath, ['scripts/verify-case.mjs', '--json', '--case', file, ...args], { encoding: 'utf8' });
+    return { exit: run.status, json: JSON.parse(run.stdout), raw: run.stdout };
+  };
+  const pinFile = join(kit, 'receiver-baselines/matching/pin.json');
+  const originalPin = readFileSync(pinFile, 'utf8');
+  for (const row of matrix.scenarios) {
+    const file = resolve(kit, row.caseFile);
+    const raw = readFileSync(file, 'utf8');
+    const args = row.pin === 'missing' ? [] : pinArgs(row.pin);
+    const result = verify(file, args);
+    assert.equal(result.json.input, 'valid', row.id);
+    assert.equal(result.json.disposition, row.disposition, row.id);
+    assert.equal(result.exit, row.disposition === 'resolved' ? 0 : 1, row.id);
+    assert.ok(result.json.reasons.some(r => r.code === row.reason), row.id);
+    assert.equal(result.raw, verify(file, args).raw);
+    assert.equal(readFileSync(file, 'utf8'), raw);
+    assert.equal(readFileSync(pinFile, 'utf8'), originalPin);
+  }
+  const legacy = verify(join(kit, 'donors/matching-case.json'), pinArgs('matching'));
+  assert.equal(legacy.json.disposition, 'resolved');
+  const selected = join(kit, 'cases/history-on.json');
+  const wrongName = verify(selected, pinArgs('matching', 'Different review'));
+  assert.equal(wrongName.json.checks.pin, 'missing');
+  const modified = join(tmp, 'modified.json');
+  const bundle = JSON.parse(readFileSync(selected));
+  bundle.resolution = '0'.repeat(64);
+  bundle.note = 'FICTIONAL-NOTE-DO-NOT-PRINT';
+  writeFileSync(modified, JSON.stringify(bundle));
+  const unverified = verify(modified, pinArgs('matching'));
+  assert.equal(unverified.exit, 1);
+  assert.ok(unverified.json.reasons.some(r => r.code === 'unverified-closure-record'));
+  assert.ok(!unverified.raw.includes(bundle.note));
+  delete bundle.resolution;
+  writeFileSync(modified, JSON.stringify(bundle));
+  assert.equal(verify(modified, pinArgs('matching')).json.disposition, 'open-ready');
+  bundle.schemaVersion = 2;
+  writeFileSync(modified, JSON.stringify(bundle));
+  assert.equal(verify(modified).json.reasons[0].code, 'unsupported-case-format');
+  writeFileSync(modified, '{');
+  assert.equal(verify(modified).exit, 2);
+  writeFileSync(pinFile, originalPin.replace(/[0-9a-f]{64}/g, '0'.repeat(64)));
+  assert.equal(verify(selected, pinArgs('matching')).json.reasons[0].code, 'invalid-receiver-baseline');
+});

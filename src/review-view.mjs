@@ -1,11 +1,12 @@
 import { regressionLabels } from './comparison.mjs';
+import { actionDirectory, actionLink, grantLookup, reviewRun } from './grant-lookup.mjs';
 import { importCodexFolder } from './codex-import.mjs';
 import { MAX_IMPORT_BYTES, parseInvestigation } from './import.mjs';
 import { importInvoiceFolder, invoiceFields } from './invoice-import.mjs';
-import { restoreWorkflowBaselines, WORKFLOW_BASELINE_KEY } from './storage.mjs';
+import { restoreWorkflowBaselines, workflowKey, WORKFLOW_BASELINE_KEY } from './storage.mjs';
 import {
-  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage,
-  MAX_REPORT_BYTES, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, MAX_SENDER_HISTORY_ENTRIES, removeReview, resolveReviewCase,
+  adoptCodexBaseline, assessFollowUp, assessReview, attachCodexFollowUp, attachInvoiceFollowUp, attachReviewFollowUp, createReviewCase, createReviewPackage, importReview, importReviewPackage, importNewCodexCase, inspectCodexCaseImport,
+  MAX_REPORT_BYTES, REVIEW_STORAGE_KEY, MAX_REVIEW_NOTE, MAX_REVIEW_PACKAGE_BYTES, MAX_SENDER_HISTORY_ENTRIES, removeReview, resolveReviewCase,
   applyCodexOriginalRepair, previewCodexOriginalRepair, previewInvoiceEvidenceRestore, restoreInvoiceEvidence, restoreReviews, reviewDecisions, saveInvoiceCandidate, saveReview, saveReviewDecision, senderHistoryEntries,
 } from './review.mjs';
 
@@ -86,6 +87,39 @@ export function codexClosureSteps(item, original, followUp, supportsFolders = tr
   return steps;
 }
 
+const closureLabels = { resolved: 'Verified resolved', ready: 'Ready to close', blocked: 'Open · blocked', clear: 'No closure needed' };
+
+export function reviewCardState(item, original, followUp) {
+  const blocked = reason => ({ closure: 'blocked', reason });
+  if (original.error) return blocked(original.error);
+  if (followUp.resolved) return { closure: 'resolved' };
+  if (followUp.canResolve) return { closure: 'ready' };
+  if (!original.verdict) {
+    const sides = ['baseline', 'candidate'].filter(side => original.states?.[side] !== 'matched');
+    return blocked(sides.length ? 'Verify the ' + sides.join(' and ') + ' evidence.' : 'The original comparison could not be reproduced.');
+  }
+  if (item.invoice && !followUp.originalInvoice?.checked) return blocked(followUp.originalInvoice?.error || 'Verify the original invoice receipts.');
+  if (!followUp.flagged && item.report.status === 'pass' && !item.decision) return { closure: 'clear' };
+  if (item.codex) {
+    const [step] = codexClosureSteps(item, original, followUp);
+    if (step) return blocked(step.label + ' · ' + step.reason);
+  }
+  if (followUp.pinChanged) {
+    const status = followUp.pinState.status;
+    return blocked(status === 'conflict' ? 'Conflicting baseline pin.' : status === 'missing' ? 'A matching workflow pin is needed.' : 'The workflow pin could not be read.');
+  }
+  if (!item.decision) return blocked('Save a decision and its reason.');
+  if (!item.followUp) return blocked('Attach a corrected follow-up.');
+  if (followUp.incompatible) return blocked('The follow-up does not match the original ' + followUp.incompatible + '.');
+  if (followUp.error || followUp.invoice?.error) return blocked(followUp.error ?? followUp.invoice.error);
+  if (item.invoice && followUp.invoice?.checked) {
+    const { authority, output, execution } = followUp.invoice.checked;
+    const failed = [authority, output, execution].find(lane => lane.tone !== 'valid');
+    if (failed) return blocked('Follow-up receipt check · ' + failed.label);
+  }
+  return blocked('The follow-up and original evidence do not meet the closure checks.');
+}
+
 export function createReviewInbox({ getStorage, escape, comparisonDetail, onBaselineAdopted }) {
   const form = document.querySelector('#review-import');
   const packageInput = document.querySelector('#review-package-file');
@@ -106,6 +140,79 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   let restoreDraft;
   let revision = 0;
   let records = [];
+  let runs = {};
+
+  const filters = document.querySelector('#review-filters');
+  const controls = {
+    workflow: document.querySelector('#review-workflow-filter'), decision: document.querySelector('#review-decision-filter'),
+    closure: document.querySelector('#review-closure-filter'),
+  };
+  const filterKey = 'adcp.review-filters.v1';
+  let choices = {};
+  let queue = [];
+  try {
+    const saved = sessionStorage.getItem(filterKey);
+    if (saved && saved.length <= 1024) {
+      const values = JSON.parse(saved);
+      for (const key of Object.keys(controls)) {
+        if (typeof values?.[key] === 'string') choices[key] = values[key];
+      }
+    }
+  } catch { /* All cases remain available if tab storage is unavailable. */ }
+
+  const workflowOf = item => item.codex?.workflow ?? item.invoice?.workflow;
+  const workflowValue = item => workflowOf(item) ? 'named:' + workflowKey(workflowOf(item)) : 'unnamed';
+
+  function updateFilters(items) {
+    filters.hidden = !items.length;
+    const workflows = new Map(items.map(item => [workflowValue(item), workflowOf(item) ?? 'No recorded workflow']));
+    controls.workflow.replaceChildren(new Option('All workflows', ''));
+    for (const [value, label] of [...workflows].sort((a, b) => a[1].localeCompare(b[1]))) {
+      controls.workflow.add(new Option(label, value));
+    }
+    for (const [name, control] of Object.entries(controls)) {
+      control.value = choices[name] ?? '';
+      if (control.selectedIndex < 0) control.value = '';
+    }
+  }
+
+  function renderQueue() {
+    const id = selected?.id;
+    const workflow = controls.workflow.value;
+    const decision = controls.decision.value;
+    const closure = controls.closure.value;
+    const visible = queue.filter(({ item, status }) => (!workflow || workflowValue(item) === workflow)
+      && (!decision || (item.decision?.kind ?? 'none') === decision)
+      && (!closure || closure === status.closure || (closure === 'open' && ['ready', 'blocked'].includes(status.closure))));
+    const outside = id && !visible.some(({ item }) => item.id === id);
+    document.querySelector('#review-filter-count').textContent = `Showing ${visible.length} of ${queue.length} saved cases.`
+      + (outside ? ' The selected case is outside these filters.' : '');
+    document.querySelector('#review-clear-filters').disabled = !workflow && !decision && !closure;
+    list.innerHTML = visible.map(({ item, status }) => `<a class="chain-card review-card ${item.id === id ? 'selected' : ''}"
+      href="${itemRoute(item.id)}" ${item.id === id ? 'aria-current="true"' : ''}>
+      <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span>
+      ${item.codex ? '<strong>Codex folder</strong>' : ''}
+      ${item.invoice ? `<strong>${escape(item.invoice.evidence?.caseId ?? 'Invoice run')}</strong>` : ''}
+      <code>${escape(item.report.candidateId ?? 'Run ID unavailable')}</code>
+      <span class="case-closure">${closureLabels[status.closure]}</span>
+      ${status.reason ? `<span class="muted">${escape(status.reason)}</span>` : ''}
+      ${workflowOf(item) ? `<span>${escape(workflowOf(item))}</span>` : ''}
+      ${item.invoice ? `<span class="muted">Output at import · ${escape(item.invoice.outputAtImport)}</span>` : ''}
+      <span class="muted">${item.decision ? reviewDecisions[item.decision.kind] + ' · ' : ''}${item.reviewed ? 'Reviewed' : 'Unreviewed'}</span></a>`).join('');
+  }
+
+  function applyFilters() {
+    choices = Object.fromEntries(Object.entries(controls).map(([name, control]) => [name, control.value]));
+    try { sessionStorage.setItem(filterKey, JSON.stringify(choices)); }
+    catch { announce('The filters apply to this view. This browser could not remember them after reload.', true); }
+    renderQueue();
+  }
+  filters.addEventListener('change', applyFilters);
+  document.querySelector('#review-clear-filters').addEventListener('click', () => {
+    for (const control of Object.values(controls)) control.value = '';
+    applyFilters();
+    controls.workflow.focus();
+  });
 
   function announce(message, error = false) {
     status.textContent = message;
@@ -121,13 +228,76 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     else location.hash = itemRoute(id);
   }
 
+  const inspectFile = document.querySelector('#codex-inspect-file');
+  const inspectStatus = document.querySelector('#codex-inspect-status');
+  const inspectResult = document.querySelector('#codex-inspect-result');
+  const acceptPreview = document.querySelector('#codex-inspect-save');
+  const cancelPreview = document.querySelector('#codex-inspect-cancel');
+  let previewRequest = 0;
+  let pendingImport;
+
+  function clearImportPreview(message) {
+    previewRequest++;
+    pendingImport = undefined;
+    inspectFile.value = '';
+    inspectResult.replaceChildren();
+    inspectStatus.textContent = message;
+    acceptPreview.hidden = true;
+    cancelPreview.hidden = true;
+  }
+
+  inspectFile.addEventListener('change', async () => {
+    const file = inspectFile.files[0];
+    clearImportPreview('');
+    if (!file) return;
+    const request = previewRequest;
+    cancelPreview.hidden = false;
+    inspectStatus.textContent = 'Checking the case and available inbox space…';
+    try {
+      if (file.size > MAX_REVIEW_PACKAGE_BYTES) throw new Error('Choose a case no larger than 2 MiB.');
+      const contents = await file.text();
+      const preview = await inspectCodexCaseImport(getStorage, contents);
+      if (request !== previewRequest) return;
+      pendingImport = { contents, pinState: preview.pinState };
+      inspectResult.innerHTML = `<dl>
+        <dt>Workflow</dt><dd>${escape(preview.workflow)}</dd>
+        <dt>Required receiver baseline</dt><dd><code>${escape(preview.baselineId ?? 'Missing')}</code>
+        <code>${escape(preview.fingerprint ?? 'Missing')}</code></dd>
+        <dt>Receiver pin</dt><dd>${escape(preview.pinState.status)}</dd>
+        <dt>Original receipts</dt><dd>${escape(preview.originalReceipts.join(', '))}</dd>
+        <dt>Follow-up receipts</dt><dd>${escape(preview.followUpReceipts.join(', ') || 'None')}</dd>
+        <dt>Sender history entries</dt><dd>${preview.senderEvents}</dd>
+        <dt>Case after import</dt><dd>${escape(preview.disposition)}</dd></dl>`;
+      inspectStatus.textContent = ['Preview only. The case has not been saved.', ...preview.warnings].join(' ');
+      acceptPreview.hidden = false;
+    } catch (error) {
+      if (request === previewRequest) clearImportPreview(error.message + ' Choose another file or open an existing case.');
+    }
+  });
+  cancelPreview.addEventListener('click', () => clearImportPreview('Preview canceled.'));
+  acceptPreview.addEventListener('click', async () => {
+    if (!pendingImport || acceptPreview.disabled) return;
+    const route = location.hash;
+    const { contents, pinState } = pendingImport;
+    acceptPreview.disabled = inspectFile.disabled = cancelPreview.disabled = true;
+    try {
+      const imported = await importNewCodexCase(getStorage, contents, pinState);
+      clearImportPreview('Case imported.');
+      finishImport(imported, route);
+    } catch (error) {
+      clearImportPreview(error.message + ' Choose the file to preview it again.');
+    } finally {
+      acceptPreview.disabled = inspectFile.disabled = cancelPreview.disabled = false;
+    }
+  });
+
   function evidenceDetails(title, record, description = '') {
     const index = records.push(record) - 1;
     return `<details class="run-difference" data-review-evidence="${index}"><summary><strong>${escape(title)}</strong>
       <span class="muted">${escape(description)}</span></summary><div class="compare-detail"></div></details>`;
   }
 
-  function renderEvidence(item, assessment) {
+  function renderEvidence(item, assessment, candidateSide = 'candidate') {
     const { states, groups, candidateResult, verdict } = assessment;
     const evidence = `<dl class="review-evidence-status">${['baseline', 'candidate'].map(side => `<div>
       <dt>${side === 'baseline' ? 'Baseline' : 'Candidate'}</dt><dd><code>${escape(item.report[side + 'Id'] ?? 'No run ID')}</code>
@@ -138,18 +308,18 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const explanation = reproduced ? 'The current check reproduced the reported verdict.'
       : 'The current check differs from the reported verdict. Review the matching evidence below.';
     const reasons = verdict.reasons.slice(0, 12).map(reason => {
-      if (reason.row) return evidenceDetails(reason.row.title, { row: reason.row }, reason.message);
+      if (reason.row) return evidenceDetails(reason.row.title, { row: reason.row, candidateSide }, reason.message);
       const chain = item.candidate;
       const event = chain.events.find(record => record.id === reason.eventId);
       const grant = chain.grants.find(record => record.id === event?.authorityId);
       const parentGrant = chain.grants.find(record => record.id === grant?.parentGrantId);
       const findings = candidateResult.findings.filter(finding => finding.eventId === (event?.id ?? null));
-      return evidenceDetails(event?.label ?? 'Candidate assessment', { snapshot: {
+      return evidenceDetails(event?.label ?? 'Candidate assessment', { candidateSide, snapshot: {
         event, grant: grant ?? null, parentGrant: parentGrant ?? null, findings,
       } }, reason.message);
     });
     const differences = Object.entries(groups).filter(([, rows]) => rows.length).map(([group, rows]) =>
-      `<h4>${escape(group[0].toUpperCase() + group.slice(1))}</h4>${rows.map(row => evidenceDetails(row.title, { row },
+      `<h4>${escape(group[0].toUpperCase() + group.slice(1))}</h4>${rows.map(row => evidenceDetails(row.title, { row, candidateSide },
         row.changes.map(change => change.label).join(' · ') || 'Only supplied in one run')).join('')}`).join('');
     return `${evidence}<section class="assessment review-verdict ${tones[verdict.status]}">
       <div><strong>${item.invoice ? 'Baseline regression' : 'Current evidence check'} · ${regressionLabels[verdict.status]}</strong><p>${explanation}</p></div></section>
@@ -395,7 +565,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         ${comparison('Follow-up run', item.followUp, assessment)}</div>
         ${receiptSummary}
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
-          ${assessment ? renderEvidence(item.followUp, assessment) + followUpRecords : ''}${receiptDetails}
+          ${assessment ? renderEvidence(item.followUp, assessment, 'follow-up') + followUpRecords : ''}${receiptDetails}
           ${assessment?.codex ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
       ${item.invoice && !resolved && item.decision ? evidenceRestorePanel(item) : ''}
       <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
@@ -442,35 +612,48 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   async function render({ focus = false } = {}) {
     const currentRevision = ++revision;
     const { items, warning } = restoreReviews(getStorage);
-    const id = new URLSearchParams(location.hash.slice(reviewRoute.length)).get('item');
+    const route = new URLSearchParams(location.hash.slice(reviewRoute.length));
+    const id = route.get('item');
     selected = items.find(item => item.id === id);
     restoreDraft = undefined;
     records = [];
+    runs = {};
     if (warning) announce(warning, true);
     if (!savingInvoice) updateInvoiceWorkflows();
-    list.innerHTML = [...items].sort((a, b) => Number(a.reviewed) - Number(b.reviewed)
-      || priority[a.report.status] - priority[b.report.status]).map(item => `<a class="chain-card review-card ${item.id === id ? 'selected' : ''}"
-        href="${itemRoute(item.id)}" ${item.id === id ? 'aria-current="true"' : ''}>
-        <span class="badge ${tones[item.report.status]}">${regressionLabels[item.report.status]}</span>
-        ${item.codex ? '<strong>Codex folder</strong>' : ''}
-        ${item.invoice ? `<strong>${escape(item.invoice.evidence?.caseId ?? 'Invoice run')}</strong>` : ''}
-        <code>${escape(item.report.candidateId ?? 'Run ID unavailable')}</code>
-        ${item.invoice ? `<span class="muted">Output at import · ${escape(item.invoice.outputAtImport)}</span>` : ''}
-        <span class="muted">${item.reviewed ? 'Reviewed' : 'Unreviewed'}</span></a>`).join('');
+    queue = [];
+    updateFilters(items);
+    list.replaceChildren();
+    document.querySelector('#review-filter-count').textContent = items.length ? 'Checking saved cases…' : '';
+    detail.innerHTML = selected ? '<p class="muted">Checking the saved evidence…</p>' : '';
+    if (focus && selected) detail.focus();
+    const rows = [];
+    let selectedChecks;
+    for (const item of [...items].sort((a, b) => Number(a.reviewed) - Number(b.reviewed) || priority[a.report.status] - priority[b.report.status])) {
+      try {
+        const assessment = await assessReview(item).catch(error => {
+          if (item.codex) return { error: error.message };
+          throw error;
+        });
+        const followUp = await assessFollowUp(item, assessment, getStorage);
+        rows.push({ item, status: reviewCardState(item, assessment, followUp) });
+        if (item.id === id) selectedChecks = { assessment, followUp };
+      } catch (error) {
+        rows.push({ item, status: { closure: 'blocked', reason: 'Verification failed · ' + error.message } });
+        if (item.id === id) selectedChecks = { error };
+      }
+      if (currentRevision !== revision) return;
+    }
+    queue = rows;
+    renderQueue();
     if (!selected) {
       detail.innerHTML = `<p class="muted">${id ? 'This report is unavailable in this browser.'
         : items.length ? 'Select a report to inspect its evidence and record your review.' : 'No saved reports yet. Import an offline regression report to get started.'}</p>`;
       return;
     }
     const item = selected;
-    detail.innerHTML = '<p class="muted">Checking the saved evidence…</p>';
-    if (focus) detail.focus();
     try {
-      const assessment = await assessReview(item).catch(error => {
-        if (item.codex) return { error: error.message };
-        throw error;
-      });
-      const followUp = await assessFollowUp(item, assessment, getStorage);
+      if (selectedChecks.error) throw selectedChecks.error;
+      const { assessment, followUp } = selectedChecks;
       const invoice = followUp.originalInvoice;
       const receiptResults = invoice?.checked ? invoiceMarkup(invoice.checked)
         : invoice?.error ? `<p class="import-error">${escape(invoice.error)}</p>` : '';
@@ -480,12 +663,23 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + evidenceRestorePanel(item));
         return;
       }
+      for (const side of ['baseline', 'candidate', 'follow-up']) runs[side] = reviewRun(item, assessment, followUp, side);
+      const lookupSide = route.get('side');
+      const lookupEvent = route.get('event');
+      if (lookupEvent !== null && route.get('view') !== 'actions') {
+        const sameCapture = lookupSide !== 'follow-up' || (item.followUp && route.get('capture') === item.followUp.id);
+        const run = sameCapture && Object.hasOwn(runs, lookupSide) ? runs[lookupSide] : undefined;
+        detail.innerHTML = grantLookup(item, run, lookupSide, lookupEvent, route.get('grant'), escape);
+        detail.querySelector('#grant-lookup-title').focus();
+        return;
+      }
       const title = assessment.states.candidate === 'matched' ? item.candidate.title : 'Saved regression report';
       detail.innerHTML = `<div class="panel-heading"><h3>${escape(title)}</h3>
         <span class="badge ${tones[item.report.status]}">Reported · ${regressionLabels[item.report.status]}</span></div>
         ${item.invoice || item.codex ? `<p class="panel-description">${item.codex ? 'Case workflow' : 'Pinned workflow'} · ${escape((item.invoice ?? item.codex).workflow)}</p>` : ''}
         ${checklist}
         ${renderEvidence(item, assessment)}
+        ${actionDirectory(item, runs, escape)}
         ${receiptResults}
         ${assessment.codex ? codexFolderEvidence(assessment) : ''}
         ${item.report.reasons.length ? `<details class="review-differences"><summary>Reasons recorded by the offline report</summary>
@@ -500,6 +694,16 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
           <button type="submit">Save review</button><button type="button" id="remove-review">Remove from inbox</button></div>
         </form>
         ${renderExport(item, assessment, followUp)}`;
+      if (lookupEvent && route.get('view') === 'actions') {
+        const directory = detail.querySelector('#review-action-directory');
+        const link = [...(directory?.querySelectorAll('a') ?? [])].find(anchor =>
+          anchor.dataset.grantSide === lookupSide && anchor.dataset.grantEvent === lookupEvent);
+        if (link) {
+          directory.open = true;
+          link.focus();
+          history.replaceState(null, '', itemRoute(item.id));
+        }
+      }
     } catch (error) {
       if (currentRevision !== revision) return;
       const message = `<p class="import-error">${escape(error.message)}</p>`;
@@ -510,7 +714,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   }
 
   window.addEventListener('storage', event => {
-    if ((event.key === WORKFLOW_BASELINE_KEY || event.key === null) && selected?.codex && location.hash.startsWith(reviewRoute)) render();
+    if ([WORKFLOW_BASELINE_KEY, REVIEW_STORAGE_KEY, null].includes(event.key) && location.hash.startsWith(reviewRoute)) render();
   });
 
   function receiptFileChecks(states) {
@@ -690,6 +894,18 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       evidence.textContent = JSON.stringify(record.snapshot, null, 2);
       container.append(evidence);
     }
+    if (!record.candidateSide) return;
+    const links = [];
+    for (const [index, side] of ['baseline', record.candidateSide].entries()) {
+      const run = runs[side];
+      if (!run) continue;
+      const eventId = record.row?.eventLinks?.[index] ?? (index === 1 ? record.snapshot?.event?.id : null);
+      const changed = index === 0 ? record.row?.before : record.row?.after;
+      const actions = eventId ? run.events.filter(event => event.id === eventId) :
+        changed && Object.hasOwn(changed, 'parentGrantId') ? run.events.filter(event => event.authorityId === changed.id) : [];
+      for (const event of actions) links.push(actionLink(selected, side, event, escape));
+    }
+    if (links.length) container.insertAdjacentHTML('afterbegin', '<nav aria-label="Actions and supporting grants">' + links.join(' · ') + '</nav>');
   }, true);
 
   detail.addEventListener('submit', async event => {

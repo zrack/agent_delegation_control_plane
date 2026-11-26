@@ -1,5 +1,7 @@
 # First-use alpha review
 
+For the source-checkout handoff exercise, build the [fictional sender and receiver kit](CODEX_HANDOFF.md). The published alpha.15 exercise below uses its own release ZIP.
+
 Use fictional records only. The viewer and rehearsal kit run locally without an
 API key, account, Docker, or model calls.
 

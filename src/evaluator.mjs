@@ -146,6 +146,7 @@ export function evaluateChain(chain) {
       }
       const seenGrants = new Set();
       let grantId = event.authorityId;
+      let referencingGrantId;
       while (grantId !== null) {
         spend();
         if (seenGrants.has(grantId)) {
@@ -156,7 +157,7 @@ export function evaluateChain(chain) {
         const grant = grantMap.get(grantId);
         if (!grant) {
           add('unknown', 'GRANT_MISSING', `Authority record ${grantId} is missing or ambiguous.`, eventId, grantId,
-            { missingGrantId: grantId, reason: 'No unique supplied authority record' });
+            { missingGrantId: grantId, ...(referencingGrantId ? { referencingGrantId } : {}), reason: 'No unique supplied authority record' });
           break;
         }
         if (!grantValid(grant)) {
@@ -206,6 +207,7 @@ export function evaluateChain(chain) {
           }
         }
         if (!nonempty(grant.parentGrantId)) break;
+        referencingGrantId = grant.id;
         grantId = grant.parentGrantId;
       }
     }

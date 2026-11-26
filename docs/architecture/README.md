@@ -1,6 +1,6 @@
 # Architecture diagrams
 
-[Architecture](../../ARCHITECTURE.md) owns implementation structure and trust boundaries. Diagrams show the local viewer, optional SDK workflows, isolated coding pilot and separate scripted experiment.
+[Architecture](../../ARCHITECTURE.md) owns implementation structure and trust boundaries. The overview and C4 views show the local viewer, the offline producer and receiver commands, and the optional capture workflows. The sequence diagrams detail the SDK and isolated coding pilots.
 
 The [sandbox validation report](../SANDBOX_VALIDATION.md) records observed live-run,
 final-executor, control-test and dashboard-persistence results. Use it to distinguish
@@ -15,7 +15,7 @@ tested behavior from the implementation structure shown in these diagrams.
 | Agent workflow sequence | [SVG](diagrams/agent-workflow.svg) | [Mermaid](diagrams/agent-workflow.mmd) |
 | Sandboxed coding sequence | [SVG](diagrams/sandbox-workflow.svg) | [Mermaid](diagrams/sandbox-workflow.mmd) |
 
-C4 levels follow the [official model](https://c4model.com/diagrams). Containers are runnable applications or data stores, not Docker units. Credential configuration and artifact files are distinct from browser-local saved evidence. C4 container/component views show the origin-scoped localStorage boundary. The experiment emits bare offline evaluator input; the SDK emits the envelope accepted by the browser.
+C4 levels follow the [official model](https://c4model.com/diagrams). Containers are runnable applications or data stores, not Docker units. Credential configuration and artifact files are distinct from browser-local saved evidence. C4 container/component views show the origin-scoped localStorage boundary. The offline producer and receiver commands read caller-selected files independently of browser storage. The optional SDK emits an investigation envelope, and the scripted experiment emits input for the evaluator.
 
 The C4 views use explicit element types and Mermaid flowchart layout. Mermaid's dedicated [C4 syntax](https://mermaid.js.org/syntax/c4.html) is experimental; typed flowchart routing keeps relationship labels readable. SVGs use native text without embedded HTML or external resources.
 

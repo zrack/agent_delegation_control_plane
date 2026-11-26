@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { actionGrants, reviewRun } from '../../src/grant-lookup.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -55,4 +56,30 @@ test('fresh rehearsal output is reproducible, separate, and exercises the real i
     const saved = restoreReviews(getStorage).items.find(item => item.id === original.id);
     assert.equal((await assessFollowUp(saved, await assessReview(saved))).resolved, true);
   }
+});
+
+test('grant inspection stops at ambiguous, missing and cyclic references and excludes other snapshots', () => {
+  const source = { id: 'audit', principal: { id: 'owner' }, events: [{ id: 'action-1', authorityId: 'child' }], grants: [
+    { id: 'child', parentGrantId: 'root' }, { id: 'root', parentGrantId: null },
+  ] };
+  const item = { baseline: source, candidate: { ...source, id: 'candidate' }, followUp: { candidate: { ...source, id: 'follow-up' } } };
+  const original = { states: { baseline: 'matched', candidate: 'mismatch' } };
+  const followUp = { assessment: { states: { candidate: 'matched' } } };
+  assert.equal(reviewRun(item, original, followUp, 'baseline'), source);
+  assert.equal(reviewRun(item, original, followUp, 'candidate'), undefined);
+  assert.equal(reviewRun(item, original, followUp, 'follow-up').id, 'follow-up');
+  assert.equal(reviewRun(item, original, { ...followUp, incompatible: 'candidate' }, 'follow-up'), undefined);
+  assert.equal(reviewRun(item, original, followUp, '__proto__'), undefined);
+  assert.deepEqual(actionGrants(source, 'action-1').grants.map(g => g.id), ['child', 'root']);
+  for (const [grants, issue, id] of [
+    [[source.grants[0]], 'Missing grant', 'root'],
+    [[...source.grants, source.grants[1]], 'Ambiguous grant', 'root'],
+    [[source.grants[0], { id: 'root', parentGrantId: 'child' }], 'Grant cycle at', 'child'],
+  ]) {
+    const result = actionGrants({ ...source, grants }, 'action-1');
+    assert.equal(result.issue, issue);
+    assert.equal(result.id, id);
+  }
+  assert.equal(actionGrants(source, 'other').issue, 'Missing action');
+  assert.equal(actionGrants({ ...source, events: [...source.events, ...source.events] }, 'action-1').issue, 'Ambiguous action');
 });

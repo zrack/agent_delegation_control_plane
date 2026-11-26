@@ -15,6 +15,17 @@ Build toward one practical outcome. When a reviewer receives a portable Codex ca
 
 These are estimates for one developer, including implementation, tests, integration and documentation. The ranges indicate proposed build order. The **Needs** column identifies work that can start earlier. Time waiting for a release decision or a reviewer is outside the 160 hours. Each checkpoint produces something usable on its own.
 
+## Delivery status in this checkout
+
+| Block | Implementation and verification |
+| --- | --- |
+| A1–A4 | The [handoff kit](docs/CODEX_HANDOFF.md) builds a local alpha.16 candidate ZIP. It contains [seven expected outcomes](docs/codex-handoff/facilitator/outcomes.json), independent receiver pins, a [reviewer task sheet](docs/codex-handoff/reviewer/TASK_SHEET.md) and a [separate key](docs/codex-handoff/facilitator/ANSWER_KEY.md). Published download pointers still lead to alpha.15. |
+| B1–B4 | The [Chromium suite](tests/browser/README.md) builds and extracts the ZIP, exercises isolated sender and receiver profiles and checks the outcome after reload. The same suite is configured to run on pull requests. |
+| C1–C4 | [Grant lookup exercises](docs/alpha-rehearsal/GRANT_TASKS.md) cover same-ID grants from different runs, missing references and parent authority. The original reviewer worksheet can be completed inside the dashboard. |
+| D1–D5 | The [offline verifier](docs/CODEX_HANDOFF.md#verify-the-case-offline) uses the case assessment and a separately supplied receiver pin. Its output distinguishes a verified resolution, a ready case, a blocked case and an invalid input. |
+| E1–E5 | A [producer walkthrough](docs/producer/README.md) exercises structural, authority and receipt checks. The inbox filters by workflow, decision and verified closure. The mixed-inbox exercise checks changes to the pin while preserving saved decisions and notes. |
+| F1–F5 | The [source assessment and recovery exercise](docs/WORKFLOW_INTAKE_DECISION.md) records why this cycle implements preview and recovery. A permissioned second source, independent human timings and repeat-use evidence are still open. |
+
 ## Coding-agent review
 
 **First exercise in the published alpha.** Download the alpha.15 fictional demo ZIP. Pin `pins/complete-capture` as `Follow-up review`, then import `cases/altered-original-receipt.json`. The case opens with a failed `after.md` receipt and empty local history. [Demo ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.15/adcp-codex-repair-history-demo-v0.1.0-alpha.15.zip) · [Walkthrough](docs/ALPHA_REVIEW.md#repair-an-original-codex-receipt)

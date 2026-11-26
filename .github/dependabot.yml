@@ -26,3 +26,7 @@ updates:
     directory: /experiments/sandbox-agent
     schedule:
       interval: weekly
+  - package-ecosystem: npm
+    directory: /tests/browser
+    schedule:
+      interval: weekly

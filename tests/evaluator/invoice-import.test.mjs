@@ -360,6 +360,35 @@ test('portable invoice cases opt in to receipts and reverify closure in a fresh 
   }
 });
 
+test('a saved resolved invoice loses verified closure on pin conflict and recovers when the same pin returns', async () => {
+  const { getStorage, pin, baseline } = await savedWorkflow();
+  const files = folder('SANDBOX-000000000002');
+  const manifest = manifestFor(files);
+  const missing = { ...files };
+  delete missing['validation.json'];
+  const original = await importInvoiceFolder(selectedFiles(missing, manifest));
+  const corrected = await importInvoiceFolder(selectedFiles(files, manifest));
+  const id = await saveInvoiceCandidate(getStorage, pin, original.evidence);
+  const saved = () => restoreReviews(getStorage).items.find(item => item.id === id);
+  saveReviewDecision(getStorage, saved(), 'fix-required', 'Verify the corrected invoice receipt.');
+  await attachInvoiceFollowUp(getStorage, saved(), corrected.evidence);
+  await resolveReviewCase(getStorage, saved());
+  const inspect = async () => assessFollowUp(saved(), await assessReview(saved()), getStorage);
+  assert.equal((await inspect()).resolved, true);
+  const changed = { ...baseline, title: 'Different recorded baseline' };
+  saveInvestigation(getStorage, changed);
+  saveWorkflowBaseline(getStorage, pin.name, changed, await runFingerprint(changed), pin);
+  const conflict = await inspect();
+  assert.equal(conflict.resolved, false);
+  assert.equal(conflict.pinState.status, 'conflict');
+  assert.equal(conflict.canResolve, false);
+  const exported = JSON.parse(await createReviewCase(saved(), undefined, { includeInvoiceReceipts: true, getStorage }));
+  assert.equal(exported.resolution, undefined);
+  saveInvestigation(getStorage, baseline);
+  saveWorkflowBaseline(getStorage, pin.name, baseline, pin.fingerprint, conflict.pinState.pin);
+  assert.equal((await inspect()).resolved, true);
+});
+
 test('matching portable evidence repairs open invoice cases without replacing reviews or pins', async () => {
   const { getStorage, pin } = await savedWorkflow();
   const files = folder('SANDBOX-000000000002');

@@ -2,10 +2,11 @@
 
 ## Published alpha
 
-[v0.1.0-alpha.7](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.7) adds the invoice closure checklist and includes four
-fictional demo cases. Use the [invoice walkthrough](ALPHA_REVIEW.md#try-the-portable-invoice-review-demo)
-to check the released ZIP. Use the [coding-agent walkthrough](ALPHA_REVIEW.md#try-the-coding-agent-review-demo)
-with a source checkout that includes the demo generator.
+[v0.1.0-alpha.15](https://github.com/zrack/agent_delegation_control_plane/releases/tag/v0.1.0-alpha.15) is the published local repair history exercise. The [alpha guide](ALPHA_REVIEW.md#repair-an-original-codex-receipt) points to the release download.
+
+## Next candidate
+
+The [sender handoff guide](CODEX_HANDOFF.md) builds the proposed alpha.16 demo from source. Verify two builds of the selected revision produce the same ZIP, check the extracted file manifest, and run the isolated receiver exercises and offline verifier. Run project integrity and security checks on that revision. Record the commit, ZIP digest, and check results before tagging or publishing. Replace the published pointers in the README and alpha guide only after the release asset can be downloaded and verified.
 
 ## Original public alpha release
 

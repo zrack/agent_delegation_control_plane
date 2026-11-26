@@ -92,6 +92,58 @@ function generatePackages(scratch) {
   return packages;
 }
 
+// Equivalent record sets for an uncoached dashboard-vs-record review.
+// Reuse IDs across the two run snapshots deliberately. Grant IDs are local to a run.
+function buildGrantStudy(destination, scratch, docs) {
+  const study = join(destination, 'grant-study');
+  mkdirSync(study);
+  for (const [from, to] of [['GRANT_TASKS.md', 'TASK_SHEET.md'], ['GRANT_ANSWERS.md', 'facilitator/ANSWER_KEY.md']]) {
+    mkdirSync(dirname(join(study, to)), { recursive: true });
+    writeFileSync(join(study, to), readFileSync(join(docs, from)));
+  }
+  const [exported, valid, missing] = chains;
+  for (const [pack, resource, cases] of [
+    ['A', 'crm://accounts/river', [valid, missing, exported]],
+    ['B', 'crm://accounts/cedar', [exported, valid, missing]],
+  ]) {
+    const make = (example, role) => {
+      const run = accountRun(example, `GRANT-STUDY-${pack}-${role}`);
+      const sharedId = id => id === null ? null : id.slice(id.lastIndexOf('-') + 1);
+      run.rootGrantId = sharedId(run.rootGrantId);
+      run.intent = 'Review the fictional account using read-only authority.';
+      for (const grant of run.grants) {
+        grant.id = sharedId(grant.id);
+        grant.parentGrantId = sharedId(grant.parentGrantId);
+        for (const capability of grant.capabilities) capability.resource = resource;
+      }
+      for (const event of run.events) {
+        event.id = sharedId(event.id);
+        event.parentEventId = sharedId(event.parentEventId);
+        event.authorityId = sharedId(event.authorityId);
+        event.action.resource = resource;
+      }
+      return run;
+    };
+    const pinDir = join(scratch, 'study-' + pack);
+    const records = join(study, 'pack-' + pack, 'records');
+    const dashboard = join(study, 'pack-' + pack, 'dashboard');
+    mkdirSync(pinDir);
+    mkdirSync(records, { recursive: true });
+    mkdirSync(dashboard);
+    const baseline = envelope(make(valid, 'BASELINE'));
+    writeFileSync(join(records, 'baseline.json'), baseline);
+    writeFileSync(join(pinDir, 'investigation.json'), baseline);
+    runCheck(0, 'pin', '--baseline-dir', pinDir);
+    for (const [index, example] of cases.entries()) {
+      const name = 'case-0' + (index + 1);
+      const input = join(records, name + '.json');
+      writeFileSync(input, envelope(make(example, name.toUpperCase())));
+      runCheck(example === valid ? 0 : example === exported ? 1 : 2, 'check', '--baseline-dir', pinDir,
+        '--candidate', input, '--package', join(dashboard, name + '.json'));
+    }
+  }
+}
+
 function buildKit(destination) {
   const scratch = mkdtempSync(join(tmpdir(), 'adcp-alpha-rehearsal-'));
   try {
@@ -107,6 +159,7 @@ function buildKit(destination) {
       for (const [file, contents] of Object.entries(packages)) {
         writeFileSync(join(reviewer, file), contents, { mode: 0o600, flag: 'wx' });
       }
+      buildGrantStudy(destination, scratch, docs);
       for (const [directory, name] of [[reviewer, 'TASK_SHEET.md'], [facilitator, 'ANSWER_KEY.md']]) {
         writeFileSync(join(directory, name), readFileSync(join(docs, name)), { mode: 0o600, flag: 'wx' });
       }
@@ -126,7 +179,7 @@ try {
   } else {
     const destination = resolve(values.output ?? join(root, 'output/private-alpha-rehearsal'));
     buildKit(destination);
-    console.log(`Rehearsal kit saved to ${destination}. Give reviewers the reviewer folder and retain the facilitator folder.`);
+    console.log(`Rehearsal kit saved to ${destination}. Give reviewers the reviewer folder and retain the facilitator folder. For the grant comparison, see grant-study/TASK_SHEET.md.`);
   }
 } catch (error) {
   console.error(error.code === 'EEXIST' ? 'The output directory already exists. Choose a new directory.' : error.message);

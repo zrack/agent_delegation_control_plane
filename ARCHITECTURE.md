@@ -8,6 +8,8 @@ The local viewer loads native HTML/CSS/JavaScript modules from a Python static s
 
 The optional Python SDK runner produces an importable `investigation.json`. The separate Node experiment produces raw records and bare `normalized.json` for offline evaluation; it has no browser-import adapter. Neither process is launched by the dashboard.
 
+Two offline Node commands run on caller-selected files. A producer can validate a completed investigation or a supported Codex folder before handoff. A receiver can verify a portable Codex case using a separately supplied workflow pin. Both commands reuse the viewer’s checks and finish locally. Neither command reads browser storage. [Producer validator](scripts/validate-capture.mjs) · [Receiver verifier](scripts/verify-case.mjs)
+
 ## C4 views
 
 The [diagram guide](docs/architecture/README.md) links editable sources and rendering instructions. C4 containers here are applications/data stores, not Docker units or deployed services.
@@ -25,9 +27,13 @@ The [diagram guide](docs/architecture/README.md) links editable sources and rend
 | `src/comparison.mjs` | Deterministic alignment, comparison and regression classification of two normalized runs |
 | `src/import.mjs` | Bounded version 1 intake, normalization and imported-chain merge |
 | `src/codex-import.mjs` | Offline pilot-folder manifest and tool receipt checks before version 1 normalization |
+| `src/grant-lookup.mjs` | Resolve an action and its grant ancestry within the selected case snapshot |
 | `src/storage.mjs` | Versioned, bounded browser-local imports and workflow baseline pins |
 | `scripts/regression.mjs` | Offline baseline pinning and regression reports using the viewer's normalization and comparison rules |
 | `src/review.mjs`, `src/review-view.mjs` | Report and package intake, local downloads, bounded inbox storage, review decisions and follow-up verification |
+| `scripts/validate-capture.mjs` | Read-only producer diagnostics using the investigation parser, folder checks and authority evaluator |
+| `scripts/verify-case.mjs` | Read-only receiver verification of portable Codex cases using the shared inbox assessment |
+| `scripts/build_codex_handoff.py` | Package generated fictional cases, independent pins and the separate reviewer and facilitator materials |
 | `scripts/alpha-rehearsal.mjs` | Offline generation of fictional reviewer and facilitator materials with the regression checker |
 | `src/fixtures.mjs` | Three fixed fictional investigations |
 | `src/evaluator.mjs` | Pure deterministic retrospective authority checks |
@@ -51,6 +57,12 @@ The comparison uses both runs' existing evaluations. It aligns events by exact r
 Permissions compare exact capability pairs, delegation, principal, lineage and grant duration. For the known sandbox pilot, only each run's own execution and result targets are treated as equivalent across captures. Raw resource names, dates, call IDs and artifact hashes remain available in expanded records. The view compares recorded actions and parent references, evidence fields, referenced grant presence, evaluator outcomes and finding-code counts. It uses the existing import limits and renders raw records on expansion.
 
 Regression checks use the selected workflow's pinned baseline, the same aligned differences, and the candidate's evaluator result. A proved regression takes precedence over an evidence gap, and both types of reasons are shown when present. A candidate violation or widening of a matched grant flags a regression, as does a changed matched action/resource pair. Unmatched records, changes in authority lineage, and loss of previously supplied evidence require review. Optional evidence is required where the baseline supplied it. A change in call ID or a valid hash alone does not affect the verdict. Reasons link to the compared row or the candidate hop.
+
+## Local producer and receiver commands
+
+The producer validator accepts a version 1 investigation file or the supported flat Codex folder. It checks the file shape and size before evaluating authority. For a folder, it also checks the manifest and tool receipts. A missing grant referenced by a valid action yields an unverifiable authority result. Changed receipt bytes fail the evidence check before an authority assessment can be made. Diagnostics identify the affected file, field or reference without printing receipt bodies.
+
+The receiver verifier reads a receipt-inclusive portable case. An optional, independently selected baseline directory contains the normalized investigation and its pin. The command recomputes the baseline fingerprint, checks its eligibility and imports the case into an in-memory inbox. The same assessment functions used by the dashboard recheck the original, follow-up, recorded closure and receiver pin. Output distinguishes a verified resolution, a case ready for explicit closure, a blocked case and invalid input. The process exits without changing the files, browser history or review decision. [Handoff and command examples](docs/CODEX_HANDOFF.md)
 
 ## Offline Codex run folder
 
@@ -229,13 +241,23 @@ case open. Imports leave workflow pins unchanged.
 
 ## Trust and recovery
 
-The static server permits only `/`, `/index.html`, `/styles.css`, `/app.js`, `/fixtures.mjs`, `/evaluator.mjs`, `/import.mjs`, `/codex-import.mjs`, `/storage.mjs`, `/comparison.mjs`, `/review.mjs`, `/review-view.mjs` and `/invoice-import.mjs`. It rejects writes, unexpected Hosts and repository paths. Its content policy blocks outbound browser connections. Loopback is a development boundary, not authentication. Run artifacts and credentials are not served.
+The static server permits the dashboard HTML, styles and JavaScript modules on an explicit [asset allowlist](scripts/serve.py). It rejects writes, unexpected Hosts and repository paths. Its content policy blocks outbound browser connections. Loopback is a development boundary, not authentication. Run artifacts and credentials are not served.
 
 Imports are stored under `adcp.investigations.v1` as versioned normalized envelopes, with a 20-run / 2 MiB UTF-8 serialized collection limit in addition to per-import limits. Each saved envelope passes intake again on startup and findings are recomputed with the current evaluator before hash selection, so a chain/hop URL can reopen its saved evidence. Findings are never trusted from storage. Reimport replaces the same chain ID; writes merge against the latest saved collection to preserve imports from other tabs. Writes are synchronous but do not provide transactional cross-tab coordination.
 
 Users name workflows explicitly. A separate, versioned browser store holds up to 20 workflow names, run IDs and SHA-256 fingerprints of the selected normalized runs, capped at 12 KiB. The viewer checks a pin against the loaded record before reporting a regression verdict. Reimporting changed evidence under the same run ID cannot silently move the baseline. Clear imported runs leaves pins available for reimport of the original records, and users can remove pins independently. A fingerprint identifies the saved record and does not authenticate its producer. Reload the view to pick up records imported in another tab.
 
-The review inbox stores up to 20 reports and 2 MiB total under `adcp.regression-reviews.v1`. Each item has the normalized report, optional matching evidence snapshots, a note and a reviewed flag. Attachments must match both run ID and fingerprint. Opening an item rechecks the snapshots and recomputes findings with the current evaluator when both exports qualify. The recorded verdict and current result remain distinct. Evidence drill-down stays within the saved snapshots, even when a normal run import with the same ID changes. Report input does not supply navigation targets. Reimporting the same report preserves its note and matching snapshots, and updates save the report, evidence and note together under one key. The inbox has its own removal control.
+The review inbox stores up to 20 reports and 2 MiB total under `adcp.regression-reviews.v1`. Each item has the normalized report, optional matching evidence snapshots, a note and a reviewed flag. Attachments must match both run ID and fingerprint. Opening an item rechecks the snapshots and recomputes findings with the current evaluator when both exports qualify. The recorded verdict and current result remain distinct. The action directory and flagged findings link to a case, snapshot side and event. Grant lookup follows exact parent IDs in that same matching snapshot and preserves the selected action on reload. Evidence drill-down stays within the saved snapshots, even when a normal run import with the same ID changes. Report input does not supply navigation targets. Reimporting the same report preserves its note and matching snapshots, and updates save the report, evidence and note together under one key. The inbox has its own removal control.
+
+The optional Codex import preview simulates a fresh import into a temporary in-memory overlay. It shows included receipt filenames, accepted sender-history count, required baseline identity, receiver pin state and prospective disposition. Canceling discards the preview. Confirming rechecks the input, current pin, duplicates and available inbox space before saving. A failed confirmation leaves existing cases intact. The original one-step import remains available.
+
+The inbox rechecks each saved case before showing its closure and first blocker.
+Workflow, decision and closure filters apply to these current results. A selected
+case remains inspectable when a changed pin moves it outside the active filter.
+The tab remembers only the three filter choices in session storage. Other tabs’
+changes to evidence or pins trigger a new check. An invoice’s self-contained
+portable closure can verify when the receiver has no pin. A conflicting or
+unreadable pin prevents displaying or exporting a verified resolution.
 
 A portable package is a version 1 JSON document capped at 2 MiB. It wraps the normalized report, optional matching version 1 investigation envelopes and an optional note. Imports use the same fingerprint checks as separate files. An altered attachment is excluded and marked as mismatched. Exports use a browser-local download, omit the note by default and leave review completion local to each inbox. An included note seeds a newly imported item. Existing local reviews take precedence on reimport.
 
@@ -255,4 +277,6 @@ No general live ingestion, verified external authority, revocation processing, s
 
 ## Development safeguards
 
-CI uses commit-pinned actions and a read-only token. SDK and security-tool dependencies are fully version/hash pinned and installed as binary distributions with `--require-hashes`. Separate jobs run 80 offline application/sandbox tests and source secret-pattern/Python static checks, four safeguard tests and PyPI advisory checks. Weekly scheduled checks recheck advisories without a code change. Dependabot monitors Actions, both Python dependency directories and the sandbox Dockerfile. The optional pre-commit hook scans exact staged bytes; CI scans the checked-out source. Ignored credentials, generated runs and Git history are excluded from these current-source checks. See [contributing](CONTRIBUTING.md) for commands, limitations and branch-control policy.
+CI uses commit-pinned actions and a read-only repository token. The project integrity job exercises the application, CLI, SDK replay and isolated execution. The security job checks the source for secret patterns and Python findings and checks pinned Python dependencies against advisories. Dependabot monitors the workflow actions, Python dependencies, browser test package and pilot Dockerfile. The optional pre-commit hook scans the staged bytes. [Contributing](CONTRIBUTING.md)
+
+The separate Chromium job builds and extracts the fictional handoff ZIP, starts the dashboard on loopback, and uses fresh browser contexts for sender and receiver. It drives file selection, repair, explicit closure, reload and onward export. Browser expectations and offline verifier tests use the same facilitator outcomes. Unexpected external browser requests fail the tests. The browser and driver are installed only for acceptance testing. [CI workflow](.github/workflows/project-integrity.yml) · [Browser acceptance tests](tests/browser/README.md)

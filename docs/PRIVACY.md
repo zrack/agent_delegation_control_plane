@@ -53,3 +53,8 @@ Local run directories may contain provider/request/tool identifiers, generated t
 This repository distributes the public technical alpha and fictional examples. The original repository and its historical records are private. For new public releases, review the exact source revision, assets, commit metadata and new GitHub-hosted records. Keep raw runs, backups and private evidence outside the public repository. See the [release checklist](RELEASE_READINESS.md#checklist-for-future-public-prereleases).
 
 Local privacy checks and tests cover the cases they exercise. Their scope is limited to the reviewed source and artifacts.
+
+Inbox filters remember the selected workflow name, decision category and
+closure filter in this tab’s session storage. Case evidence, notes and decisions
+continue to use the existing bounded inbox store. Clearing the filters removes
+the workflow name from the tab’s preferences.

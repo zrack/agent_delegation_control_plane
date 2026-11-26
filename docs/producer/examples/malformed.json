@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "chain": {
+    "id": "GUIDE-01",
+    "principal": {
+      "id": "fictional-docs-owner"
+    },
+    "rootGrantId": "guide-read",
+    "grants": [
+      {
+        "id": "guide-read",
+        "parentGrantId": null,
+        "issuer": "fictional-docs-owner",
+        "subject": "fictional-reviewer",
+        "principal": "fictional-docs-owner",
+        "canDelegate": false,
+        "capabilities": [
+          {
+            "action": "file:read",
+            "resource": "repo://fictional/docs/guide.md"
+          }
+        ],
+        "validFrom": "2026-01-01T00:00:00Z",
+        "expiresAt": "2026-01-01T01:00:00Z"
+      }
+    ],
+    "events": [
+      {
+        "id": "inspect-guide",
+        "parentEventId": null,
+        "actor": "fictional-reviewer",
+        "authorityId": "guide-read",
+        "action": {
+          "action": "file:read",
+          "at": "2026-01-01T00:10:00Z",
+          "outcome": "completed"
+        },
+        "evidence": {
+          "callId": "guide-call-01",
+          "tool": "read_document",
+          "artifactSha256": "d7bcf604466bb1b6b80dac835ac6aab490d23fae70af483c43e6d0891778c1c0"
+        }
+      }
+    ]
+  }
+}

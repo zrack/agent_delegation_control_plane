@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Check selected source only; never inspect ignored configuration or Git history."""
 import argparse
+import hashlib
+import json
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
@@ -13,6 +15,35 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT, timeout=30)
 
 
+def reviewed_fixture_findings(snapshot, output):
+    """Recognize only the individually reviewed findings on byte-identical fictional data."""
+    try:
+        registry = (snapshot / "scripts/security/reviewed-fixtures.txt").read_text().splitlines()
+        reviewed = {}
+        for line in registry:
+            if not line or line.startswith("#"):
+                continue
+            name, file_digest, findings_digest = line.split()
+            reviewed[name] = (file_digest, findings_digest)
+        results = json.loads(output)["results"]
+        if not results:
+            return False
+        for name, findings in results.items():
+            if (PurePosixPath(name).parent.as_posix() not in {"docs/codex-handoff/fixtures", "docs/producer/examples"}
+                    or name not in reviewed or not findings):
+                return False
+            if any(f["type"] not in {"Hex High Entropy String", "Base64 High Entropy String"} for f in findings):
+                return False
+            signatures = sorted((f["line_number"], f["type"], f["hashed_secret"]) for f in findings)
+            encoded = json.dumps(signatures, separators=(",", ":")).encode()
+            current = (hashlib.sha256((snapshot / name).read_bytes()).hexdigest(), hashlib.sha256(encoded).hexdigest())
+            if current != reviewed[name]:
+                return False
+        return True
+    except (AttributeError, KeyError, OSError, TypeError, ValueError):
+        return False
+
+
 def run(label, args, cwd, *, quiet=False):
     print("Security check: " + label, flush=True)
     try:
@@ -23,6 +54,9 @@ def run(label, args, cwd, *, quiet=False):
     if not quiet:
         print(result.stdout, end="")
         print(result.stderr, end="", file=sys.stderr)
+    elif result.returncode == 1 and not result.stderr and reviewed_fixture_findings(cwd, result.stdout):
+        print("Only previously reviewed public fixture digests and receipt encodings matched.")
+        return True
     elif result.returncode:
         # Secret scanners may include source text. Never copy their output to CI logs.
         print("Secret scan failed. Inspect locally with detect-secrets-hook --no-verify; no candidate values were logged.", file=sys.stderr)

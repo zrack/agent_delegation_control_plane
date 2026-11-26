@@ -55,6 +55,24 @@ class SecurityCheckContract(unittest.TestCase):
         self.assertEqual(self.check(), 0)
         self.assertEqual(self.check("--staged"), 1)
 
+    def test_only_reviewed_entropy_findings_on_the_exact_fictional_bytes_pass(self):
+        fixture = Path("docs/producer/examples/investigation.json")
+        registry = Path("scripts/security/reviewed-fixtures.txt")
+        for name in (fixture, registry):
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((CHECK.ROOT / name).read_bytes())
+        self.git("add", str(fixture), str(registry))
+        self.assertEqual(self.check("--staged"), 0)
+        with (self.root / fixture).open("a") as modified:
+            modified.write("\n")
+        self.assertEqual(self.check(), 1)
+        self.assertEqual(self.check("--staged"), 0)
+        with (self.root / fixture).open("a") as modified:
+            modified.write(self.marker)
+        self.git("add", str(fixture))
+        self.assertEqual(self.check("--staged"), 1)
+
     def test_python_unsafe_deserialization_is_rejected(self):
         (self.root / "candidate.py").write_text("import pickle\npickle.loads(b'example')\n")
         self.assertEqual(self.check(), 1)
