@@ -1,0 +1,433 @@
+{
+  "kind": "adcp-codex-review-case",
+  "schemaVersion": 1,
+  "report": {
+    "schemaVersion": 1,
+    "status": "review",
+    "reasons": [
+      {
+        "impact": "review",
+        "message": "The candidate has incomplete or unverifiable authority evidence.",
+        "candidateEventId": "CODING-FICTIONAL-PREVIEW-01-read"
+      },
+      {
+        "impact": "review",
+        "message": "No unique counterpart in the other run."
+      },
+      {
+        "impact": "review",
+        "message": "Referenced grant supplied",
+        "baselineEventId": "CODING-FICTIONAL-PREVIEW-01-read",
+        "candidateEventId": "CODING-FICTIONAL-PREVIEW-01-read"
+      },
+      {
+        "impact": "review",
+        "message": "Referenced grant supplied",
+        "baselineEventId": "CODING-FICTIONAL-PREVIEW-01-write",
+        "candidateEventId": "CODING-FICTIONAL-PREVIEW-01-write"
+      }
+    ],
+    "baselineId": "CODEX-3e20f2ce5addc99343754fc1cb5871d2df9a0eb6d7857d642b4236a110cdc577",
+    "baselineFingerprint": "40d644c03e4e8db3f8756f104a5e839dbc0943e208ecba8a151a7c122e49296d",
+    "candidateId": "CODEX-fbb1cf91672693d7feb91b94e5b91ef394d68b5c973c1fe0850eae736a2a7291",
+    "candidateFingerprint": "efa81ad77b0639bbf9a2f7550ce1041fe07f9eb9ce2d3e1d5fa838250fec42b1"
+  },
+  "baseline": {
+    "schemaVersion": 1,
+    "chain": {
+      "id": "CODEX-3e20f2ce5addc99343754fc1cb5871d2df9a0eb6d7857d642b4236a110cdc577",
+      "title": "Codex run · CODING-FICTIONAL-PREVIEW-01",
+      "summary": "Completed actions from a local file.",
+      "principal": {
+        "id": "fictional-docs-owner",
+        "name": "fictional-docs-owner",
+        "role": "Identity supplied by file"
+      },
+      "rootGrantId": "CODING-FICTIONAL-PREVIEW-01-root",
+      "intent": "Intent supplied in imported records",
+      "completedAt": "2026-01-01T00:01:00Z",
+      "source": "Codex pilot capture folder",
+      "grants": [
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-root",
+          "parentGrantId": null,
+          "issuer": "fictional-docs-owner",
+          "subject": "fictional-coordinator",
+          "principal": "fictional-docs-owner",
+          "capabilities": [
+            {
+              "action": "file:read",
+              "resource": "repo://fictional-preview/docs/quickstart.md"
+            },
+            {
+              "action": "file:write",
+              "resource": "repo://fictional-preview/docs/quickstart.md"
+            }
+          ],
+          "validFrom": "2026-01-01T00:00:00Z",
+          "expiresAt": "2026-01-01T00:02:00Z",
+          "canDelegate": true
+        },
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-edit",
+          "parentGrantId": "CODING-FICTIONAL-PREVIEW-01-root",
+          "issuer": "fictional-coordinator",
+          "subject": "fictional-codex-editor",
+          "principal": "fictional-docs-owner",
+          "capabilities": [
+            {
+              "action": "file:read",
+              "resource": "repo://fictional-preview/docs/quickstart.md"
+            },
+            {
+              "action": "file:write",
+              "resource": "repo://fictional-preview/docs/quickstart.md"
+            }
+          ],
+          "validFrom": "2026-01-01T00:00:00Z",
+          "expiresAt": "2026-01-01T00:02:00Z",
+          "canDelegate": false
+        }
+      ],
+      "events": [
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-inspect",
+          "parentEventId": null,
+          "actor": "fictional-coordinator",
+          "authorityId": "CODING-FICTIONAL-PREVIEW-01-root",
+          "label": "fictional-coordinator",
+          "job": "Inspect the recorded action",
+          "action": {
+            "action": "file:read",
+            "resource": "repo://fictional-preview/docs/quickstart.md",
+            "at": "2026-01-01T00:01:00Z",
+            "outcome": "completed"
+          },
+          "evidence": {
+            "callId": "fictional-call-inspect",
+            "tool": "preflight_read",
+            "artifactSha256": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504"
+          }
+        },
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-read",
+          "parentEventId": "CODING-FICTIONAL-PREVIEW-01-inspect",
+          "actor": "fictional-codex-editor",
+          "authorityId": "CODING-FICTIONAL-PREVIEW-01-edit",
+          "label": "fictional-codex-editor",
+          "job": "Inspect the recorded action",
+          "action": {
+            "action": "file:read",
+            "resource": "repo://fictional-preview/docs/quickstart.md",
+            "at": "2026-01-01T00:01:00Z",
+            "outcome": "completed"
+          },
+          "evidence": {
+            "callId": "fictional-call-read",
+            "tool": "read_quickstart",
+            "artifactSha256": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504"
+          }
+        },
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-write",
+          "parentEventId": "CODING-FICTIONAL-PREVIEW-01-inspect",
+          "actor": "fictional-codex-editor",
+          "authorityId": "CODING-FICTIONAL-PREVIEW-01-edit",
+          "label": "fictional-codex-editor",
+          "job": "Inspect the recorded action",
+          "action": {
+            "action": "file:write",
+            "resource": "repo://fictional-preview/docs/quickstart.md",
+            "at": "2026-01-01T00:01:00Z",
+            "outcome": "completed"
+          },
+          "evidence": {
+            "callId": "fictional-call-write",
+            "tool": "update_preview_paragraph",
+            "artifactSha256": "700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa"
+          }
+        }
+      ],
+      "imported": true
+    }
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "chain": {
+      "id": "CODEX-fbb1cf91672693d7feb91b94e5b91ef394d68b5c973c1fe0850eae736a2a7291",
+      "title": "Codex run · CODING-FICTIONAL-PREVIEW-01",
+      "summary": "Completed actions from a local file.",
+      "principal": {
+        "id": "fictional-docs-owner",
+        "name": "fictional-docs-owner",
+        "role": "Identity supplied by file"
+      },
+      "rootGrantId": "CODING-FICTIONAL-PREVIEW-01-root",
+      "intent": "Intent supplied in imported records",
+      "completedAt": "2026-01-01T00:01:00Z",
+      "source": "Codex pilot capture folder",
+      "grants": [
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-root",
+          "parentGrantId": null,
+          "issuer": "fictional-docs-owner",
+          "subject": "fictional-coordinator",
+          "principal": "fictional-docs-owner",
+          "capabilities": [
+            {
+              "action": "file:read",
+              "resource": "repo://fictional-preview/docs/quickstart.md"
+            },
+            {
+              "action": "file:write",
+              "resource": "repo://fictional-preview/docs/quickstart.md"
+            }
+          ],
+          "validFrom": "2026-01-01T00:00:00Z",
+          "expiresAt": "2026-01-01T00:02:00Z",
+          "canDelegate": true
+        }
+      ],
+      "events": [
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-inspect",
+          "parentEventId": null,
+          "actor": "fictional-coordinator",
+          "authorityId": "CODING-FICTIONAL-PREVIEW-01-root",
+          "label": "fictional-coordinator",
+          "job": "Inspect the recorded action",
+          "action": {
+            "action": "file:read",
+            "resource": "repo://fictional-preview/docs/quickstart.md",
+            "at": "2026-01-01T00:01:00Z",
+            "outcome": "completed"
+          },
+          "evidence": {
+            "callId": "fictional-call-inspect",
+            "tool": "preflight_read",
+            "artifactSha256": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504"
+          }
+        },
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-read",
+          "parentEventId": "CODING-FICTIONAL-PREVIEW-01-inspect",
+          "actor": "fictional-codex-editor",
+          "authorityId": "CODING-FICTIONAL-PREVIEW-01-edit",
+          "label": "fictional-codex-editor",
+          "job": "Inspect the recorded action",
+          "action": {
+            "action": "file:read",
+            "resource": "repo://fictional-preview/docs/quickstart.md",
+            "at": "2026-01-01T00:01:00Z",
+            "outcome": "completed"
+          },
+          "evidence": {
+            "callId": "fictional-call-read",
+            "tool": "read_quickstart",
+            "artifactSha256": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504"
+          }
+        },
+        {
+          "id": "CODING-FICTIONAL-PREVIEW-01-write",
+          "parentEventId": "CODING-FICTIONAL-PREVIEW-01-inspect",
+          "actor": "fictional-codex-editor",
+          "authorityId": "CODING-FICTIONAL-PREVIEW-01-edit",
+          "label": "fictional-codex-editor",
+          "job": "Inspect the recorded action",
+          "action": {
+            "action": "file:write",
+            "resource": "repo://fictional-preview/docs/quickstart.md",
+            "at": "2026-01-01T00:01:00Z",
+            "outcome": "completed"
+          },
+          "evidence": {
+            "callId": "fictional-call-write",
+            "tool": "update_preview_paragraph",
+            "artifactSha256": "700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa"
+          }
+        }
+      ],
+      "imported": true
+    }
+  },
+  "decision": {
+    "kind": "evidence-needed",
+    "reason": "Supply the delegated grant used by the editor read and write."
+  },
+  "codex": {
+    "workflow": "Follow-up review",
+    "fingerprint": "05f4f5ee0e98a48d7158a58e8bbd336f035cafe018683268b529c71052ffe19f",
+    "evidence": {
+      "hashes": {
+        "actions.jsonl": "1b64ff470ed5fedf44ce32049ab93a554bedf8c28bed78fa9965035b3d1bad9e",
+        "grants.jsonl": "91dea6dc98ba0409c1345be251c66a895e20eac148937bde4a94fdbd99b2f353",
+        "attempts.jsonl": "c2b9f36b0801afeb54fa2817f22051edd47f29fd4da5edb924cb45870b8e9770",
+        "before.md": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504",
+        "after.md": "700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa",
+        "quickstart.diff": "a8dc111730d68cd401abf3bd8c61682b78f808b75d15806cb5bdcc9170831924",
+        "codex-events.jsonl": "2f9c7e7990ae142408698e52b779675ed6c51017460126ea126cfb8c657623a3"
+      },
+      "files": {
+        "actions.jsonl": "eyJpZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtaW5zcGVjdCIsICJwYXJlbnRFdmVudElkIjogbnVsbCwgImFjdG9yIjogImZpY3Rpb25hbC1jb29yZGluYXRvciIsICJhdXRob3JpdHlJZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtcm9vdCIsICJhY3Rpb24iOiB7ImFjdGlvbiI6ICJmaWxlOnJlYWQiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJvdXRjb21lIjogImNvbXBsZXRlZCJ9LCAiZXZpZGVuY2UiOiB7InRvb2wiOiAicHJlZmxpZ2h0X3JlYWQiLCAiY2FsbElkIjogImZpY3Rpb25hbC1jYWxsLWluc3BlY3QiLCAiYXJ0aWZhY3RTaGEyNTYiOiAiMzEwMmU1OTYxYTBlN2E1MjQzMjk4NjY2OWIwOGFhNzg1OTk4NTI2ZDU5NjkxYzEwZDBjMTkwNDg0MzI4ZjUwNCJ9fQp7ImlkIjogIkNPRElORy1GSUNUSU9OQUwtUFJFVklFVy0wMS1yZWFkIiwgInBhcmVudEV2ZW50SWQiOiAiQ09ESU5HLUZJQ1RJT05BTC1QUkVWSUVXLTAxLWluc3BlY3QiLCAiYWN0b3IiOiAiZmljdGlvbmFsLWNvZGV4LWVkaXRvciIsICJhdXRob3JpdHlJZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtZWRpdCIsICJhY3Rpb24iOiB7ImFjdGlvbiI6ICJmaWxlOnJlYWQiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJvdXRjb21lIjogImNvbXBsZXRlZCJ9LCAiZXZpZGVuY2UiOiB7InRvb2wiOiAicmVhZF9xdWlja3N0YXJ0IiwgImNhbGxJZCI6ICJmaWN0aW9uYWwtY2FsbC1yZWFkIiwgImFydGlmYWN0U2hhMjU2IjogIjMxMDJlNTk2MWEwZTdhNTI0MzI5ODY2NjliMDhhYTc4NTk5ODUyNmQ1OTY5MWMxMGQwYzE5MDQ4NDMyOGY1MDQifX0KeyJpZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtd3JpdGUiLCAicGFyZW50RXZlbnRJZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtaW5zcGVjdCIsICJhY3RvciI6ICJmaWN0aW9uYWwtY29kZXgtZWRpdG9yIiwgImF1dGhvcml0eUlkIjogIkNPRElORy1GSUNUSU9OQUwtUFJFVklFVy0wMS1lZGl0IiwgImFjdGlvbiI6IHsiYWN0aW9uIjogImZpbGU6d3JpdGUiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJvdXRjb21lIjogImNvbXBsZXRlZCJ9LCAiZXZpZGVuY2UiOiB7InRvb2wiOiAidXBkYXRlX3ByZXZpZXdfcGFyYWdyYXBoIiwgImNhbGxJZCI6ICJmaWN0aW9uYWwtY2FsbC13cml0ZSIsICJhcnRpZmFjdFNoYTI1NiI6ICI3MDBjOWFlZDBhN2VlY2Y0MTZjN2QyMDM0YTkzZWZhOTU5YTBhODdkYTRlYjExOTc1MDExMjdiYjA0ODY4NGZhIn19Cg==",
+        "grants.jsonl": "eyJpZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtcm9vdCIsICJwYXJlbnRHcmFudElkIjogbnVsbCwgImlzc3VlciI6ICJmaWN0aW9uYWwtZG9jcy1vd25lciIsICJzdWJqZWN0IjogImZpY3Rpb25hbC1jb29yZGluYXRvciIsICJwcmluY2lwYWwiOiAiZmljdGlvbmFsLWRvY3Mtb3duZXIiLCAiY2FwYWJpbGl0aWVzIjogW3siYWN0aW9uIjogImZpbGU6cmVhZCIsICJyZXNvdXJjZSI6ICJyZXBvOi8vZmljdGlvbmFsLXByZXZpZXcvZG9jcy9xdWlja3N0YXJ0Lm1kIn0sIHsiYWN0aW9uIjogImZpbGU6d3JpdGUiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCJ9XSwgImNhbkRlbGVnYXRlIjogdHJ1ZSwgInZhbGlkRnJvbSI6ICIyMDI2LTAxLTAxVDAwOjAwOjAwWiIsICJleHBpcmVzQXQiOiAiMjAyNi0wMS0wMVQwMDowMjowMFoifQo=",
+        "attempts.jsonl": "eyJ0b29sIjogInJlYWRfcXVpY2tzdGFydCIsICJjYWxsSWQiOiAiZmljdGlvbmFsLWNhbGwtcmVhZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJzdGF0dXMiOiAiY29tcGxldGVkIn0KeyJ0b29sIjogInVwZGF0ZV9wcmV2aWV3X3BhcmFncmFwaCIsICJjYWxsSWQiOiAiZmljdGlvbmFsLWNhbGwtd3JpdGUiLCAiYXQiOiAiMjAyNi0wMS0wMVQwMDowMTowMFoiLCAic3RhdHVzIjogImNvbXBsZXRlZCJ9Cg==",
+        "before.md": "IyBMb2NhbCBwcmV2aWV3CgpTdGFydCB0aGUgcHJldmlldyBzZXJ2ZXIuCg==",
+        "after.md": "IyBMb2NhbCBwcmV2aWV3CgpSdW4gYHB5dGhvbjMgLW0gaHR0cC5zZXJ2ZXIgODAwMCAtLWJpbmQgMTI3LjAuMC4xYCBhbmQgb3BlbiA8aHR0cDovLzEyNy4wLjAuMTo4MDAwLz4uCg=="
+      }
+    }
+  },
+  "followUp": {
+    "report": {
+      "schemaVersion": 1,
+      "status": "pass",
+      "reasons": [],
+      "baselineId": "CODEX-3e20f2ce5addc99343754fc1cb5871d2df9a0eb6d7857d642b4236a110cdc577",
+      "baselineFingerprint": "40d644c03e4e8db3f8756f104a5e839dbc0943e208ecba8a151a7c122e49296d",
+      "candidateId": "CODEX-f559c2afd796ba9d197938396d0afd32fec84f64667aceca45a9d8c361611a81",
+      "candidateFingerprint": "00f76b5ede5c5a0902c558f33e055d2d8a93b33ef28bbfd611d37cae2c2e01c6"
+    },
+    "candidate": {
+      "schemaVersion": 1,
+      "chain": {
+        "id": "CODEX-f559c2afd796ba9d197938396d0afd32fec84f64667aceca45a9d8c361611a81",
+        "title": "Codex run · CODING-FICTIONAL-PREVIEW-01",
+        "summary": "Completed actions from a local file.",
+        "principal": {
+          "id": "fictional-docs-owner",
+          "name": "fictional-docs-owner",
+          "role": "Identity supplied by file"
+        },
+        "rootGrantId": "CODING-FICTIONAL-PREVIEW-01-root",
+        "intent": "Intent supplied in imported records",
+        "completedAt": "2026-01-01T00:01:00Z",
+        "source": "Codex pilot capture folder",
+        "grants": [
+          {
+            "id": "CODING-FICTIONAL-PREVIEW-01-root",
+            "parentGrantId": null,
+            "issuer": "fictional-docs-owner",
+            "subject": "fictional-coordinator",
+            "principal": "fictional-docs-owner",
+            "capabilities": [
+              {
+                "action": "file:read",
+                "resource": "repo://fictional-preview/docs/quickstart.md"
+              },
+              {
+                "action": "file:write",
+                "resource": "repo://fictional-preview/docs/quickstart.md"
+              }
+            ],
+            "validFrom": "2026-01-01T00:00:00Z",
+            "expiresAt": "2026-01-01T00:02:00Z",
+            "canDelegate": true
+          },
+          {
+            "id": "CODING-FICTIONAL-PREVIEW-01-edit",
+            "parentGrantId": "CODING-FICTIONAL-PREVIEW-01-root",
+            "issuer": "fictional-coordinator",
+            "subject": "fictional-codex-editor",
+            "principal": "fictional-docs-owner",
+            "capabilities": [
+              {
+                "action": "file:read",
+                "resource": "repo://fictional-preview/docs/quickstart.md"
+              },
+              {
+                "action": "file:write",
+                "resource": "repo://fictional-preview/docs/quickstart.md"
+              }
+            ],
+            "validFrom": "2026-01-01T00:00:00Z",
+            "expiresAt": "2026-01-01T00:02:00Z",
+            "canDelegate": false
+          }
+        ],
+        "events": [
+          {
+            "id": "CODING-FICTIONAL-PREVIEW-01-inspect",
+            "parentEventId": null,
+            "actor": "fictional-coordinator",
+            "authorityId": "CODING-FICTIONAL-PREVIEW-01-root",
+            "label": "fictional-coordinator",
+            "job": "Inspect the recorded action",
+            "action": {
+              "action": "file:read",
+              "resource": "repo://fictional-preview/docs/quickstart.md",
+              "at": "2026-01-01T00:01:00Z",
+              "outcome": "completed"
+            },
+            "evidence": {
+              "callId": "fictional-call-inspect",
+              "tool": "preflight_read",
+              "artifactSha256": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504"
+            }
+          },
+          {
+            "id": "CODING-FICTIONAL-PREVIEW-01-read",
+            "parentEventId": "CODING-FICTIONAL-PREVIEW-01-inspect",
+            "actor": "fictional-codex-editor",
+            "authorityId": "CODING-FICTIONAL-PREVIEW-01-edit",
+            "label": "fictional-codex-editor",
+            "job": "Inspect the recorded action",
+            "action": {
+              "action": "file:read",
+              "resource": "repo://fictional-preview/docs/quickstart.md",
+              "at": "2026-01-01T00:01:00Z",
+              "outcome": "completed"
+            },
+            "evidence": {
+              "callId": "fictional-call-read",
+              "tool": "read_quickstart",
+              "artifactSha256": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504"
+            }
+          },
+          {
+            "id": "CODING-FICTIONAL-PREVIEW-01-write",
+            "parentEventId": "CODING-FICTIONAL-PREVIEW-01-inspect",
+            "actor": "fictional-codex-editor",
+            "authorityId": "CODING-FICTIONAL-PREVIEW-01-edit",
+            "label": "fictional-codex-editor",
+            "job": "Inspect the recorded action",
+            "action": {
+              "action": "file:write",
+              "resource": "repo://fictional-preview/docs/quickstart.md",
+              "at": "2026-01-01T00:01:00Z",
+              "outcome": "completed"
+            },
+            "evidence": {
+              "callId": "fictional-call-write-repeat",
+              "tool": "update_preview_paragraph",
+              "artifactSha256": "700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa"
+            }
+          }
+        ],
+        "imported": true
+      }
+    },
+    "codex": {
+      "workflow": "Follow-up review",
+      "fingerprint": "3efd24cb290f15322aa3c654402d625e4bfa1754f94d2a4b278ff1c1af481265",
+      "evidence": {
+        "hashes": {
+          "actions.jsonl": "dc04b597839b205750b57fa70e03627c833d7beea686a91d2bc354eff42f78d7",
+          "grants.jsonl": "20917e8cfaa7714b34ce45638ce73fb76adf0b5598c97a048d5221e798c76952",
+          "attempts.jsonl": "2f56a1e48339b0dcf49ac6eb6310e0b12e8c4c2dbcf93a650986ea7dadf89a0e",
+          "before.md": "3102e5961a0e7a52432986669b08aa785998526d59691c10d0c190484328f504",
+          "after.md": "700c9aed0a7eecf416c7d2034a93efa959a0a87da4eb1197501127bb048684fa",
+          "quickstart.diff": "a8dc111730d68cd401abf3bd8c61682b78f808b75d15806cb5bdcc9170831924",
+          "codex-events.jsonl": "2f9c7e7990ae142408698e52b779675ed6c51017460126ea126cfb8c657623a3"
+        },
+        "files": {
+          "actions.jsonl": "eyJpZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtaW5zcGVjdCIsICJwYXJlbnRFdmVudElkIjogbnVsbCwgImFjdG9yIjogImZpY3Rpb25hbC1jb29yZGluYXRvciIsICJhdXRob3JpdHlJZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtcm9vdCIsICJhY3Rpb24iOiB7ImFjdGlvbiI6ICJmaWxlOnJlYWQiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJvdXRjb21lIjogImNvbXBsZXRlZCJ9LCAiZXZpZGVuY2UiOiB7InRvb2wiOiAicHJlZmxpZ2h0X3JlYWQiLCAiY2FsbElkIjogImZpY3Rpb25hbC1jYWxsLWluc3BlY3QiLCAiYXJ0aWZhY3RTaGEyNTYiOiAiMzEwMmU1OTYxYTBlN2E1MjQzMjk4NjY2OWIwOGFhNzg1OTk4NTI2ZDU5NjkxYzEwZDBjMTkwNDg0MzI4ZjUwNCJ9fQp7ImlkIjogIkNPRElORy1GSUNUSU9OQUwtUFJFVklFVy0wMS1yZWFkIiwgInBhcmVudEV2ZW50SWQiOiAiQ09ESU5HLUZJQ1RJT05BTC1QUkVWSUVXLTAxLWluc3BlY3QiLCAiYWN0b3IiOiAiZmljdGlvbmFsLWNvZGV4LWVkaXRvciIsICJhdXRob3JpdHlJZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtZWRpdCIsICJhY3Rpb24iOiB7ImFjdGlvbiI6ICJmaWxlOnJlYWQiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJvdXRjb21lIjogImNvbXBsZXRlZCJ9LCAiZXZpZGVuY2UiOiB7InRvb2wiOiAicmVhZF9xdWlja3N0YXJ0IiwgImNhbGxJZCI6ICJmaWN0aW9uYWwtY2FsbC1yZWFkIiwgImFydGlmYWN0U2hhMjU2IjogIjMxMDJlNTk2MWEwZTdhNTI0MzI5ODY2NjliMDhhYTc4NTk5ODUyNmQ1OTY5MWMxMGQwYzE5MDQ4NDMyOGY1MDQifX0KeyJpZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtd3JpdGUiLCAicGFyZW50RXZlbnRJZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtaW5zcGVjdCIsICJhY3RvciI6ICJmaWN0aW9uYWwtY29kZXgtZWRpdG9yIiwgImF1dGhvcml0eUlkIjogIkNPRElORy1GSUNUSU9OQUwtUFJFVklFVy0wMS1lZGl0IiwgImFjdGlvbiI6IHsiYWN0aW9uIjogImZpbGU6d3JpdGUiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJvdXRjb21lIjogImNvbXBsZXRlZCJ9LCAiZXZpZGVuY2UiOiB7InRvb2wiOiAidXBkYXRlX3ByZXZpZXdfcGFyYWdyYXBoIiwgImNhbGxJZCI6ICJmaWN0aW9uYWwtY2FsbC13cml0ZS1yZXBlYXQiLCAiYXJ0aWZhY3RTaGEyNTYiOiAiNzAwYzlhZWQwYTdlZWNmNDE2YzdkMjAzNGE5M2VmYTk1OWEwYTg3ZGE0ZWIxMTk3NTAxMTI3YmIwNDg2ODRmYSJ9fQo=",
+          "grants.jsonl": "eyJpZCI6ICJDT0RJTkctRklDVElPTkFMLVBSRVZJRVctMDEtcm9vdCIsICJwYXJlbnRHcmFudElkIjogbnVsbCwgImlzc3VlciI6ICJmaWN0aW9uYWwtZG9jcy1vd25lciIsICJzdWJqZWN0IjogImZpY3Rpb25hbC1jb29yZGluYXRvciIsICJwcmluY2lwYWwiOiAiZmljdGlvbmFsLWRvY3Mtb3duZXIiLCAiY2FwYWJpbGl0aWVzIjogW3siYWN0aW9uIjogImZpbGU6cmVhZCIsICJyZXNvdXJjZSI6ICJyZXBvOi8vZmljdGlvbmFsLXByZXZpZXcvZG9jcy9xdWlja3N0YXJ0Lm1kIn0sIHsiYWN0aW9uIjogImZpbGU6d3JpdGUiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCJ9XSwgImNhbkRlbGVnYXRlIjogdHJ1ZSwgInZhbGlkRnJvbSI6ICIyMDI2LTAxLTAxVDAwOjAwOjAwWiIsICJleHBpcmVzQXQiOiAiMjAyNi0wMS0wMVQwMDowMjowMFoifQp7ImlkIjogIkNPRElORy1GSUNUSU9OQUwtUFJFVklFVy0wMS1lZGl0IiwgInBhcmVudEdyYW50SWQiOiAiQ09ESU5HLUZJQ1RJT05BTC1QUkVWSUVXLTAxLXJvb3QiLCAiaXNzdWVyIjogImZpY3Rpb25hbC1jb29yZGluYXRvciIsICJzdWJqZWN0IjogImZpY3Rpb25hbC1jb2RleC1lZGl0b3IiLCAicHJpbmNpcGFsIjogImZpY3Rpb25hbC1kb2NzLW93bmVyIiwgImNhcGFiaWxpdGllcyI6IFt7ImFjdGlvbiI6ICJmaWxlOnJlYWQiLCAicmVzb3VyY2UiOiAicmVwbzovL2ZpY3Rpb25hbC1wcmV2aWV3L2RvY3MvcXVpY2tzdGFydC5tZCJ9LCB7ImFjdGlvbiI6ICJmaWxlOndyaXRlIiwgInJlc291cmNlIjogInJlcG86Ly9maWN0aW9uYWwtcHJldmlldy9kb2NzL3F1aWNrc3RhcnQubWQifV0sICJjYW5EZWxlZ2F0ZSI6IGZhbHNlLCAidmFsaWRGcm9tIjogIjIwMjYtMDEtMDFUMDA6MDA6MDBaIiwgImV4cGlyZXNBdCI6ICIyMDI2LTAxLTAxVDAwOjAyOjAwWiJ9Cg==",
+          "attempts.jsonl": "eyJ0b29sIjogInJlYWRfcXVpY2tzdGFydCIsICJjYWxsSWQiOiAiZmljdGlvbmFsLWNhbGwtcmVhZCIsICJhdCI6ICIyMDI2LTAxLTAxVDAwOjAxOjAwWiIsICJzdGF0dXMiOiAiY29tcGxldGVkIn0KeyJ0b29sIjogInVwZGF0ZV9wcmV2aWV3X3BhcmFncmFwaCIsICJjYWxsSWQiOiAiZmljdGlvbmFsLWNhbGwtd3JpdGUtcmVwZWF0IiwgImF0IjogIjIwMjYtMDEtMDFUMDA6MDE6MDBaIiwgInN0YXR1cyI6ICJjb21wbGV0ZWQifQo=",
+          "before.md": "IyBMb2NhbCBwcmV2aWV3CgpTdGFydCB0aGUgcHJldmlldyBzZXJ2ZXIuCg==",
+          "after.md": "IyBMb2NhbCBwcmV2aWV3CgpSdW4gYHB5dGhvbjMgLW0gaHR0cC5zZXJ2ZXIgODAwMCAtLWJpbmQgMTI3LjAuMC4xYCBhbmQgb3BlbiA8aHR0cDovLzEyNy4wLjAuMTo4MDAwLz4uCg=="
+        }
+      }
+    }
+  },
+  "resolution": "ada5f4118d74a0730de78f0ac2aba2f17beaceb11ac769795acc2f76a78a5c75",
+  "note": "This copy supplied the original quickstart output."
+}

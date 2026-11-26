@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "workflow": "Follow-up review",
+  "scenarios": [
+    {
+      "id": "history-on",
+      "caseFile": "cases/history-on.json",
+      "pin": "matching",
+      "disposition": "resolved",
+      "reason": "verified-closure",
+      "senderHistory": [
+        "repair",
+        "closure"
+      ],
+      "localHistory": []
+    },
+    {
+      "id": "history-off",
+      "caseFile": "cases/history-off.json",
+      "pin": "matching",
+      "disposition": "resolved",
+      "reason": "verified-closure",
+      "senderHistory": [],
+      "localHistory": []
+    },
+    {
+      "id": "missing-pin",
+      "caseFile": "cases/history-on.json",
+      "pin": "missing",
+      "disposition": "open-blocked",
+      "reason": "missing-pin",
+      "senderHistory": [
+        "repair",
+        "closure"
+      ],
+      "localHistory": []
+    },
+    {
+      "id": "conflicting-pin",
+      "caseFile": "cases/history-on.json",
+      "pin": "conflicting",
+      "disposition": "open-blocked",
+      "reason": "conflicting-pin",
+      "senderHistory": [
+        "repair",
+        "closure"
+      ],
+      "localHistory": []
+    },
+    {
+      "id": "altered-original",
+      "caseFile": "cases/altered-original.json",
+      "pin": "matching",
+      "disposition": "open-blocked",
+      "reason": "original-receipt-mismatch",
+      "senderHistory": [
+        "repair",
+        "closure"
+      ],
+      "localHistory": []
+    },
+    {
+      "id": "altered-follow-up",
+      "caseFile": "cases/altered-follow-up.json",
+      "pin": "matching",
+      "disposition": "open-blocked",
+      "reason": "follow-up-receipt-mismatch",
+      "senderHistory": [
+        "repair",
+        "closure"
+      ],
+      "localHistory": []
+    },
+    {
+      "id": "open-follow-up",
+      "caseFile": "cases/open-follow-up.json",
+      "pin": "matching",
+      "disposition": "open-ready",
+      "reason": "explicit-closure-needed",
+      "senderHistory": [
+        "repair"
+      ],
+      "localHistory": []
+    }
+  ]
+}

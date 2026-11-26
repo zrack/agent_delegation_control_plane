@@ -21,6 +21,7 @@ checks += [
     ("offline regression command", ["node", "--test", "tests/evaluator/regression.test.mjs"]),
     ("regression review inbox", ["node", "--test", "tests/evaluator/review.test.mjs"]),
     ("offline Codex folder", ["node", "--test", "tests/evaluator/codex-import.test.mjs"]),
+    ("fictional Codex handoff kit", ["node", "--test", "tests/evaluator/codex-handoff.test.mjs"]),
     ("offline invoice folder", ["node", "--test", "tests/evaluator/invoice-import.test.mjs"]),
     ("private alpha rehearsal kit", ["node", "--test", "tests/evaluator/alpha-rehearsal.test.mjs"]),
     ("loopback HTTP", [sys.executable, "-m", "unittest", "discover", "-s", "tests/evaluator", "-p", "test_server.py", "-v"]),
