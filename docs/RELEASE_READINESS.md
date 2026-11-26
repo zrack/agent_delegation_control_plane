@@ -6,6 +6,7 @@ The [alpha.16 prerelease](https://github.com/zrack/agent_delegation_control_plan
 
 | Check | Release evidence |
 | --- | --- |
+| Source ZIP | All 156 files in GitHub’s public source download matched the tagged commit byte for byte. |
 | Demo ZIP | Two builds produced the same ZIP. All 35 files listed in its manifest verified. The [published ZIP](https://github.com/zrack/agent_delegation_control_plane/releases/download/v0.1.0-alpha.16/adcp-codex-handoff-demo-v0.1.0-alpha.16.zip) has SHA-256 `d13bd9772d6333ef656b7452d5c4bdf23a787aea4f0d7398dc07a8f08ddcda6c`. |
 | Receiver outcomes | The browser after reload and the [offline verifier](CODEX_HANDOFF.md#verify-the-case-offline) agreed on all seven scenarios. Two were resolved, four were blocked and one remained open pending explicit closure. |
 | CI | [Project integrity, browser acceptance and security passed](https://github.com/zrack/agent_delegation_control_plane/actions/runs/45756246703) on the tagged revision. |

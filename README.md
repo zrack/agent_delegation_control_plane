@@ -24,7 +24,7 @@ Open `reviewer/TASK_SHEET.md` in the extracted demo. The seven scenarios share a
 
 1. **Choose your baseline.** In **Investigate a run → Import a Codex run folder**, choose `pins/matching`. In **Compare runs**, select the imported run as **Baseline run**. Expand **Save or replace a workflow baseline**, name it `Follow-up review` and select **Save baseline**.
 2. **Open the handoff.** In **Regression inbox → Import review package or case**, choose `cases/history-on.json`. Reload at the same address and reopen the case. Its **Resolved** status verifies against your pin and the passing follow-up.
-3. **Check what happened.** Under **Sender-reported history**, compare the replacement digest for `after.md` with the saved original output receipt. In the follow-up’s `grants.jsonl`, find the grant covering the editor’s read and write. **Local repair history** is empty because the repair and closure happened in the sender’s profile.
+3. **Check what happened.** Under **Sender-reported history**, compare the replacement digest for `after.md` with the saved original output receipt. In the follow-up’s `grants.jsonl`, find the grant covering the editor’s read and write. Your **Local repair history** stays empty when you import and reload the case.
 
 Try `cases/history-off.json` with the same baseline in a second fresh profile. The closure still verifies, but the sender’s account of the repair is absent. The other five rows exercise missing or conflicting pins, damaged receipts and a passing follow-up awaiting closure. [Full handoff walkthrough](docs/ALPHA_REVIEW.md#review-a-codex-handoff) · [Verify a case offline](docs/CODEX_HANDOFF.md#verify-the-case-offline)
 
