@@ -23,6 +23,7 @@ checks += [
     ("offline Codex folder", ["node", "--test", "tests/evaluator/codex-import.test.mjs"]),
     ("portable case verifier and import preview", ["node", "--test", "tests/evaluator/verify-case.test.mjs", "tests/evaluator/codex-inspection.test.mjs"]),
     ("fictional Codex handoff kit", ["node", "--test", "tests/evaluator/codex-handoff.test.mjs"]),
+    ("offline receipt signature experiment", ["node", "--test", "experiments/receipt-provenance/prototype.test.mjs"]),
     ("producer capture validation", ["node", "--test", "tests/evaluator/validate-capture.test.mjs"]),
     ("offline invoice folder", ["node", "--test", "tests/evaluator/invoice-import.test.mjs"]),
     ("private alpha rehearsal kit", ["node", "--test", "tests/evaluator/alpha-rehearsal.test.mjs"]),
