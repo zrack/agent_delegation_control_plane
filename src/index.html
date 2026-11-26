@@ -39,6 +39,25 @@
           <p id="codex-save-status" role="status"></p>
         </form>
       </section>
+      <form id="imported-pin-form" class="workflow-controls" aria-label="Pin this imported run" hidden>
+        <p class="pin-identity">Run ID <code id="imported-pin-run"></code></p>
+        <div><label for="imported-pin-workflow">Workflow name</label>
+          <input id="imported-pin-workflow" maxlength="80" required autocomplete="off"></div>
+        <button id="pin-imported-run" type="submit">Pin this run as a workflow baseline</button>
+        <p id="imported-pin-status" role="status"></p>
+      </form>
+      <dialog id="baseline-replacement" aria-labelledby="replacement-title">
+        <form method="dialog">
+          <h2 id="replacement-title">Replace the workflow baseline?</h2>
+          <p>Workflow <strong id="replacement-workflow"></strong></p>
+          <dl>
+            <dt>Currently pinned run</dt><dd><code id="replacement-current"></code></dd>
+            <dt>New baseline run</dt><dd><code id="replacement-new"></code></dd>
+          </dl>
+          <button id="cancel-baseline-replacement" type="submit" value="cancel" autofocus>Cancel</button>
+          <button id="confirm-baseline-replacement" type="submit" value="replace">Replace baseline</button>
+        </form>
+      </dialog>
       <nav class="view-nav" aria-label="Dashboard views">
         <a id="investigate-link" href="#CH-002" aria-current="page">Investigate a run</a>
         <a id="compare-link" href="#compare?">Compare runs</a>

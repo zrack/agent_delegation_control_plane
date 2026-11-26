@@ -41,7 +41,7 @@ export async function importCase(page, file) {
   await page.locator('#review-detail .review-case, #review-detail #review-note-form').first().waitFor();
 }
 
-export async function savePin(page, folder) {
+export async function savePin(page, folder, { replace = false } = {}) {
   await page.locator('#codex-folder').setInputFiles(folder);
   await page.waitForURL(url => url.hash.startsWith('#CODEX-'));
   const id = new URL(page.url()).hash.slice(1).split('/')[0];
@@ -50,7 +50,13 @@ export async function savePin(page, folder) {
   await page.getByText('Save or replace a workflow baseline', { exact: true }).click();
   await page.locator('#workflow-name').fill('Follow-up review');
   await page.locator('#save-workflow-baseline').click();
+  if (replace) await page.locator('#confirm-baseline-replacement').click();
   await page.locator('#workflow-status').filter({ hasText: 'Saved baseline ' + id }).waitFor();
+}
+
+export async function pinImportedRun(page, workflowName) {
+  await page.locator('#imported-pin-workflow').fill(workflowName);
+  await page.getByRole('button', { name: 'Pin this run as a workflow baseline', exact: true }).click();
 }
 
 // Observe the saved pin without using internal APIs to create or change it.

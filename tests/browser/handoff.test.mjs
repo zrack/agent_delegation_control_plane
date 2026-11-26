@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { browserSession, disposition, expand, importCase, kit, profile, savedPin, savePin, work } from './dashboard.mjs';
+import { browserSession, disposition, expand, importCase, kit, pinImportedRun, profile, savedPin, savePin, work } from './dashboard.mjs';
 
 const json = async filename => JSON.parse(await readFile(filename, 'utf8'));
 const labels = { repair: 'Original receipts repaired', closure: 'Case explicitly closed' };
@@ -64,7 +64,7 @@ async function download(page, name, shareHistory) {
   return path;
 }
 
-test('handoff kit outcomes survive reload in independent receiver profiles', async t => {
+test('handoff kit outcomes survive reload with baselines pinned directly from receiver imports', async t => {
   const matrix = await json(join(kit, 'facilitator/outcomes.json'));
   assert.deepEqual(new Set(matrix.scenarios.map(row => row.id)), new Set([
     'history-on', 'history-off', 'missing-pin', 'conflicting-pin', 'altered-original', 'altered-follow-up', 'open-follow-up',
@@ -73,7 +73,16 @@ test('handoff kit outcomes survive reload in independent receiver profiles', asy
   for (const row of matrix.scenarios) {
     await t.test(row.id, async child => {
       const page = await profile(browser, child);
-      if (row.pin !== 'missing') await savePin(page, join(kit, 'pins', row.pin));
+      if (row.pin !== 'missing') {
+        const expected = await json(join(kit, 'receiver-baselines', row.pin, 'pin.json'));
+        await page.locator('#codex-folder').setInputFiles(join(kit, 'pins', row.pin));
+        await page.locator('#imported-pin-run').filter({ hasText: expected.runId }).waitFor();
+        await pinImportedRun(page, matrix.workflow);
+        await page.locator('#imported-pin-status').filter({ hasText: expected.runId }).waitFor();
+        assert.deepEqual(JSON.parse(await savedPin(page)).baselines, [{
+          name: matrix.workflow, runId: expected.runId, fingerprint: expected.fingerprint,
+        }]);
+      }
       const pin = await savedPin(page);
       await importCase(page, join(kit, row.caseFile));
       await verifyOutcome(page, row);

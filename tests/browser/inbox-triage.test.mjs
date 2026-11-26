@@ -63,7 +63,7 @@ test('a full mixed inbox keeps the selected case and filters while closure follo
 
   const other = await page.context().newPage();
   await other.goto(new URL(selectedUrl).origin);
-  await savePin(other, join(kit, 'pins', 'conflicting'));
+  await savePin(other, join(kit, 'pins', 'conflicting'), { replace: true });
   await count.filter({ hasText: 'Showing 0 of 20 saved cases. The selected case is outside these filters.' }).waitFor();
   await page.locator('.review-case .badge').filter({ hasText: /^Open$/ }).waitFor();
   assert.equal(await cards.count(), 0);

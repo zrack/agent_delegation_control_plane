@@ -55,6 +55,13 @@ const workflowName = document.querySelector('#workflow-name');
 const workflowStatus = document.querySelector('#workflow-status');
 const saveBaselineButton = document.querySelector('#save-workflow-baseline');
 const removeBaselineButton = document.querySelector('#remove-workflow-baseline');
+const importedPinForm = document.querySelector('#imported-pin-form');
+const importedPinRun = document.querySelector('#imported-pin-run');
+const importedWorkflow = document.querySelector('#imported-pin-workflow');
+const importedPinButton = document.querySelector('#pin-imported-run');
+const importedPinStatus = document.querySelector('#imported-pin-status');
+const replacementDialog = document.querySelector('#baseline-replacement');
+let displayedPinChain;
 const investigateLink = document.querySelector('#investigate-link');
 const compareLink = document.querySelector('#compare-link');
 const reviewLink = document.querySelector('#review-link');
@@ -262,6 +269,7 @@ function comparisonDetail(row, pair = comparisonPair) {
 
 function setView(view) {
   if (view !== 'investigation') codexForm.hidden = true;
+  if (view !== 'investigation') importedPinForm.hidden = true;
   comparison.hidden = view !== 'comparison';
   reviewInbox.hidden = view !== 'review-inbox';
   for (const selector of ['.workspace', '#overview', '.demo-note', '.dataset-note']) document.querySelector(selector).hidden = view !== 'investigation';
@@ -339,6 +347,13 @@ function render() {
   updateCodexForm();
   const chain = selectedChain;
   const result = results.get(chain.id);
+  importedPinForm.hidden = !chain.imported || !canPinBaseline(chain, result);
+  if (displayedPinChain !== chain) {
+    displayedPinChain = chain;
+    importedPinRun.textContent = chain.id;
+    importedWorkflow.value = '';
+    importedPinStatus.textContent = '';
+  }
   document.querySelector('#overview').innerHTML = [
     ['Completed chains', chains.length, 'Examples and imported investigations'],
     ['With violations', [...results.values()].filter(r => r.status === 'violation').length, 'Recorded authority exceeded'],
@@ -388,7 +403,10 @@ function render() {
   document.querySelector('#announcement').textContent = `${chain.title}. ${statusLabels[result.status]}. Hop ${hop}, ${event.label}, ${statusLabels[eventStatus]}.`;
 }
 
-window.addEventListener('hashchange', selectFromHash);
+window.addEventListener('hashchange', () => {
+  if (replacementDialog.open) replacementDialog.close('cancel');
+  selectFromHash();
+});
 workflowName.addEventListener('input', updateSaveLabel);
 workflowSelect.addEventListener('change', () => {
   const profile = workflows.find(item => workflowKey(item.name) === workflowSelect.value);
@@ -396,39 +414,72 @@ workflowSelect.addEventListener('change', () => {
   const candidate = candidateSelect.value === baseline ? '' : candidateSelect.value;
   location.hash = comparisonHash(baseline, candidate, workflowSelect.value);
 });
-saveBaselineButton.addEventListener('click', async () => {
-  const baseline = chains.find(chain => chain.id === baselineSelect.value);
-  const name = workflowName.value.trim();
+function confirmReplacement(current, baseline, fingerprint) {
+  replacementDialog.querySelector('#replacement-workflow').textContent = current.name;
+  replacementDialog.querySelector('#replacement-current').textContent = `${current.runId}\nSHA-256 ${current.fingerprint}`;
+  replacementDialog.querySelector('#replacement-new').textContent = `${baseline.id}\nSHA-256 ${fingerprint}`;
+  replacementDialog.returnValue = 'cancel';
+  replacementDialog.showModal();
+  return new Promise(resolve => replacementDialog.addEventListener('close',
+    () => resolve(replacementDialog.returnValue === 'replace'), { once: true }));
+}
+
+async function pinBaseline(currentRun, input, button, status, pins) {
+  const baseline = currentRun();
+  const name = input.value.trim();
   if (!baseline || !canPinBaseline(baseline, results.get(baseline.id))) {
-    workflowStatus.textContent = 'Choose a within-scope baseline with complete authority evidence and usable artifact references.';
+    status.textContent = 'Choose a within-scope baseline with complete authority evidence and usable artifact references.';
     return;
   }
   if (!name) {
-    workflowStatus.textContent = 'Enter a workflow name.';
-    workflowName.focus();
+    status.textContent = 'Enter a workflow name.';
+    input.focus();
     return;
   }
   const key = workflowKey(name);
-  const expected = workflows.find(item => workflowKey(item.name) === key);
+  const expected = pins.find(item => workflowKey(item.name) === key);
   const currentRoute = location.hash;
-  saveBaselineButton.disabled = true;
+  const stillSelected = () => location.hash === currentRoute && currentRun() === baseline && input.value.trim() === name;
+  button.disabled = true;
+  status.textContent = '';
   try {
     const fingerprint = await runFingerprint(baseline);
-    workflows = await writeLocal(saveWorkflowBaseline, getStorage, name, baseline, fingerprint, expected);
-    workflowStatus.textContent = `Saved baseline ${baseline.id} for ${name}.`;
-    if (location.hash === currentRoute) {
+    if (!stillSelected()) return;
+    const samePin = expected?.runId === baseline.id && expected.fingerprint === fingerprint;
+    if (expected && !samePin && !(await confirmReplacement(expected, baseline, fingerprint))) {
+      if (stillSelected()) status.textContent = 'Replacement canceled.';
+      return;
+    }
+    await writeLocal(() => {
+      if (stillSelected()) saveWorkflowBaseline(getStorage, name, baseline, fingerprint, expected);
+    });
+    if (!stillSelected()) return;
+    status.textContent = samePin ? `Already pinned ${baseline.id} for ${expected.name}.` : `Saved baseline ${baseline.id} for ${name}.`;
+    if (button === saveBaselineButton) {
       const candidate = candidateSelect.value === baseline.id ? '' : candidateSelect.value;
       const hash = comparisonHash(baseline.id, candidate, key);
       if (location.hash === hash) renderComparison();
       else location.hash = hash;
-    }
+    } else updateCodexForm();
   } catch (error) {
-    workflowStatus.textContent = `Could not save the baseline. ${error.message}`;
-    renderComparison(true);
+    if (stillSelected()) {
+      status.textContent = `Could not save the baseline. ${error.message}`;
+      if (button === saveBaselineButton) renderComparison(true);
+    }
   } finally {
-    saveBaselineButton.disabled = false;
+    button.disabled = false;
   }
+}
+saveBaselineButton.addEventListener('click', () =>
+  pinBaseline(() => chains.find(chain => chain.id === baselineSelect.value), workflowName, saveBaselineButton, workflowStatus, workflows));
+importedPinForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (importedPinForm.hidden || importedPinButton.disabled || importBusy) return;
+  const { baselines, warning } = restoreWorkflowBaselines(getStorage);
+  if (warning) { importedPinStatus.textContent = warning; return; }
+  pinBaseline(() => selectedChain, importedWorkflow, importedPinButton, importedPinStatus, baselines);
 });
+importedWorkflow.addEventListener('input', () => { importedPinStatus.textContent = ''; });
 removeBaselineButton.addEventListener('click', async () => {
   const profile = workflows.find(item => workflowKey(item.name) === workflowSelect.value);
   if (!profile) return;
@@ -544,7 +595,7 @@ function updateCodexForm() {
   codexSave.disabled = importBusy || !codexWorkflow.value;
   codexHelp.textContent = warning || (codexPins.length
     ? 'Saving keeps the action, grant and attempt ledgers and both Markdown receipts in this browser. The diff and Codex event stream are kept as hashes only.'
-    : 'Pin a complete run under a workflow name in Compare runs, then import a different candidate folder.');
+    : 'Pin a complete run as a workflow baseline, then import a different candidate folder.');
 }
 
 codexWorkflow.addEventListener('change', () => {
