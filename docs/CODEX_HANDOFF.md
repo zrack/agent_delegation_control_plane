@@ -8,6 +8,8 @@ python3 scripts/build_codex_handoff.py --output output/handoff
 
 Open **`adcp-codex-handoff-demo/reviewer/TASK_SHEET.md` first** inside the output folder or extracted ZIP. It names the case to import and the receiver baseline to pin. Give each reviewer their own fresh browser profile at the same local dashboard address. The facilitator uses `facilitator/ANSWER_KEY.md` and `facilitator/outcomes.json` to score the exercise after the reviewer records a decision.
 
+In the inbox, read **Sender-reported history** and **Local repair history** separately. When the sender panel has no events, the available history leaves the sender’s repair unknown. A receiver can still verify a recorded closure from the receipts, follow-up and matching pin.
+
 ## Verify the case offline
 
 Point the command to the case received from the sender. Supply the independently selected receiver baseline and the workflow it belongs to. The files stay on disk unchanged.
