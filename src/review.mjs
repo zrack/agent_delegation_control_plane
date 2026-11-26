@@ -138,7 +138,7 @@ export async function createReviewCase(item, note, {
   }
   if (item.invoice && !withReceipts) return serializeBundle(bundle);
   const original = await assessReview(item);
-  const { assessment, invoice, originalInvoice, resolved } = await assessFollowUp(item, original);
+  const { assessment, invoice, originalInvoice, resolved } = await assessFollowUp(item, original, getStorage);
   if (withReceipts) {
     if (!bundle.decision || !original.verdict || !originalInvoice.checked) {
       throw new Error('Save a decision and restore the original invoice evidence before exporting receipts.');
@@ -821,6 +821,14 @@ export async function assessFollowUp(item, original, getStorage) {
     const pinState = folderPinState(getStorage, item);
     const pinChanged = pinState.status !== 'matched';
     return { ...open, assessment, pinState, pinChanged, passes, canResolve: passes && !pinChanged, resolved: resolved && !pinChanged };
+  }
+  if (item.invoice && getStorage) {
+    // Receivers may verify a portable invoice closure with its included baseline.
+    // An explicit conflicting local pin or unreadable pin store blocks verification.
+    const pinState = folderPinState(getStorage, item);
+    const pinChanged = pinState.status !== 'matched';
+    return { ...open, assessment, invoice, pinState, pinChanged, passes, canResolve: passes && !pinChanged,
+      resolved: resolved && ['matched', 'missing'].includes(pinState.status) };
   }
   return { ...open, assessment, invoice, passes, canResolve: passes && !pinChanged, resolved };
 }

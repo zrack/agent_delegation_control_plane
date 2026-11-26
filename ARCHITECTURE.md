@@ -251,7 +251,13 @@ The review inbox stores up to 20 reports and 2 MiB total under `adcp.regression-
 
 The optional Codex import preview simulates a fresh import into a temporary in-memory overlay. It shows included receipt filenames, accepted sender-history count, required baseline identity, receiver pin state and prospective disposition. Canceling discards the preview. Confirming rechecks the input, current pin, duplicates and available inbox space before saving. A failed confirmation leaves existing cases intact. The original one-step import remains available.
 
-Inbox filters let a reviewer select a workflow, decision and verified closure state. Card status uses the saved evidence and current workflow pin. A change in the applicable pin can reopen a previously resolved case. Filtering and navigation preserve the case’s decision and notes.
+The inbox rechecks each saved case before showing its closure and first blocker.
+Workflow, decision and closure filters apply to these current results. A selected
+case remains inspectable when a changed pin moves it outside the active filter.
+The tab remembers only the three filter choices in session storage. Other tabs’
+changes to evidence or pins trigger a new check. An invoice’s self-contained
+portable closure can verify when the receiver has no pin. A conflicting or
+unreadable pin prevents displaying or exporting a verified resolution.
 
 A portable package is a version 1 JSON document capped at 2 MiB. It wraps the normalized report, optional matching version 1 investigation envelopes and an optional note. Imports use the same fingerprint checks as separate files. An altered attachment is excluded and marked as mismatched. Exports use a browser-local download, omit the note by default and leave review completion local to each inbox. An included note seeds a newly imported item. Existing local reviews take precedence on reimport.
 

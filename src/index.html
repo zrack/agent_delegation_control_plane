@@ -110,6 +110,22 @@
             <p id="invoice-candidate-help" class="panel-description"></p>
           </form>
         </details>
+        <fieldset id="review-filters" hidden>
+          <legend>Filter saved cases</legend>
+          <div><label for="review-workflow-filter">Workflow</label><select id="review-workflow-filter"><option value="">All workflows</option></select></div>
+          <div><label for="review-decision-filter">Decision</label><select id="review-decision-filter">
+            <option value="">All decisions</option><option value="none">No saved decision</option>
+            <option value="fix-required">Fix required</option><option value="evidence-needed">Evidence needed</option>
+            <option value="expected-change">Expected change</option>
+          </select></div>
+          <div><label for="review-closure-filter">Closure</label><select id="review-closure-filter">
+            <option value="">All cases</option><option value="open">All open cases</option><option value="blocked">Open · blocked</option>
+            <option value="ready">Ready to close</option><option value="resolved">Verified resolved</option>
+            <option value="clear">No closure needed</option>
+          </select></div>
+          <button type="button" id="review-clear-filters">Clear filters</button>
+          <p id="review-filter-count" aria-live="polite"></p>
+        </fieldset>
         <div class="review-layout">
           <nav id="review-list" aria-label="Saved regression reports"></nav>
           <section id="review-detail" tabindex="-1" aria-label="Selected regression report"></section>
