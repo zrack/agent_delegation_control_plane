@@ -620,10 +620,11 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   function renderCase(item, original, followUp) {
     if (item.report.status === 'pass' && !followUp.flagged && !item.decision) return '';
     const { assessment, canResolve, pinChanged, resolved } = followUp;
-    const comparison = (label, record, check, stage) => `<div class="compare-run"><h3>${label}</h3>
+    const comparison = (label, record, check, stage, error) => `<div class="compare-run"><h3>${label}</h3>
       <code>${escape(record.report.candidateId ?? 'No run ID')}</code>
-      <p class="panel-description">Reported · ${regressionLabels[record.report.status]}</p>
-      <p class="panel-description">${check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p>
+      <p class="panel-description">${error ? 'Sender-reported' : 'Reported'} · ${regressionLabels[record.report.status]}</p>
+      <p class="panel-description">${error ? `Receiver check failed · ${escape(error)}` :
+        check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p>
       ${outputReceiptControl(check, stage)}</div>`;
     const nextStep = (item.invoice || item.codex) && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
@@ -652,7 +653,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <label for="review-follow-up-file">${label}</label>
       <input id="review-follow-up-file" type="file" ${picker} aria-describedby="${item.codex && !resolved ? 'codex-closure-reasons' : 'review-case-help'}" ${canAttach ? '' : 'disabled'}>
       ${item.followUp ? `<div class="compare-sides review-case-verdicts">${comparison('Original run', item, original, 'original')}
-        ${comparison('Follow-up run', item.followUp, assessment, 'follow-up')}</div>
+        ${comparison('Follow-up run', item.followUp, assessment, 'follow-up', followUp.error)}</div>
         ${receiptSummary}
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment, 'follow-up') + followUpRecords : ''}${receiptDetails}
@@ -710,7 +711,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
   function blockedCodexView(item, message, explanation) {
     return `<section class="review-case"><h3><span class="badge unknown">Open</span> · ${escape(message)}</h3>
       ${explanation}
-      ${item.decision ? `<p id="codex-blocked-decision"><strong>${escape(reviewDecisions[item.decision.kind])}</strong> · ${escape(item.decision.reason)}</p>` : ''}
+      ${item.decision ? `<p id="codex-blocked-decision"><strong>Previously saved decision</strong> · ${escape(reviewDecisions[item.decision.kind])} · ${escape(item.decision.reason)}</p>` : ''}
       ${item.note ? `<p>Saved review note · ${escape(item.note)}</p>` : ''}
       <button type="button" id="resolve-review-case" disabled>Close as resolved</button></section>
       ${codexHistory(item)}
