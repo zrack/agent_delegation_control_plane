@@ -3,7 +3,66 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { parseInvestigation } from '../../src/import.mjs';
+import { REVIEW_STORAGE_KEY } from '../../src/review.mjs';
+import { runFingerprint } from '../../src/storage.mjs';
 import { browserSession, disposition, expand, importCase, kit, profile, savedPin, savePin } from './dashboard.mjs';
+
+const receiptButton = (page, stage) => page.getByRole('button', { name: 'Go to ' + stage + ' receipt for after.md', exact: true });
+const reviewParams = url => new URLSearchParams(new URL(url).hash.slice('#review?'.length));
+
+async function savedSelection(page) {
+  return page.evaluate(key => {
+    const id = new URLSearchParams(location.hash.slice('#review?'.length)).get('item');
+    const item = JSON.parse(localStorage.getItem(key)).items.find(record => record.id === id);
+    return { item: item.id, capture: item.followUp.id };
+  }, REVIEW_STORAGE_KEY);
+}
+
+async function inspectVerifiedOutput(page, stage, record, selection) {
+  const targetId = 'codex-' + stage + '-output-receipt';
+  const control = receiptButton(page, stage);
+  assert.equal(await control.count(), 1);
+  assert.equal(await control.evaluate(node => node.tagName), 'BUTTON');
+  assert.equal(await control.getAttribute('aria-controls'), targetId);
+  const description = page.locator('#' + await control.getAttribute('aria-describedby'));
+  assert.equal(await description.isVisible(), true);
+  assert.equal(await description.innerText(), 'Opens the saved file contents and SHA-256 in this case.');
+  await control.focus();
+  await page.keyboard.press('Enter');
+
+  const target = page.locator('#' + targetId);
+  const summary = target.locator('summary:focus');
+  const label = stage === 'original' ? 'Original' : 'Follow-up';
+  const expected = Buffer.from(record.codex.evidence.files['after.md'], 'base64');
+  const digest = createHash('sha256').update(expected).digest('hex');
+  assert.equal(digest, record.codex.evidence.hashes['after.md']);
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    await summary.waitFor();
+    assert.equal(await summary.innerText(), label + ' output receipt · after.md · Rechecked from saved bytes');
+    assert.equal(await target.getAttribute('data-codex-side'), stage);
+    assert.equal(await target.locator('.receipt-digest').innerText(), 'SHA-256 ' + digest);
+    const content = target.locator('pre').filter({ hasText: expected.toString('utf8').trim() });
+    await content.waitFor();
+    assert.equal(await content.textContent(), expected.toString('utf8'));
+    const params = reviewParams(page.url());
+    assert.equal(params.get('item'), selection.item);
+    assert.equal(params.get('receipt'), stage);
+    assert.equal(params.get('capture'), stage === 'follow-up' ? selection.capture : null);
+  }
+}
+
+async function rejectedReceiptRoute(page, stage, selection) {
+  const url = new URL(page.url());
+  const params = new URLSearchParams({ item: selection.item, receipt: stage });
+  if (stage === 'follow-up') params.set('capture', selection.capture);
+  url.hash = 'review?' + params;
+  await page.goto(url.href);
+  await page.reload();
+  await page.waitForURL(url => !reviewParams(url).has('receipt'));
+  assert.equal(reviewParams(page.url()).get('item'), selection.item);
+}
 
 test('keyboard navigation opens after.md for the selected stage and restores that receipt after reload', async t => {
   const browser = await browserSession(t);
@@ -13,33 +72,12 @@ test('keyboard navigation opens after.md for the selected stage and restores tha
   const caseFile = join(kit, 'cases/history-on.json');
   const bundle = JSON.parse(await readFile(caseFile, 'utf8'));
   await importCase(page, caseFile);
-  const id = new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('item');
+  const selection = await savedSelection(page);
   for (const stage of ['original', 'follow-up']) {
-    const label = stage === 'original' ? 'Original' : 'Follow-up';
     const record = stage === 'original' ? bundle : bundle.followUp;
-    const expected = Buffer.from(record.codex.evidence.files['after.md'], 'base64');
-    const digest = createHash('sha256').update(expected).digest('hex');
-    const control = page.getByRole('button', { name: 'Inspect ' + stage + ' output receipt · after.md', exact: true });
-    assert.equal(await control.count(), 1);
-    await control.focus();
-    await page.keyboard.press('Enter');
-    const target = page.locator('#codex-' + stage + '-output-receipt');
-    const summary = target.locator('summary');
-    for (const reload of [false, true]) {
-      if (reload) await page.reload();
-      await summary.waitFor({ state: 'visible' });
-      assert.equal(await summary.innerText(), label + ' output receipt · after.md · Rechecked from saved bytes');
-      assert.equal(await target.getAttribute('data-codex-side'), stage);
-      assert.equal(await target.locator('.receipt-digest').innerText(), 'SHA-256 ' + digest);
-      await target.locator('pre').filter({ hasText: expected.toString('utf8').trim() }).waitFor();
-      assert.equal(await summary.evaluate(node => node === document.activeElement), true);
-      const params = new URLSearchParams(new URL(page.url()).hash.split('?')[1]);
-      assert.equal(params.get('item'), id);
-      assert.equal(params.get('receipt'), stage);
-      assert.equal(params.has('capture'), stage === 'follow-up');
-      assert.equal(await savedPin(page), pin);
-      assert.deepEqual(await disposition(page), { state: 'Resolved', ready: false });
-    }
+    await inspectVerifiedOutput(page, stage, record, selection);
+    assert.equal(await savedPin(page), pin);
+    assert.deepEqual(await disposition(page), { state: 'Resolved', ready: false });
   }
   const stale = new URL(page.url());
   const params = new URLSearchParams(stale.hash.split('?')[1]);
@@ -108,10 +146,11 @@ test('altered receipts keep the sender’s account inspectable and closure block
       const label = stage === 'original' ? 'Original' : 'Follow-up';
       const blocker = page.locator('#codex-closure-reasons li').filter({ hasText: label + ' evidence' });
       assert.match(await blocker.innerText(), /after\.md hash mismatch against manifest\.json/);
-      assert.equal(await page.getByRole('button', { name: 'Inspect ' + stage + ' output receipt · after.md' }).count(), 0);
+      assert.equal(await receiptButton(page, stage).count(), 0);
       assert.equal(await page.locator('#codex-' + stage + '-output-receipt').count(), 0);
       assert.equal(await page.locator('[data-grant-side="' + (stage === 'original' ? 'candidate' : 'follow-up') + '"]').count(), 0);
       if (stage === 'original') {
+        assert.equal(await page.locator('#review-detail details.grant-finding').count(), 0);
         const decision = await page.locator('#codex-blocked-decision').innerText();
         assert.match(decision, /Previously saved decision/);
         assert.ok(decision.includes(bundle.decision.reason));
@@ -123,16 +162,52 @@ test('altered receipts keep the sender’s account inspectable and closure block
         assert.match(verdict, /Sender-reported[^\n]*No regression found/);
         assert.match(verdict, /Receiver check failed[^\n]*after\.md hash mismatch against manifest\.json/);
         assert.doesNotMatch(verdict, /Evidence check unavailable/);
-        await page.getByRole('button', { name: 'Inspect original output receipt · after.md' }).click();
-        assert.match(await page.locator('#codex-original-output-receipt summary').innerText(), /Rechecked from saved bytes/);
         assert.equal(await page.locator('#review-follow-up-file').isEnabled(), true);
       }
+      const selection = await savedSelection(page);
+      const healthy = stage === 'original' ? 'follow-up' : 'original';
+      const region = page.getByRole('region', { name: (healthy === 'original' ? 'Original' : 'Follow-up') + ' run evidence' });
+      assert.equal(await receiptButton(region.getByRole('region', { name: 'Receiver checks' }), healthy).count(), 1);
+      await inspectVerifiedOutput(page, healthy, healthy === 'original' ? bundle : bundle.followUp, selection);
+      assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
+
+      // Even a route for the exact saved capture cannot open the damaged file.
+      await rejectedReceiptRoute(page, stage, selection);
+      assert.equal(await page.locator('#codex-' + stage + '-output-receipt').count(), 0);
+      assert.equal(await page.locator('#codex-' + healthy + '-output-receipt').evaluate(node => node.open), false);
+      assert.equal(await page.locator('#codex-local-history .codex-history-entry').count(), 0);
       await expand(page, 'Preview PR summary');
       const summary = await page.locator('#review-summary-text').inputValue();
       assert.match(summary, /Disposition: Open, blocked/);
       assert.ok(summary.includes(label + ' receipts: after.md failed verification'));
       assert.ok(!summary.includes(label + ' verified output receipt'));
       assert.equal(await savedPin(page), pin);
+      assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
+    });
+  }
+});
+
+test('a verified follow-up cannot open as this case’s output without a matching original task', async t => {
+  const browser = await browserSession(t);
+  for (const reason of ['missing original investigation', 'different starting document']) {
+    await t.test(reason, async child => {
+      const page = await profile(browser, child);
+      await savePin(page, join(kit, 'pins/matching'));
+      const bundle = JSON.parse(await readFile(join(kit, 'cases/altered-original.json'), 'utf8'));
+      if (reason === 'missing original investigation') {
+        delete bundle.candidate;
+      } else {
+        const preflight = bundle.candidate.chain.events.find(event => event.evidence.tool === 'preflight_read');
+        preflight.evidence.artifactSha256 = createHash('sha256').update('Another fictional starting document').digest('hex');
+        bundle.report.candidateFingerprint = await runFingerprint(parseInvestigation(JSON.stringify(bundle.candidate)));
+      }
+      await importCase(page, { name: 'different-task.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) });
+      await page.reload();
+      assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
+      await checkStageEvidence(page, 'Follow-up', bundle.followUp, false);
+      assert.equal(await receiptButton(page, 'follow-up').count(), 0);
+      await rejectedReceiptRoute(page, 'follow-up', await savedSelection(page));
+      assert.equal(await page.locator('#codex-follow-up-output-receipt').count(), 0);
       assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
     });
   }
@@ -148,7 +223,7 @@ test('unreadable original evidence never offers a checked output', async t => {
   await page.reload();
   assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
   assert.match(await page.locator('#codex-closure-reasons').innerText(), /after\.md/);
-  assert.equal(await page.getByRole('button', { name: 'Inspect original output receipt · after.md' }).count(), 0);
+  assert.equal(await receiptButton(page, 'original').count(), 0);
   assert.equal(await page.locator('#codex-original-output-receipt').count(), 0);
 });
 
@@ -158,7 +233,7 @@ test('explicit closure refreshes the current case immediately while viewing a re
   await savePin(page, join(kit, 'pins/matching'));
   await importCase(page, join(kit, 'cases/open-follow-up.json'));
   assert.deepEqual(await disposition(page), { state: 'Open', ready: true });
-  await page.getByRole('button', { name: 'Inspect follow-up output receipt · after.md' }).click();
+  await receiptButton(page, 'follow-up').click();
   await page.getByRole('button', { name: 'Close as resolved' }).click();
   await page.locator('#review-detail .review-case .badge').filter({ hasText: /^Resolved$/ }).waitFor();
   assert.deepEqual(await disposition(page), { state: 'Resolved', ready: false });

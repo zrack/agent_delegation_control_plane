@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { browserSession, expand, importCase, profile, work } from './dashboard.mjs';
+import { browserSession, disposition, expand, importCase, kit, profile, savePin, work } from './dashboard.mjs';
 
 const directory = join(work, 'grant-rehearsal');
 execFileSync(process.execPath, ['scripts/alpha-rehearsal.mjs', '--output', directory]);
@@ -21,6 +22,59 @@ async function goBack(page) {
   return focused;
 }
 const field = (page, label) => page.locator('#review-grant-lookup dt').filter({ hasText: new RegExp('^' + label + '$') }).locator('+ dd').innerText();
+
+test('one missing grant links to the baseline and candidate records for both affected actions after reload', async t => {
+  const browser = await browserSession(t);
+  const page = await profile(browser, t);
+  await savePin(page, join(kit, 'pins/matching'));
+  const caseFile = join(kit, 'cases/altered-follow-up.json');
+  const bundle = JSON.parse(await readFile(caseFile, 'utf8'));
+  await importCase(page, caseFile);
+  await page.reload();
+  assert.deepEqual(await disposition(page), { state: 'Open', ready: false });
+  const grantId = 'CODING-FICTIONAL-PREVIEW-01-edit';
+  const events = bundle.candidate.chain.events.filter(event => event.authorityId === grantId);
+  assert.deepEqual(events.map(event => event.action.action), ['file:read', 'file:write']);
+  const finding = page.locator('#review-detail details.grant-finding');
+  assert.equal(await finding.count(), 1);
+  const heading = finding.locator('summary');
+  const headline = await heading.innerText();
+  for (const text of ['Missing grant ' + grantId, events[0].actor, events[0].action.resource, 'file:read', 'file:write']) {
+    assert.ok(headline.includes(text), 'Grouped finding must identify ' + text);
+  }
+  for (const event of events) {
+    for (const side of ['candidate', 'baseline']) {
+      await heading.click();
+      assert.equal(await finding.getByRole('link').count(), 4);
+      const link = finding.locator('a[data-grant-side="' + side + '"][data-grant-event="' + event.id + '"]');
+      await link.press('Enter');
+      await page.locator('#grant-lookup-title:focus').waitFor();
+      await page.locator('#review-grant-lookup').getByText(bundle[side].chain.id, { exact: true }).waitFor();
+      assert.equal(await field(page, 'Action record'), event.id);
+      assert.equal(await field(page, 'Recorded action'), event.action.action);
+      assert.equal(await field(page, 'Resource'), event.action.resource);
+      assert.equal(await field(page, 'Referenced grant'), grantId);
+      if (side === 'candidate') {
+        assert.equal(await page.locator('#review-grant-lookup .import-error').innerText(), 'Missing grant ' + grantId);
+      } else {
+        await page.getByRole('heading', { name: 'Grant ' + grantId, exact: true }).waitFor();
+        assert.equal(await field(page, 'Subject'), event.actor);
+      }
+      const back = await goBack(page);
+      assert.equal(await back.getAttribute('data-grant-side'), side);
+      assert.equal(await back.getAttribute('data-grant-event'), event.id);
+    }
+  }
+  await expand(page, 'Reasons recorded by the offline report');
+  const offline = page.locator('details').filter({ has: page.getByText('Reasons recorded by the offline report', { exact: true }) });
+  const reasons = offline.getByRole('listitem').filter({ hasText: 'Referenced grant supplied' });
+  assert.equal(await reasons.count(), 2);
+  for (const event of events) {
+    const raw = await reasons.filter({ hasText: event.id }).innerText();
+    assert.ok(raw.includes('baseline action ' + event.id));
+    assert.ok(raw.includes('candidate action ' + event.id));
+  }
+});
 
 test('worksheet supports lookup, repaired follow-ups and explicit closure inside the dashboard', async t => {
   const browser = await browserSession(t);

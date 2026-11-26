@@ -127,6 +127,36 @@ export function reviewCardState(item, original, followUp) {
   return blocked('The follow-up and original evidence do not meet the closure checks.');
 }
 
+// Group reasons from one reproduced comparison. Keep the original rows for evidence lookup.
+export function groupGrantFindings(reasons) {
+  const findings = [];
+  const missing = new Map();
+  for (const reason of reasons) {
+    const { row } = reason;
+    const before = row?.before?.event;
+    const after = row?.after?.event;
+    const change = row?.changes.find(field => field.label === 'Referenced grant supplied');
+    if (reason.impact !== 'review' || reason.message !== 'Referenced grant supplied'
+      || change?.before !== true || change.after !== false || !before || !after
+      || before.id !== row.eventLinks?.[0] || after.id !== row.eventLinks?.[1]
+      || before.authorityId !== after.authorityId || before.actor !== after.actor
+      || before.action.resource !== after.action.resource || before.action.action !== after.action.action
+      || !row.after.findings?.some(f => f.code === 'GRANT_MISSING' && f.eventId === after.id && f.grantId === after.authorityId)) {
+      findings.push(reason);
+      continue;
+    }
+    const key = JSON.stringify([after.authorityId, after.actor, after.action.resource]);
+    let finding = missing.get(key);
+    if (!finding) {
+      finding = { grantId: after.authorityId, actor: after.actor, resource: after.action.resource, rows: [] };
+      missing.set(key, finding);
+      findings.push(finding);
+    }
+    finding.rows.push(row);
+  }
+  return findings;
+}
+
 export function createReviewInbox({ getStorage, escape, comparisonDetail, onBaselineAdopted }) {
   const form = document.querySelector('#review-import');
   const packageInput = document.querySelector('#review-package-file');
@@ -304,9 +334,34 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <span class="muted">${escape(description)}</span></summary><div class="compare-detail"></div></details>`;
   }
 
+  function missingGrantFinding(finding, candidateSide) {
+    const actions = [...new Set(finding.rows.map(row => row.after.event.action.action))].join(', ');
+    const sideLabel = candidateSide === 'follow-up' ? 'follow-up' : 'candidate';
+    const links = finding.rows.map(({ before, after }) => `<li><strong>${escape(after.event.action.action)}</strong> ·
+      ${actionLink(selected, 'baseline', before.event, escape)} · ${actionLink(selected, candidateSide, after.event, escape)}</li>`);
+    return `<details class="run-difference grant-finding"><summary><strong>Missing grant <code>${escape(finding.grantId)}</code></strong>
+      <span class="muted">${escape(finding.actor)} · ${escape(actions)} · ${escape(finding.resource)}</span></summary>
+      <div class="compare-detail"><p>The baseline supplied this grant. The ${sideLabel} references it but omits the grant record.</p>
+      <ul>${links.join('')}</ul></div></details>`;
+  }
+
+  function recordedReason(reason) {
+    const refs = [];
+    for (const side of ['baseline', 'candidate']) {
+      for (const [field, label] of [['EventId', 'action'], ['GrantId', 'grant']]) {
+        const id = reason[side + field];
+        if (id) refs.push(`${side} ${label} <code>${escape(id)}</code>`);
+      }
+    }
+    return `<li>${escape(reason.message)}${refs.length ? ' · ' + refs.join(' · ') : ''}</li>`;
+  }
+
   function outputReceiptControl(check, stage) {
-    if (!check?.codex?.evidence.files || !Object.hasOwn(check.codex.evidence.files, 'after.md')) return '';
-    return `<button type="button" data-output-receipt="${stage}" aria-controls="codex-${stage}-output-receipt">Inspect ${stage} output receipt · after.md</button>`;
+    const files = check?.codex?.evidence?.files;
+    if (!files || !Object.hasOwn(files, 'after.md')) return '';
+    const target = `codex-${stage}-output-receipt`;
+    return `<button type="button" data-output-receipt="${stage}" aria-controls="${target}" aria-describedby="${target}-help">Go to ${stage} receipt for after.md</button>
+      <p id="${target}-help" class="panel-description">Opens the saved file contents and SHA-256 in this case.</p>`;
   }
 
   function openOutputReceipt(stage) {
@@ -316,6 +371,13 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     for (let group = receipt; group; group = group.parentElement?.closest('details')) group.open = true;
     receipt.querySelector('summary').focus();
     return true;
+  }
+
+  function restoreOutputReceipt(route, item) {
+    if (!route.has('receipt')) return;
+    const stage = route.get('receipt');
+    const currentCapture = stage === 'original' || (stage === 'follow-up' && item.followUp && route.get('capture') === item.followUp.id);
+    if (!currentCapture || !openOutputReceipt(stage)) history.replaceState(null, '', itemRoute(item.id));
   }
 
   function renderEvidence(item, assessment, candidateSide = 'candidate') {
@@ -328,7 +390,9 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
     const reproduced = verdict.status === item.report.status;
     const explanation = reproduced ? 'The current check reproduced the reported verdict.'
       : 'The current check differs from the reported verdict. Review the matching evidence below.';
-    const reasons = verdict.reasons.slice(0, 12).map(reason => {
+    const findings = runs[candidateSide] ? groupGrantFindings(verdict.reasons) : verdict.reasons;
+    const reasons = findings.slice(0, 12).map(reason => {
+      if (reason.rows) return missingGrantFinding(reason, candidateSide);
       if (reason.row) return evidenceDetails(reason.row.title, { row: reason.row, candidateSide }, reason.message);
       const chain = item.candidate;
       const event = chain.events.find(record => record.id === reason.eventId);
@@ -346,6 +410,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <div><strong>${item.invoice ? 'Baseline regression' : 'Current evidence check'} · ${regressionLabels[verdict.status]}</strong><p>${explanation}</p>
       ${candidateSide === 'candidate' && !item.followUp ? outputReceiptControl(assessment, 'original') : ''}</div></section>
       ${reasons.length ? `<h4>Flagged findings</h4>${reasons.join('')}` : ''}
+      ${findings.length > 12 ? `<p>Showing 12 of ${findings.length} findings. See all comparison differences below.</p>` : ''}
       ${differences ? `<details class="review-differences"><summary>All comparison differences</summary>${differences}</details>` : ''}`;
   }
 
@@ -439,10 +504,23 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       </form>`;
   }
 
+  function codexFileRow(evidence, side, name) {
+    const { hashes, files } = evidence;
+    const retained = Object.hasOwn(files, name);
+    const isOutput = name === 'after.md' && retained;
+    const receiptId = 'codex-' + side + '-output-receipt';
+    const stageLabel = side === 'original' ? 'Original' : 'Follow-up';
+    const summary = `${isOutput ? stageLabel + ' output receipt · ' : ''}<code>${escape(name)}</code> · ${retained ? 'Rechecked from saved bytes' : 'Verified at import only'}`;
+    const hash = escape(hashes[name]);
+    return retained ? `<details ${isOutput ? `id="${receiptId}"` : ''} class="run-difference" data-codex-file="${escape(name)}" data-codex-side="${side}" data-file-index="${records.push(files[name]) - 1}">
+      <summary${isOutput ? ` aria-describedby="${receiptId}-sha"` : ''}>${summary}</summary><code class="receipt-digest"${isOutput ? ` id="${receiptId}-sha"` : ''}>SHA-256 ${hash}</code><pre tabindex="0"></pre></details>`
+      : `<div class="codex-digest-only">${summary}<code class="receipt-digest">SHA-256 ${hash}</code></div>`;
+  }
+
   function codexFolderEvidence({ codex, candidateResult }, side = 'original') {
     const heading = side === 'original' ? 'codex-evidence-title' : 'codex-follow-up-title';
     const stageLabel = side === 'original' ? 'Original' : 'Follow-up';
-    const { hashes, files } = codex.evidence;
+    const filenames = Object.keys(codex.evidence.hashes);
     const grants = candidateResult.findings.filter(finding => finding.code === 'GRANT_MISSING');
     const missing = grants.map(({ eventId, grantId }) => {
       const event = codex.chain.events.find(record => record.id === eventId);
@@ -450,18 +528,10 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       return evidenceDetails(event.label, { snapshot: { event, missingGrantId: grantId } },
         `${event.action.action} · Missing grant ${grantId}`);
     });
-    const rows = Object.entries(hashes).map(([name, hash]) => {
-      const retained = Object.hasOwn(files, name);
-      const isOutput = name === 'after.md' && retained;
-      const receiptId = 'codex-' + side + '-output-receipt';
-      const summary = `${isOutput ? stageLabel + ' output receipt · ' : ''}<code>${escape(name)}</code> · ${retained ? 'Rechecked from saved bytes' : 'Verified at import only'}`;
-      return retained ? `<details ${isOutput ? `id="${receiptId}"` : ''} class="run-difference" data-codex-file="${escape(name)}" data-codex-side="${side}" data-file-index="${records.push(files[name]) - 1}">
-        <summary${isOutput ? ` aria-describedby="${receiptId}-sha"` : ''}>${summary}</summary><code class="receipt-digest"${isOutput ? ` id="${receiptId}-sha"` : ''}>SHA-256 ${escape(hash)}</code><pre tabindex="0"></pre></details>`
-        : `<div class="codex-digest-only">${summary}<code class="receipt-digest">SHA-256 ${escape(hash)}</code></div>`;
-    });
+    const rows = filenames.map(name => codexFileRow(codex.evidence, side, name));
     return `<section class="invoice-results" aria-labelledby="${heading}">
       <h4 id="${heading}">${side === 'original' ? 'Codex folder evidence' : 'Corrected Codex folder evidence'}</h4>
-      <p>The capture manifest lists ${Object.keys(hashes).length} files.
+      <p>The capture manifest lists ${filenames.length} files.
         ${codex.verifiedFileCount} saved files passed the current receipt check.</p>
       ${missing.length ? '<h4>Actions with missing grants</h4>' + missing.join('') : ''}
       <details class="review-differences"><summary>Inspect files and digests · ${stageLabel} run</summary>${rows.join('')}</details></section>`;
@@ -518,13 +588,20 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const label = stage === 'original' ? 'Original' : 'Follow-up';
       const check = stage === 'original' ? original : followUp.assessment;
       const error = stage === 'original' ? original.error : followUp.error?.replace(/^Follow-up Codex evidence: /, '');
+      // The blocked-original view has no comparison panels. Its follow-up can
+      // expose saved bytes only after both its own check and the task match.
+      const inspectable = !error && (stage === 'original' || evidence?.matchesOriginalTask);
+      const control = inspectable ? outputReceiptControl(check, stage) : '';
+      const followUpReceipt = stage === 'follow-up' && control
+        ? '<p>The original evidence must verify before this case can close.</p>' + codexFileRow(check.codex.evidence, stage, 'after.md') : '';
       return `<section class="codex-stage-evidence" aria-labelledby="${heading}">
         <h4 id="${heading}">${label} run evidence</h4>
         ${evidence?.runId ? `<p class="panel-description">Run <code>${escape(evidence.runId)}</code></p>` : ''}
         <section aria-labelledby="${heading}-sender"><h5 id="${heading}-sender">Sender-reported action and grant</h5>
           ${senderActionClaims(evidence, stage)}</section>
         <section aria-labelledby="${heading}-receiver"><h5 id="${heading}-receiver">Receiver checks</h5>
-          ${receiverReceiptChecks(evidence, check, error, stage)}</section>
+          ${receiverReceiptChecks(evidence, check, error, stage)}
+          ${control}${followUpReceipt}</section>
       </section>`;
     }));
     return panels.join('');
@@ -625,7 +702,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       <p class="panel-description">${error ? 'Sender-reported' : 'Reported'} · ${regressionLabels[record.report.status]}</p>
       <p class="panel-description">${error ? `Receiver check failed · ${escape(error)}` :
         check?.verdict ? `Rechecked · ${regressionLabels[check.verdict.status]}` : 'Evidence check unavailable'}</p>
-      ${outputReceiptControl(check, stage)}</div>`;
+      ${!followUp.error && (stage === 'original' || !followUp.incompatible) ? outputReceiptControl(check, stage) : ''}</div>`;
     const nextStep = (item.invoice || item.codex) && !resolved ? '' : resolved ? 'The saved follow-up still passes against the original baseline.'
       : pinChanged ? 'Restore the original workflow pin to attach a follow-up or close this case.'
         : canResolve ? 'Inspect the follow-up evidence, then close the case when you are ready.'
@@ -657,7 +734,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         ${receiptSummary}
         ${assessment || receiptDetails ? `<details class="review-differences" id="${item.codex ? 'codex-follow-up-evidence' : 'invoice-follow-up-evidence'}"><summary>Inspect follow-up evidence</summary>
           ${assessment ? renderEvidence(item.followUp, assessment, 'follow-up') + followUpRecords : ''}${receiptDetails}
-          ${assessment?.codex ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
+          ${assessment?.codex && !followUp.incompatible ? codexFolderEvidence(assessment, 'follow-up') : ''}</details>` : ''}` : ''}
       ${item.invoice && !resolved && item.decision ? evidenceRestorePanel(item) : ''}
       <p id="review-case-help" class="panel-description">${folderUnsupported ? 'Use a browser with folder selection support to attach a follow-up.' : nextStep}</p>
       <button type="button" id="resolve-review-case" ${canResolve && !resolved ? '' : 'disabled'}>Close as resolved</button>
@@ -767,9 +844,9 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
       const damagedEvidence = await damagedCodexEvidence(item, assessment, followUp);
       if (currentRevision !== revision) return;
       if (assessment.error) {
-        if (route.has('receipt')) history.replaceState(null, '', itemRoute(item.id));
         detail.innerHTML = blockedCodexView(item, 'Original Codex evidence could not be verified', checklist + damagedEvidence + evidenceRestorePanel(item))
           + summaryPanel(item, assessment, followUp, selectedChecks.status.closure);
+        restoreOutputReceipt(route, item);
         return;
       }
       for (const side of ['baseline', 'candidate', 'follow-up']) runs[side] = reviewRun(item, assessment, followUp, side);
@@ -793,7 +870,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         ${receiptResults}
         ${assessment.codex ? codexFolderEvidence(assessment) : ''}
         ${item.report.reasons.length ? `<details class="review-differences"><summary>Reasons recorded by the offline report</summary>
-          <ul>${item.report.reasons.slice(0, 12).map(reason => `<li>${escape(reason.message)}</li>`).join('')}</ul>
+          <ul>${item.report.reasons.slice(0, 12).map(recordedReason).join('')}</ul>
           ${item.report.reasons.length > 12 ? `<p>Showing 12 of ${item.report.reasons.length} recorded reasons.</p>` : ''}</details>` : ''}
         ${renderCase(item, assessment, followUp)}
         ${codexHistory(item)}
@@ -805,12 +882,7 @@ export function createReviewInbox({ getStorage, escape, comparisonDetail, onBase
         </form>
         ${summaryPanel(item, assessment, followUp, selectedChecks.status.closure)}
         ${renderExport(item, assessment, followUp)}`;
-      const receiptStage = route.get('receipt');
-      if (receiptStage) {
-        const sameCapture = receiptStage === 'original'
-          || (receiptStage === 'follow-up' && item.followUp && route.get('capture') === item.followUp.id);
-        if (!sameCapture || !openOutputReceipt(receiptStage)) history.replaceState(null, '', itemRoute(item.id));
-      }
+      restoreOutputReceipt(route, item);
       if (lookupEvent && route.get('view') === 'actions') {
         const directory = detail.querySelector('#review-action-directory');
         const link = [...(directory?.querySelectorAll('a') ?? [])].find(anchor =>

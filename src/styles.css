@@ -217,6 +217,15 @@
 #codex-save:not(:disabled) { background: var(--blue); color: #fff; }
 
 .receipt-digest { display: block; margin: 4px 0; overflow-wrap: anywhere; color: var(--muted); }
+#review-inbox button[data-output-receipt] {
+  margin-top: 8px;
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+  font-weight: 650;
+}
+#review-inbox button[data-output-receipt]:hover { background: #1e469a; }
+[data-codex-file="after.md"] > summary:focus { outline: 3px solid #4276e6; outline-offset: 2px; }
 .codex-digest-only { padding: 8px 0; font-size: .8125rem; }
 .codex-stage-evidence {
   margin: 14px 0;
