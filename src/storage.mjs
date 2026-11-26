@@ -113,6 +113,7 @@ export function saveWorkflowBaseline(getStorage, name, chain, fingerprint, expec
   if (JSON.stringify(current) !== JSON.stringify(expectedBaseline)) {
     throw new Error('This saved workflow changed. Review its baseline before trying again.');
   }
+  if (current?.runId === chain.id && current.fingerprint === fingerprint) return baselines;
   const next = baselines.filter(item => workflowKey(item.name) !== key);
   if (next.length >= MAX_SAVED_RUNS) throw new Error(`Remove a saved workflow before adding another. The limit is ${MAX_SAVED_RUNS}.`);
   next.push({ name: normalized, runId: chain.id, fingerprint });

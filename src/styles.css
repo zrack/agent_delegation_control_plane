@@ -115,6 +115,15 @@
 .workflow-save { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 8px; }
 #workflow-status { font-size: .8125rem; color: var(--muted); }
 #workflow-status:empty { display: none; }
+#imported-pin-form > p { grid-column: 1 / -1; font-size: .875rem; overflow-wrap: anywhere; }
+#imported-pin-status:empty { display: none; }
+#baseline-replacement { margin: auto; padding: 20px; width: min(36rem, 94%); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
+#baseline-replacement::backdrop { background: rgb(18 35 57 / .45); }
+#baseline-replacement h2 { font-size: 1.2rem; margin-bottom: 8px; }
+#baseline-replacement dt { margin-top: 12px; font-weight: 650; }
+#baseline-replacement code { white-space: pre-line; overflow-wrap: anywhere; }
+#baseline-replacement p { overflow-wrap: anywhere; }
+#baseline-replacement button { margin: 16px 6px 0 0; padding: 6px 12px; font: inherit; cursor: pointer; }
 .regression-verdict { margin: 0 0 14px; }
 .regression-verdict h3 { font-size: 1rem; }
 .regression-verdict ul { margin: 8px 0 0; padding-left: 18px; }

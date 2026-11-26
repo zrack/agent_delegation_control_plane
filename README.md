@@ -28,6 +28,8 @@ Open `reviewer/TASK_SHEET.md` in the extracted demo. The seven scenarios share a
 2. **Open the handoff.** In **Regression inbox → Import review package or case**, choose `cases/history-on.json`. Reload at the same address and reopen the case.
 3. **Explain your decision.** Compare the digest for `after.md` in **Sender-reported history** with the saved original output receipt. Find the editor’s grant in the follow-up’s `grants.jsonl`. Which evidence supports the status you see after reload?
 
+**Running from the current source checkout?** You can pin an eligible run directly after import. Check the run ID, enter `Follow-up review` as the workflow name and select **Pin this run as a workflow baseline**. If that workflow already points to different evidence, review both pins before choosing **Replace baseline** or **Cancel**. The alpha.16 download uses the **Compare runs** steps above.
+
 Try `cases/history-off.json` with the same baseline in a second fresh profile. Record what you can verify about closure and what you can establish about the repair. Then compare your answers with the walkthrough. [All seven scenarios and expected results](docs/ALPHA_REVIEW.md#review-a-codex-handoff) · [Verify a case offline](docs/CODEX_HANDOFF.md#verify-the-case-offline)
 
 ### Run the two-reviewer pilot
